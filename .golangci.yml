@@ -1,0 +1,83 @@
+# golangci-lint configuration
+# Documentation: https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck # Check for unchecked errors
+    - gosimple # Simplify code
+    - govet # Vet examines Go source code
+    - ineffassign # Detect ineffectual assignments
+    - staticcheck # Go static analysis
+    - typecheck # Type-check Go code
+    - unused # Check for unused code
+    - gofmt # Check code formatting
+    - goimports # Check import formatting
+    - misspell # Check for misspelled words
+    - gocritic # Opinionated Go linter
+    - revive # Fast, configurable linter
+    - gosec # Security-focused linter
+    - bodyclose # Check for unclosed HTTP response bodies
+    - noctx # Detect sending http request without context
+    - prealloc # Find slice declarations that could be preallocated
+    - unconvert # Remove unnecessary type conversions
+    - unparam # Find unused function parameters
+    - whitespace # Check for trailing whitespace
+
+linters-settings:
+  errcheck:
+    check-blank: true
+    check-type-assertions: true
+
+  govet:
+    enable-all: true
+    disable:
+      - shadow # Can be too strict
+
+  gosec:
+    excludes:
+      - G104 # Audit errors not checked (too noisy)
+      - G307 # Deferring unsafe method (false positives)
+
+  revive:
+    rules:
+      - name: exported
+        disabled: true # Can be too strict for tests
+
+  staticcheck:
+    checks: ["all"]
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+        - unparam
+
+    # Exclude known false positives
+    - text: 'shadow: declaration of "err" shadows declaration'
+      linters:
+        - govet
+
+    # Ignore missing package comments in tests
+    - path: _test\.go
+      text: "should have a package comment"
+      linters:
+        - revive
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  sort-results: true

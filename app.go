@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"log"
+	goruntime "runtime"
 	"sync"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
 	"plexcord/internal/errors"
@@ -15,6 +15,8 @@ import (
 	"plexcord/internal/plex"
 	"plexcord/internal/retry"
 	"plexcord/internal/version"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -1131,4 +1133,31 @@ func (a *App) OpenReleaseURL(url string) error {
 	log.Printf("Opening release URL: %s", url)
 	runtime.BrowserOpenURL(a.ctx, url)
 	return nil
+}
+
+// ============================================================================
+// Resource Monitoring (Story 6.9)
+// ============================================================================
+
+// ResourceStats contains runtime statistics for monitoring long-running stability.
+type ResourceStats struct {
+	MemoryAllocMB  float64 `json:"memoryAllocMB"`
+	MemoryTotalMB  float64 `json:"memoryTotalMB"`
+	GoroutineCount int     `json:"goroutineCount"`
+	Timestamp      string  `json:"timestamp"`
+}
+
+// GetResourceStats returns current resource usage statistics.
+// This is useful for debugging memory leaks and verifying long-running stability.
+// Primarily used for development and troubleshooting - not displayed to users normally.
+func (a *App) GetResourceStats() ResourceStats {
+	var m goruntime.MemStats
+	goruntime.ReadMemStats(&m)
+
+	return ResourceStats{
+		MemoryAllocMB:  float64(m.Alloc) / 1024 / 1024,
+		MemoryTotalMB:  float64(m.TotalAlloc) / 1024 / 1024,
+		GoroutineCount: goruntime.NumGoroutine(),
+		Timestamp:      time.Now().Format(time.RFC3339),
+	}
 }

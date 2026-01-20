@@ -81,6 +81,24 @@ export namespace main {
 	        this.userName = source["userName"];
 	    }
 	}
+	export class ResourceStats {
+	    memoryAllocMB: number;
+	    memoryTotalMB: number;
+	    goroutineCount: number;
+	    timestamp: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ResourceStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.memoryAllocMB = source["memoryAllocMB"];
+	        this.memoryTotalMB = source["memoryTotalMB"];
+	        this.goroutineCount = source["goroutineCount"];
+	        this.timestamp = source["timestamp"];
+	    }
+	}
 
 }
 

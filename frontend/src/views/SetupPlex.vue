@@ -375,7 +375,6 @@ onMounted(() => {
                         @click="discoverServers"
                         :disabled="!setupStore.isPlexStepValid"
                         class="w-full"
-                        severity="success"
                     />
 
                     <!-- Always show "Enter Manually" option -->
@@ -487,7 +486,6 @@ onMounted(() => {
                         @click="validateConnection"
                         :disabled="!canValidate"
                         class="w-full"
-                        severity="success"
                     />
                     <small class="helper-text text-muted-color mt-3">
                         <i class="pi pi-info-circle mr-1"></i>
@@ -632,12 +630,14 @@ onMounted(() => {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    max-width: 600px;
 }
 
 .token-input {
     flex: 1;
     font-family: monospace;
     letter-spacing: 0.05em;
+    min-width: 400px;
 }
 
 .token-input.token-valid {

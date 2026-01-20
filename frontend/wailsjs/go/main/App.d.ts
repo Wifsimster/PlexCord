@@ -44,6 +44,8 @@ export function GetPlexUsers(arg1:string):Promise<Array<plex.PlexUser>>;
 
 export function GetPollingInterval():Promise<number>;
 
+export function GetResourceStats():Promise<main.ResourceStats>;
+
 export function GetVersion():Promise<version.Info>;
 
 export function Greet(arg1:string):Promise<string>;

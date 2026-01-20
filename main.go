@@ -26,8 +26,8 @@ func main() {
 	// Note: Removed MaxWidth and MaxHeight
 	err := wails.Run(&options.App{
 		Title:             "plexcord",
-		Width:             1024,
-		Height:            768,
+		Width:             1100,
+		Height:            1000,
 		MinWidth:          1024,
 		MinHeight:         768,
 		DisableResize:     false,

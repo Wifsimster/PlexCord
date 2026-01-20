@@ -100,7 +100,7 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Error Recovery & Resilience
-  epic-6: in-progress
+  epic-6: done
   6-1-error-banner-component: done
   6-2-actionable-error-messages: done
   6-3-manual-retry-button: done
@@ -109,7 +109,7 @@ development_status:
   6-6-graceful-discord-unavailability-handling: done
   6-7-token-expiration-detection-and-re-authentication: done
   6-8-connection-history-display: done
-  6-9-long-running-stability: ready-for-dev
+  6-9-long-running-stability: done
   epic-6-retrospective: optional
 
   # Epic 7: Updates & Maintenance

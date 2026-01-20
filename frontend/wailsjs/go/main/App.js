@@ -78,6 +78,10 @@ export function GetPollingInterval() {
   return window['go']['main']['App']['GetPollingInterval']();
 }
 
+export function GetResourceStats() {
+  return window['go']['main']['App']['GetResourceStats']();
+}
+
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }

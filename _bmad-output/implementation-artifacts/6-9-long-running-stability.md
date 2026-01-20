@@ -1,6 +1,6 @@
 # Story 6.9: Long-Running Stability
 
-Status: ready-for-dev
+Status: complete
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

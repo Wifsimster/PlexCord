@@ -4,7 +4,11 @@ import { useRouter, useRoute } from 'vue-router';
 import { useSetupStore } from '@/stores/setup';
 import { SavePlexToken, CompleteSetup, SkipSetup } from '../../wailsjs/go/main/App';
 import { useToast } from 'primevue/usetoast';
-import Steps from 'primevue/steps';
+import Stepper from 'primevue/stepper';
+import StepList from 'primevue/steplist';
+import Step from 'primevue/step';
+import StepPanels from 'primevue/steppanels';
+import StepPanel from 'primevue/steppanel';
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 
@@ -14,26 +18,27 @@ const router = useRouter();
 const route = useRoute();
 const setupStore = useSetupStore();
 
-// Step definitions
+// Step definitions with numeric values (1-based as per PrimeVue best practices)
 const steps = ref([
-    { label: 'Welcome', route: '/setup/welcome' },
-    { label: 'Plex Server', route: '/setup/plex' },
-    { label: 'Select User', route: '/setup/user' },
-    { label: 'Discord', route: '/setup/discord' },
-    { label: 'Complete', route: '/setup/complete' }
+    { label: 'Welcome', value: 1, route: '/setup/welcome' },
+    { label: 'Plex Server', value: 2, route: '/setup/plex' },
+    { label: 'Select User', value: 3, route: '/setup/user' },
+    { label: 'Discord', value: 4, route: '/setup/discord' },
+    { label: 'Complete', value: 5, route: '/setup/complete' }
 ]);
 
-// Current active step based on route
-const activeStep = computed(() => {
+// Current active step value based on route (1-based)
+const activeStepValue = computed(() => {
     const currentPath = route.path;
-    const index = steps.value.findIndex(step => step.route === currentPath);
-    return index >= 0 ? index : 0;
+    const step = steps.value.find(s => s.route === currentPath);
+    return step ? step.value : 1;
 });
 
-// Sync active step with store
-watch(activeStep, (newStep) => {
-    if (newStep !== setupStore.currentStep) {
-        setupStore.currentStep = newStep;
+// Sync active step with store (convert from 1-based to 0-based for store)
+watch(activeStepValue, (newStepValue) => {
+    const storeIndex = newStepValue - 1;
+    if (storeIndex !== setupStore.currentStep) {
+        setupStore.currentStep = storeIndex;
     }
 });
 
@@ -54,33 +59,37 @@ const goToPreviousStep = () => {
     }
 };
 
-const goToStep = (index) => {
-    if (index <= setupStore.currentStep || setupStore.isStepCompleted(index)) {
-        setupStore.goToStep(index);
-        const targetRoute = steps.value[index]?.route;
+// Navigate using step value (1-based)
+const activateStep = (stepValue) => {
+    const stepIndex = stepValue - 1;
+    if (stepIndex >= 0 && stepIndex < steps.value.length) {
+        setupStore.goToStep(stepIndex);
+        const targetRoute = steps.value[stepIndex]?.route;
         if (targetRoute) {
             router.push(targetRoute);
         }
     }
 };
 
-// Show/hide buttons based on current step
+// Show/hide buttons based on current step (use 0-based store index)
+const currentStoreStep = computed(() => setupStore.currentStep);
+
 const showBackButton = computed(() => {
-    return setupStore.canGoBack && activeStep.value !== steps.value.length - 1;
+    return setupStore.canGoBack && currentStoreStep.value !== steps.value.length - 1;
 });
 
 const showNextButton = computed(() => {
-    if (activeStep.value >= steps.value.length - 1) {
+    if (currentStoreStep.value >= steps.value.length - 1) {
         return false; // Last step doesn't have Next button
     }
 
-    // Check if we're on the Plex step (index 1) and validate connection
-    if (activeStep.value === 1) {
+    // Check if we're on the Plex step (store index 1) and validate connection
+    if (currentStoreStep.value === 1) {
         return setupStore.isPlexStepValid && setupStore.isConnectionValidated;
     }
 
-    // Check if we're on the User step (index 2) and validate user selection
-    if (activeStep.value === 2) {
+    // Check if we're on the User step (store index 2) and validate user selection
+    if (currentStoreStep.value === 2) {
         return setupStore.isUserSelected;
     }
 
@@ -88,7 +97,7 @@ const showNextButton = computed(() => {
 });
 
 const showFinishButton = computed(() => {
-    return activeStep.value === steps.value.length - 1;
+    return currentStoreStep.value === steps.value.length - 1;
 });
 
 const isFinishing = ref(false);
@@ -133,7 +142,7 @@ const finishSetup = async () => {
 // Skip setup functionality
 const showSkipLink = computed(() => {
     // Show skip link on all steps except welcome (0) and complete (last)
-    return activeStep.value > 0 && activeStep.value < steps.value.length - 1;
+    return currentStoreStep.value > 0 && currentStoreStep.value < steps.value.length - 1;
 });
 
 const isSkipping = ref(false);
@@ -188,7 +197,7 @@ const handleKeydown = (event) => {
 onMounted(() => {
     setupStore.loadState();
     // Navigate to saved step if different from current
-    if (setupStore.currentStep !== activeStep.value) {
+    if (setupStore.currentStep !== currentStoreStep.value) {
         const savedRoute = steps.value[setupStore.currentStep]?.route;
         if (savedRoute && savedRoute !== route.path) {
             router.push(savedRoute);
@@ -209,59 +218,85 @@ onUnmounted(() => {
         <Card class="setup-wizard-card">
             <template #header>
                 <div class="wizard-header">
-                    <h1 class="text-4xl font-bold text-center mb-2">PlexCord Setup</h1>
+                    <div class="header-title-container">
+                        <!-- PlexAmp Logo (Left) -->
+                        <svg class="header-logo" width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2 12C2 11.4477 2.44772 11 3 11C3.55228 11 4 11.4477 4 12V17C4 17.5523 3.55228 18 3 18C2.44772 18 2 17.5523 2 17V12Z" fill="#CC7B19"/>
+                            <path d="M6 9C6 8.44772 6.44772 8 7 8C7.55228 8 8 8.44772 8 9V17C8 17.5523 7.55228 18 7 18C6.44772 18 6 17.5523 6 17V9Z" fill="#CC7B19"/>
+                            <path d="M10 6C10 5.44772 10.4477 5 11 5C11.5523 5 12 5.44772 12 6V17C12 17.5523 11.5523 18 11 18C10.4477 18 10 17.5523 10 17V6Z" fill="#CC7B19"/>
+                            <path d="M14 9C14 8.44772 14.4477 8 15 8C15.5523 8 16 8.44772 16 9V17C16 17.5523 15.5523 18 15 18C14.4477 18 14 17.5523 14 17V9Z" fill="#CC7B19"/>
+                            <path d="M18 12C18 11.4477 18.4477 11 19 11C19.5523 11 20 11.4477 20 12V17C20 17.5523 19.5523 18 19 18C18.4477 18 18 17.5523 18 17V12Z" fill="#CC7B19"/>
+                        </svg>
+                        
+                        <h1 class="text-4xl font-bold text-center mb-2">PlexCord Setup</h1>
+                        
+                        <!-- Discord Logo (Right) -->
+                        <svg class="header-logo" width="40" height="40" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z" fill="#5865F2"/>
+                        </svg>
+                    </div>
                     <p class="text-center text-muted-color">Complete the steps below to get started</p>
                 </div>
             </template>
 
             <template #content>
-                <!-- Step Indicator -->
-                <div class="steps-container mb-6">
-                    <Steps
-                        :model="steps"
-                        :activeStep="activeStep"
-                        :readonly="false"
-                        @step-select="(event) => goToStep(event.index)"
-                    >
-                        <template #item="{ item, index }">
-                            <span class="step-label">{{ item.label }}</span>
-                        </template>
-                    </Steps>
-                </div>
+                <!-- Stepper Component -->
+                <Stepper :value="activeStepValue" class="basis-full">
+                    <!-- Step Headers -->
+                    <StepList>
+                        <Step
+                            v-for="step in steps"
+                            :key="step.value"
+                            :value="step.value"
+                        >
+                            {{ step.label }}
+                        </Step>
+                    </StepList>
 
-                <!-- Step Content -->
-                <div class="step-view-container">
-                    <router-view />
-                </div>
+                    <!-- Step Content Panels -->
+                    <StepPanels>
+                        <StepPanel
+                            v-for="step in steps"
+                            :key="step.value"
+                            :value="step.value"
+                            v-slot="{ activateCallback }"
+                        >
+                            <!-- Step View Content -->
+                            <div class="step-view-container">
+                                <router-view />
+                            </div>
 
-                <!-- Navigation Buttons -->
-                <div class="navigation-buttons">
-                    <Button
-                        v-if="showBackButton"
-                        label="Back"
-                        icon="pi pi-arrow-left"
-                        severity="secondary"
-                        @click="goToPreviousStep"
-                        class="mr-2"
-                    />
-                    <span class="flex-grow-1"></span>
-                    <Button
-                        v-if="showNextButton"
-                        label="Next"
-                        icon="pi pi-arrow-right"
-                        iconPos="right"
-                        @click="goToNextStep"
-                    />
-                    <Button
-                        v-if="showFinishButton"
-                        label="Finish Setup"
-                        icon="pi pi-check"
-                        iconPos="right"
-                        @click="finishSetup"
-                        :loading="isFinishing"
-                        :disabled="isFinishing"
-                    />
-                </div>
+                            <!-- Navigation Buttons -->
+                            <div class="navigation-buttons">
+                                <Button
+                                    v-if="showBackButton && step.value === activeStepValue"
+                                    label="Back"
+                                    icon="pi pi-arrow-left"
+                                    severity="secondary"
+                                    @click="goToPreviousStep"
+                                    class="mr-2"
+                                />
+                                <span class="flex-grow-1"></span>
+                                <Button
+                                    v-if="showNextButton && step.value === activeStepValue"
+                                    label="Next"
+                                    icon="pi pi-arrow-right"
+                                    iconPos="right"
+                                    @click="goToNextStep"
+                                />
+                                <Button
+                                    v-if="showFinishButton && step.value === activeStepValue"
+                                    label="Finish Setup"
+                                    icon="pi pi-check"
+                                    iconPos="right"
+                                    @click="finishSetup"
+                                    :loading="isFinishing"
+                                    :disabled="isFinishing"
+                                />
+                            </div>
+                        </StepPanel>
+                    </StepPanels>
+                </Stepper>
 
                 <!-- Keyboard Hint -->
                 <div class="keyboard-hint text-center mt-4">
@@ -311,26 +346,38 @@ onUnmounted(() => {
     background: linear-gradient(180deg, var(--surface-card) 0%, var(--surface-ground) 100%);
 }
 
-.steps-container {
-    padding: 0 2rem;
+.header-title-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.header-logo {
+    flex-shrink: 0;
+}
+
+.header-title-container h1 {
+    margin: 0;
 }
 
 .step-view-container {
     min-height: 300px;
-    padding: 2rem;
+    padding: 2rem 0;
 }
 
 .navigation-buttons {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 2rem 1rem 2rem;
-    border-top: 1px solid var(--surface-border);
     padding-top: 1.5rem;
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--surface-border);
 }
 
 .keyboard-hint {
-    padding: 0 2rem 0.5rem 2rem;
+    padding: 0.5rem 0;
 }
 
 /* Responsive adjustments */
@@ -343,25 +390,38 @@ onUnmounted(() => {
         padding: 1.5rem 1rem 0.5rem 1rem;
     }
 
+    .header-title-container {
+        gap: 1rem;
+    }
+
+    .header-logo {
+        width: 32px;
+        height: 32px;
+    }
+
     .wizard-header h1 {
         font-size: 2rem;
     }
 
-    .steps-container {
-        padding: 0 1rem;
-    }
-
     .step-view-container {
-        padding: 1rem;
+        padding: 1rem 0;
     }
 
     .navigation-buttons {
-        padding: 0 1rem 0.5rem 1rem;
+        padding-top: 1rem;
+        margin-top: 1rem;
     }
 }
 
+/* Ensure stepper takes full width */
+:deep(.p-stepper) {
+    width: 100%;
+}
+
 /* Dark mode compatibility */
-:deep(.p-steps) {
+:deep(.p-stepper),
+:deep(.p-steplist),
+:deep(.p-step) {
     background: transparent;
 }
 </style>
