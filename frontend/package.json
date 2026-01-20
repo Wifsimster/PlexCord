@@ -22,7 +22,7 @@
         "primevue": "^4.3.1",
         "tailwindcss-primeui": "^0.5.0",
         "vue": "^3.4.34",
-        "vue-router": "^4.4.0"
+        "vue-router": "^4.6.4"
     },
     "devDependencies": {
         "@primevue/auto-import-resolver": "^4.3.1",
