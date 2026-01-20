@@ -136,7 +136,7 @@ jobs:
         run: wails build -clean -platform ${{ matrix.platform }}/${{ matrix.arch }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: plexcord-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
