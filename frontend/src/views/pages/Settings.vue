@@ -267,14 +267,14 @@ const goToDashboard = () => {
             <h2 class="text-xl font-semibold mb-4">Connection</h2>
 
             <!-- Polling Interval -->
-            <div class="flex items-center justify-between py-3 border-b border-surface-200 dark:border-surface-700">
-                <div>
+            <div class="py-3 border-b border-surface-200 dark:border-surface-700">
+                <div class="mb-2">
                     <div class="font-medium">Polling Interval</div>
                     <div class="text-sm text-muted-color">How often to check for playback changes (1-60 seconds)</div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <InputNumber v-model="pollingInterval" :min="1" :max="60" suffix=" sec" :disabled="loading.polling" class="w-24" />
-                    <Button label="Save" size="small" :loading="loading.polling" @click="updatePollingInterval" />
+                <div class="flex gap-2">
+                    <InputNumber v-model="pollingInterval" :min="1" :max="60" suffix=" sec" :disabled="loading.polling" class="flex-grow" />
+                    <Button label="Save" :loading="loading.polling" @click="updatePollingInterval" />
                 </div>
             </div>
 

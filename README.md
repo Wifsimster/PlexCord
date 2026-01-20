@@ -4,6 +4,8 @@
 
 PlexCord is a lightweight, cross-platform desktop application that bridges your Plex Media Server and Discord, showing what you're listening to in real-time. Built with Go + Vue 3 + Wails.
 
+![PlexCord Dashboard](docs/images/homepage.png)
+
 ## Features
 
 - 🎵 Real-time Plex music playback detection
