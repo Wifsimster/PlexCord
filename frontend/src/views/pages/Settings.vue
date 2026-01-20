@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useSetupStore } from '@/stores/setup';
 import Button from 'primevue/button';
 import InputNumber from 'primevue/inputnumber';
 import InputSwitch from 'primevue/inputswitch';
@@ -27,6 +28,7 @@ import {
 
 const router = useRouter();
 const toast = useToast();
+const setupStore = useSetupStore();
 
 // Settings state
 const pollingInterval = ref(2);
@@ -219,6 +221,8 @@ const executeReset = async () => {
     try {
         await ResetApplication();
         showResetDialog.value = false;
+        // Reset the wizard state to start from the beginning
+        setupStore.resetWizard();
         toast.add({
             severity: 'success',
             summary: 'Reset Complete',
@@ -248,7 +252,7 @@ const goToDashboard = () => {
 </script>
 
 <template>
-    <div class="max-w-3xl mx-auto">
+    <div class="max-w-7xl mx-auto">
         <!-- Header -->
         <div class="flex items-center gap-4 mb-6">
             <Button

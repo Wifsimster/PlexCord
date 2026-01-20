@@ -95,10 +95,8 @@ const handleRetry = () => {
         :closable="false"
         severity="error"
         role="alert"
-        :class="[
-            'error-banner',
-            { 'opacity-0 scale-95': isDismissing }
-        ]"
+        class="transition-[opacity,transform] duration-150 ease-out"
+        :class="{ 'opacity-0 scale-95': isDismissing }"
     >
         <template #messageicon>
             <i :class="[sourceIcon, sourceColor, 'text-lg mr-2']"></i>
@@ -130,14 +128,14 @@ const handleRetry = () => {
                 </div>
 
                 <!-- Error code for troubleshooting -->
-                <div class="text-xs text-muted-color mt-2 font-mono">
+                <div class="text-xs text-surface-600 dark:text-surface-400 mt-2 font-mono">
                     Code: {{ errorInfo.code || 'UNKNOWN' }}
                 </div>
 
                 <!-- Retry countdown -->
                 <div
                     v-if="showCountdown"
-                    class="text-sm text-muted-color mt-2 flex items-center gap-2"
+                    class="text-sm text-surface-600 dark:text-surface-400 mt-2 flex items-center gap-2"
                 >
                     <i class="pi pi-spin pi-spinner text-xs"></i>
                     <span>
@@ -176,16 +174,12 @@ const handleRetry = () => {
 </template>
 
 <style scoped>
-.error-banner {
-    transition: opacity 150ms ease-out, transform 150ms ease-out;
-}
-
 /* Ensure Message component spans full width */
-.error-banner :deep(.p-message-wrapper) {
+:deep(.p-message-wrapper) {
     width: 100%;
 }
 
-.error-banner :deep(.p-message-content) {
+:deep(.p-message-content) {
     width: 100%;
 }
 </style>

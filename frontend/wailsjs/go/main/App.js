@@ -6,6 +6,10 @@ export function CheckForUpdate() {
   return window['go']['main']['App']['CheckForUpdate']();
 }
 
+export function CheckPlexPINAuth(arg1) {
+  return window['go']['main']['App']['CheckPlexPINAuth'](arg1);
+}
+
 export function CheckSetupComplete() {
   return window['go']['main']['App']['CheckSetupComplete']();
 }
@@ -172,6 +176,10 @@ export function ShowWindow() {
 
 export function SkipSetup() {
   return window['go']['main']['App']['SkipSetup']();
+}
+
+export function StartPlexPINAuth() {
+  return window['go']['main']['App']['StartPlexPINAuth']();
 }
 
 export function StartSessionPolling() {

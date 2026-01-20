@@ -22,29 +22,34 @@ const selectUser = () => {
 
 <template>
     <Card
-        :class="['user-card', { 'selected': selected }]"
+        :class="[
+            'cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl min-w-45',
+            { 'border-2 border-primary-500 bg-primary-50 dark:bg-primary-900/20': selected }
+        ]"
         @click="selectUser"
     >
         <template #content>
-            <div class="user-content">
+            <div class="flex flex-col items-center text-center gap-3 p-0">
                 <Avatar
                     v-if="user.thumb"
                     :image="user.thumb"
                     size="xlarge"
                     shape="circle"
-                    class="user-avatar"
+                    class="w-20! h-20!"
                 />
                 <Avatar
                     v-else
                     icon="pi pi-user"
                     size="xlarge"
                     shape="circle"
-                    class="user-avatar default-avatar"
+                    class="w-20! h-20! bg-surface-200 dark:bg-surface-700 text-surface-600 dark:text-surface-400"
                 />
-                <div class="user-info">
-                    <h3 class="user-name">{{ user.name }}</h3>
-                    <span v-if="selected" class="selected-indicator">
-                        <i class="pi pi-check-circle"></i>
+                <div class="flex flex-col items-center gap-1">
+                    <h3 class="m-0 text-base font-semibold overflow-hidden text-ellipsis whitespace-nowrap max-w-37.5">
+                        {{ user.name || `User ${user.id}` }}
+                    </h3>
+                    <span v-if="selected" class="flex items-center gap-1 text-xs text-primary-500">
+                        <i class="pi pi-check-circle text-sm"></i>
                         Selected
                     </span>
                 </div>
@@ -52,77 +57,3 @@ const selectUser = () => {
         </template>
     </Card>
 </template>
-
-<style scoped>
-.user-card {
-    cursor: pointer;
-    transition: all 0.2s;
-    min-width: 180px;
-}
-
-.user-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.user-card.selected {
-    border: 2px solid var(--primary-color);
-    background: var(--primary-50);
-}
-
-:deep(.p-card-body) {
-    padding: 1rem;
-}
-
-:deep(.p-card-content) {
-    padding: 0;
-}
-
-.user-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 0.75rem;
-}
-
-.user-avatar {
-    width: 80px !important;
-    height: 80px !important;
-}
-
-.user-avatar.default-avatar {
-    background: var(--surface-200);
-    color: var(--text-color-secondary);
-}
-
-.user-info {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.user-name {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-color);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 150px;
-}
-
-.selected-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.75rem;
-    color: var(--primary-color);
-}
-
-.selected-indicator i {
-    font-size: 0.875rem;
-}
-</style>

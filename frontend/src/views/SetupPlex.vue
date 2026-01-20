@@ -1,19 +1,24 @@
 <script setup>
-import { ref, watch, computed, onMounted } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import { useSetupStore } from '@/stores/setup';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
-import { DiscoverPlexServers, ValidatePlexConnection, SavePlexToken } from '../../wailsjs/go/main/App';
+import { DiscoverPlexServers, ValidatePlexConnection, SavePlexToken, SaveServerURL, StartPlexPINAuth, CheckPlexPINAuth } from '../../wailsjs/go/main/App';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import ProgressSpinner from 'primevue/progressspinner';
 import Message from 'primevue/message';
+import Tooltip from 'primevue/tooltip';
 import ServerCard from '@/components/ServerCard.vue';
 
 const setupStore = useSetupStore();
 
-// Token input state
-const showToken = ref(false);
-const tokenInput = ref(setupStore.plexToken || '');
+// PIN authentication state
+const authStep = ref('initial'); // 'initial', 'waiting', 'success', 'error'
+const pinCode = ref('');
+const pinID = ref(null);
+const authURL = ref('');
+const authError = ref('');
+const checkInterval = ref(null);
 
 // Server discovery state
 const isDiscovering = ref(false);
@@ -36,25 +41,100 @@ const hasServerUrl = computed(() => {
     return setupStore.plexServerUrl && setupStore.plexServerUrl.trim().length > 0;
 });
 
+// Tooltip content
+const discoveryTooltip = `Auto-discovery finds Plex servers on your LOCAL network only.
+
+✓ Works for: Localhost servers, LAN servers with native installation
+✗ Won't work for: Docker containers (bridge mode), remote servers, different subnets, blocked by firewall
+
+If discovery fails, use "Enter Manually" instead.`;
+
+const manualEntryTooltip = `Use manual entry when:
+
+• Plex is in Docker container (e.g., http://192.168.0.237:32400)
+• Remote/cloud server (e.g., https://plex.example.com:32400)
+• Server on different subnet/VLAN
+• Firewall blocks auto-discovery
+• Localhost server (e.g., http://localhost:32400)`;
+
 // Computed: Check if ready to validate (has token and server URL)
 const canValidate = computed(() => {
     return setupStore.isPlexStepValid && hasServerUrl.value;
 });
 
-// Watch for changes and update store
-watch(tokenInput, (newToken) => {
-    setupStore.setPlexToken(newToken);
+// Start PIN authentication
+const startPINAuth = async () => {
+    authError.value = '';
+    authStep.value = 'loading';
+    
+    try {
+        const result = await StartPlexPINAuth();
+        pinCode.value = result.pinCode;
+        pinID.value = result.pinID;
+        authURL.value = result.authURL;
+        authStep.value = 'waiting';
+        
+        // Start polling for authorization
+        checkInterval.value = setInterval(checkPINStatus, 2000);
+        
+        // Open browser automatically
+        BrowserOpenURL(authURL.value);
+    } catch (error) {
+        console.error('Failed to start PIN auth:', error);
+        authError.value = error?.message || 'Failed to start authentication';
+        authStep.value = 'error';
+    }
+};
+
+// Check PIN status
+const checkPINStatus = async () => {
+    try {
+        const result = await CheckPlexPINAuth(pinID.value);
+        
+        if (result.authorized) {
+            // Success! Save the token
+            setupStore.setPlexToken(result.authToken);
+            authStep.value = 'success';
+            
+            // Stop polling
+            if (checkInterval.value) {
+                clearInterval(checkInterval.value);
+                checkInterval.value = null;
+            }
+        } else if (result.expired) {
+            authError.value = 'PIN expired. Please try again.';
+            authStep.value = 'error';
+            
+            // Stop polling
+            if (checkInterval.value) {
+                clearInterval(checkInterval.value);
+                checkInterval.value = null;
+            }
+        }
+    } catch (error) {
+        console.error('Error checking PIN status:', error);
+    }
+};
+
+// Cancel PIN auth
+const cancelPINAuth = () => {
+    if (checkInterval.value) {
+        clearInterval(checkInterval.value);
+        checkInterval.value = null;
+    }
+    authStep.value = 'initial';
+    pinCode.value = '';
+    pinID.value = null;
+    authURL.value = '';
+    authError.value = '';
+};
+
+// Cleanup on unmount
+onUnmounted(() => {
+    if (checkInterval.value) {
+        clearInterval(checkInterval.value);
+    }
 });
-
-// Toggle password visibility
-const toggleTokenVisibility = () => {
-    showToken.value = !showToken.value;
-};
-
-// Open Plex token page in external browser
-const openPlexTokenPage = () => {
-    BrowserOpenURL('https://www.plex.tv/claim/');
-};
 
 // Discover Plex servers
 const discoverServers = async () => {
@@ -171,6 +251,9 @@ const validateConnection = async () => {
         const result = await ValidatePlexConnection(setupStore.plexServerUrl);
         setupStore.setValidationResult(result);
         validationError.value = '';
+
+        // Save server URL to backend config after successful validation
+        await SaveServerURL(setupStore.plexServerUrl);
     } catch (error) {
         console.error('Connection validation failed:', error);
 
@@ -222,85 +305,114 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="setup-step">
-        <div class="step-content">
+    <div class="max-w-4xl mx-auto">
+        <div class="py-8">
             <h2 class="text-3xl font-bold mb-4">Connect to Your Plex Account</h2>
             <p class="text-lg mb-6">
-                To connect PlexCord to your Plex Media Server, you'll need an authentication token.
+                Authenticate with Plex using a secure PIN code - no password required!
             </p>
 
-            <!-- Security Note -->
-            <div class="security-note mb-6">
-                <i class="pi pi-lock mr-2"></i>
-                <div>
-                    <strong>Security:</strong> Your token will be stored securely using your operating system's credential manager in the next step. Never share your token with anyone.
+            <!-- PIN Authentication Section -->
+            <div class="min-h-50 mb-6">
+                <!-- Initial State: Show Connect Button -->
+                <div v-if="authStep === 'initial'" class="auth-initial">
+                    <div class="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-gray-600 rounded-lg">
+                        <i class="pi pi-lock text-6xl text-primary"></i>
+                        <h3 class="text-xl font-semibold">Secure Authentication</h3>
+                        <p class="text-center text-surface-600 dark:text-surface-400">
+                            Click below to generate a PIN code, then authorize PlexCord in your browser.
+                        </p>
+                        <Button
+                            label="Connect with Plex"
+                            icon="pi pi-sign-in"
+                            @click="startPINAuth"
+                            size="large"
+                            class="mt-2"
+                        />
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div v-if="authStep === 'loading'" class="auth-loading">
+                    <div class="flex flex-col items-center gap-4 p-8">
+                        <ProgressSpinner style="width: 50px; height: 50px" />
+                        <p>Generating PIN code...</p>
+                    </div>
+                </div>
+
+                <!-- Waiting for Authorization -->
+                <div v-if="authStep === 'waiting'" class="auth-waiting">
+                    <div class="flex flex-col items-center gap-4 p-8 bg-surface-100 dark:bg-surface-800 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <ProgressSpinner style="width: 30px; height: 30px" />
+                            <div>
+                                <h3 class="text-2xl font-bold mb-2">Waiting for authorization...</h3>
+                                <p class="text-surface-600 dark:text-surface-400">A browser window has been opened. Please authorize PlexCord.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="pin-display">
+                            <div class="text-sm text-surface-600 dark:text-surface-400 mb-2">Your PIN Code:</div>
+                            <div class="text-6xl font-bold tracking-widest text-primary-500">{{ pinCode }}</div>
+                            <div class="text-sm text-surface-600 dark:text-surface-400 mt-2">Enter this code at plex.tv/link</div>
+                        </div>
+
+                        <div class="flex gap-3 mt-4">
+                            <Button
+                                label="Open Browser Again"
+                                icon="pi pi-external-link"
+                                @click="BrowserOpenURL(authURL)"
+                                outlined
+                            />
+                            <Button
+                                label="Cancel"
+                                icon="pi pi-times"
+                                @click="cancelPINAuth"
+                                severity="secondary"
+                                outlined
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Success State -->
+                <div v-if="authStep === 'success'" class="auth-success">
+                    <Message severity="success" :closable="false">
+                        <div class="flex items-center gap-3">
+                            <i class="pi pi-check-circle text-3xl"></i>
+                            <div>
+                                <div class="font-semibold">Successfully authenticated!</div>
+                                <div class="text-sm">You can now discover your Plex servers below.</div>
+                            </div>
+                        </div>
+                    </Message>
+                </div>
+
+                <!-- Error State -->
+                <div v-if="authStep === 'error'" class="auth-error">
+                    <Message severity="error" :closable="false">
+                        <div class="flex flex-col gap-3">
+                            <div class="flex items-center gap-3">
+                                <i class="pi pi-exclamation-circle text-2xl"></i>
+                                <div class="font-semibold">Authentication failed</div>
+                            </div>
+                            <div class="text-sm">{{ authError }}</div>
+                            <Button
+                                label="Try Again"
+                                icon="pi pi-refresh"
+                                @click="startPINAuth"
+                                size="small"
+                            />
+                        </div>
+                    </Message>
                 </div>
             </div>
 
-            <!-- Instructions Card -->
-            <div class="instructions-card mb-6">
-                <ol class="instructions-list">
-                    <li class="mb-6">
-                        <div class="flex items-center gap-3">
-                            <span class="step-number">1</span>
-                            <Button
-                                label="Get Token from Plex.tv"
-                                icon="pi pi-external-link"
-                                iconPos="right"
-                                @click="openPlexTokenPage"
-                                severity="info"
-                                outlined
-                            />
-                            <span class="text-sm text-gray-400">Sign in to your Plex account if prompted and copy the token</span>
-                        </div>
-                    </li>
-                    <li>
-                        <div class="flex items-start gap-3">
-                            <span class="step-number">2</span>
-                            <div class="flex-1 token-input-section" style="margin-top: -4px;">
-                                <label for="plex-token" class="block text-sm font-medium mb-2">
-                                    Paste your token here
-                                    <span class="text-red-500">*</span>
-                                </label>
-
-                                <div class="token-input-wrapper">
-                                    <InputText
-                                        id="plex-token"
-                                        v-model="tokenInput"
-                                        :type="showToken ? 'text' : 'password'"
-                                        placeholder="Enter your 20-character token here"
-                                        class="token-input"
-                                        :class="{ 'token-valid': tokenInput && tokenInput.trim().length > 0 }"
-                                    />
-                                    <Button
-                                        :icon="showToken ? 'pi pi-eye-slash' : 'pi pi-eye'"
-                                        @click="toggleTokenVisibility"
-                                        class="toggle-visibility-btn"
-                                        severity="secondary"
-                                        text
-                                        :aria-label="showToken ? 'Hide token' : 'Show token'"
-                                    />
-                                </div>
-
-                                <small v-if="!tokenInput || tokenInput.trim().length === 0" class="helper-text text-muted-color">
-                                    <i class="pi pi-info-circle mr-1"></i>
-                                    Required field - enter your token to continue
-                                </small>
-                                <small v-else class="helper-text text-green-600">
-                                    <i class="pi pi-check-circle mr-1"></i>
-                                    Token entered - you can proceed to the next step
-                                </small>
-                            </div>
-                        </div>
-                    </li>
-                </ol>
-            </div>
-
             <!-- Server Discovery Section -->
-            <div class="discovery-section mt-6">
-                <div class="section-header mb-4">
-                    <h3 class="text-xl font-semibold">{{ showManualEntry ? 'Enter Server Manually' : 'Discover Plex Servers' }}</h3>
-                    <p class="text-sm text-muted-color mt-2">
+            <div class="mt-8">
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold mb-2">{{ showManualEntry ? 'Enter Server Manually' : 'Discover Plex Servers' }}</h3>
+                    <p class="text-sm text-surface-600 dark:text-surface-400">
                         {{ showManualEntry ? 'Enter your Plex server URL directly' : 'Automatically find Plex servers on your local network' }}
                     </p>
                 </div>
@@ -336,7 +448,7 @@ onMounted(() => {
 
                         <!-- Helper Text -->
                         <div class="manual-entry-help mt-4">
-                            <p class="text-sm text-muted-color mb-2">
+                            <p class="text-sm text-surface-600 dark:text-surface-400 mb-2">
                                 <i class="pi pi-info-circle mr-1"></i>
                                 <strong>Examples of valid URLs:</strong>
                             </p>
@@ -345,7 +457,7 @@ onMounted(() => {
                                 <li><code>http://plex.local:32400</code> - Local server with hostname</li>
                                 <li><code>https://plex.example.com:32400</code> - Remote server with HTTPS</li>
                             </ul>
-                            <p class="text-sm text-muted-color mt-3">
+                            <p class="text-sm text-surface-600 dark:text-surface-400 mt-3">
                                 <i class="pi pi-lightbulb mr-1"></i>
                                 <strong>Tip:</strong> The default Plex port is <code>32400</code>. Use HTTPS for remote connections.
                             </p>
@@ -367,26 +479,42 @@ onMounted(() => {
 
                 <!-- Discovery UI (shown when NOT in manual entry mode) -->
                 <div v-if="!showManualEntry">
-                    <!-- Discover Button -->
-                    <Button
-                        v-if="!hasDiscovered && !isDiscovering"
-                        label="Discover Servers"
-                        icon="pi pi-search"
-                        @click="discoverServers"
-                        :disabled="!setupStore.isPlexStepValid"
-                        class="w-full"
-                    />
+                    <!-- Discover Button with Tooltip -->
+                    <div class="discovery-button-wrapper">
+                        <Button
+                            v-if="!hasDiscovered && !isDiscovering"
+                            label="Discover Servers"
+                            icon="pi pi-search"
+                            @click="discoverServers"
+                            :disabled="!setupStore.isPlexStepValid"
+                            class="w-full"
+                        />
+                        <i 
+                            v-if="!hasDiscovered && !isDiscovering"
+                            class="pi pi-question-circle ml-2 text-surface-600 dark:text-surface-400 cursor-help"
+                            v-tooltip.right="discoveryTooltip"
+                            style="font-size: 1.2rem; vertical-align: middle;"
+                        ></i>
+                    </div>
 
-                    <!-- Always show "Enter Manually" option -->
-                    <Button
-                        v-if="!hasDiscovered && !isDiscovering"
-                        label="Enter Manually"
-                        icon="pi pi-pencil"
-                        @click="enterManually"
-                        severity="info"
-                        outlined
-                        class="w-full mt-3"
-                    />
+                    <!-- Always show "Enter Manually" option with Tooltip -->
+                    <div class="manual-entry-button-wrapper mt-3">
+                        <Button
+                            v-if="!hasDiscovered && !isDiscovering"
+                            label="Enter Manually"
+                            icon="pi pi-pencil"
+                            @click="enterManually"
+                            severity="info"
+                            outlined
+                            class="w-full"
+                        />
+                        <i 
+                            v-if="!hasDiscovered && !isDiscovering"
+                            class="pi pi-question-circle ml-2 text-surface-600 dark:text-surface-400 cursor-help"
+                            v-tooltip.right="manualEntryTooltip"
+                            style="font-size: 1.2rem; vertical-align: middle;"
+                        ></i>
+                    </div>
 
                 <!-- Loading State -->
                 <div v-if="isDiscovering" class="discovery-loading">
@@ -396,7 +524,7 @@ onMounted(() => {
                         fill="transparent"
                         animationDuration="1s"
                     />
-                    <p class="text-muted-color mt-3">
+                    <p class="text-surface-600 dark:text-surface-400 mt-3">
                         Searching for Plex servers on your network...
                     </p>
                 </div>
@@ -408,11 +536,11 @@ onMounted(() => {
                 </div>
 
                 <!-- Discovered Servers -->
-                <div v-if="hasDiscovered && setupStore.discoveredServers.length > 0" class="discovered-servers mt-4">
-                    <p class="text-sm text-muted-color mb-3">
+                <div v-if="hasDiscovered && setupStore.discoveredServers.length > 0" class="discovered-servers mt-6">
+                    <p class="text-sm text-surface-600 dark:text-surface-400 mb-4">
                         Found {{ setupStore.discoveredServers.length }} server(s). Select one to continue:
                     </p>
-                    <div class="server-list">
+                    <div class="server-list space-y-3">
                         <ServerCard
                             v-for="server in setupStore.discoveredServers"
                             :key="server.id"
@@ -421,7 +549,7 @@ onMounted(() => {
                             @server-selected="handleServerSelected"
                         />
                     </div>
-                    <div class="discovery-actions mt-4">
+                    <div class="discovery-actions mt-6">
                         <Button
                             label="Search Again"
                             icon="pi pi-refresh"
@@ -437,7 +565,7 @@ onMounted(() => {
                     <div class="no-servers-message">
                         <i class="pi pi-info-circle text-3xl mb-3"></i>
                         <h4 class="font-semibold mb-2">No Servers Found</h4>
-                        <p class="text-sm text-muted-color mb-4">
+                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-4">
                             We couldn't find any Plex servers on your local network.
                             Make sure your Plex Media Server is running and connected to the same network.
                         </p>
@@ -462,7 +590,7 @@ onMounted(() => {
                 </div>
 
                     <!-- Helper Text -->
-                    <small v-if="!setupStore.isPlexStepValid && !hasDiscovered" class="helper-text text-muted-color mt-3">
+                    <small v-if="!setupStore.isPlexStepValid && !hasDiscovered" class="helper-text text-surface-600 dark:text-surface-400 mt-3">
                         <i class="pi pi-info-circle mr-1"></i>
                         Enter your Plex token above to enable server discovery
                     </small>
@@ -470,10 +598,10 @@ onMounted(() => {
             </div>
 
             <!-- Connection Validation Section -->
-            <div v-if="hasServerUrl" class="validation-section mt-6">
-                <div class="section-header mb-4">
-                    <h3 class="text-xl font-semibold">Verify Connection</h3>
-                    <p class="text-sm text-muted-color mt-2">
+            <div v-if="hasServerUrl" class="bg-surface-50 dark:bg-surface-900 p-6 rounded-lg border border-surface-200 dark:border-surface-700 mt-8">
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold mb-2">Verify Connection</h3>
+                    <p class="text-sm text-surface-600 dark:text-surface-400">
                         Test the connection to your Plex server before continuing
                     </p>
                 </div>
@@ -487,7 +615,7 @@ onMounted(() => {
                         :disabled="!canValidate"
                         class="w-full"
                     />
-                    <small class="helper-text text-muted-color mt-3">
+                    <small class="helper-text text-surface-600 dark:text-surface-400 mt-3">
                         <i class="pi pi-info-circle mr-1"></i>
                         This will verify your token and server are working correctly
                     </small>
@@ -501,7 +629,7 @@ onMounted(() => {
                         fill="transparent"
                         animationDuration="1s"
                     />
-                    <p class="text-muted-color mt-3">
+                    <p class="text-surface-600 dark:text-surface-400 mt-3">
                         Validating connection...
                     </p>
                 </div>
@@ -513,22 +641,22 @@ onMounted(() => {
                             <i class="pi pi-check-circle text-2xl"></i>
                         </template>
                         <div class="success-content">
-                            <h4 class="font-semibold mb-2">
-                                Connected to {{ setupStore.validationResult.serverName }}
+                            <h4 class="font-semibold text-lg mb-4">
+                                Connected to Plex Media Server
                             </h4>
-                            <div class="server-details">
-                                <span class="detail-item">
-                                    <i class="pi pi-server mr-1"></i>
-                                    Version {{ setupStore.validationResult.serverVersion }}
+                            <div class="server-details flex flex-col gap-3">
+                                <span class="detail-item flex items-center gap-3 text-sm">
+                                    <i class="pi pi-server text-base"></i>
+                                    <span>Version {{ setupStore.validationResult.serverVersion }}</span>
                                 </span>
-                                <span class="detail-item">
-                                    <i class="pi pi-folder mr-1"></i>
-                                    {{ setupStore.validationResult.libraryCount }} libraries found
+                                <span class="detail-item flex items-center gap-3 text-sm">
+                                    <i class="pi pi-folder text-base"></i>
+                                    <span>{{ setupStore.validationResult.libraryCount }} libraries found</span>
                                 </span>
                             </div>
                         </div>
                     </Message>
-                    <div class="validation-actions mt-4">
+                    <div class="validation-actions mt-6">
                         <Button
                             label="Re-validate"
                             icon="pi pi-refresh"
@@ -567,7 +695,7 @@ onMounted(() => {
                             outlined
                         />
                     </div>
-                    <small class="helper-text text-muted-color mt-3">
+                    <small class="helper-text text-surface-600 dark:text-surface-400 mt-3">
                         <i class="pi pi-lightbulb mr-1"></i>
                         Check that your Plex server is running and the token is correct
                     </small>
@@ -578,323 +706,21 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.setup-step {
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.step-content {
-    padding: 2rem 0;
-}
-
-.instructions-card {
-    background: var(--surface-ground);
-    padding: 1.5rem;
-    border-radius: 8px;
-    border: 1px solid var(--surface-border);
-}
-
-.instructions-list {
-    list-style: none;
-    padding: 0;
-    margin: 1rem 0 0 0;
-}
-
-.instructions-list li {
-    display: flex;
-    align-items: flex-start;
-    margin-bottom: 0.75rem;
-    padding-left: 0.5rem;
-}
-
-.step-number {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--primary-color);
-    color: var(--primary-color-text);
-    font-weight: bold;
-    font-size: 0.875rem;
-    margin-right: 0.75rem;
-    flex-shrink: 0;
-}
-
-.token-input-section {
-    margin-top: 2rem;
-}
-
-.token-input-wrapper {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    max-width: 600px;
-}
-
-.token-input {
-    flex: 1;
-    font-family: monospace;
-    letter-spacing: 0.05em;
-    min-width: 400px;
-}
-
-.token-input.token-valid {
-    border-color: var(--green-500);
-}
-
-.toggle-visibility-btn {
-    flex-shrink: 0;
-}
-
-.helper-text {
-    display: flex;
-    align-items: center;
-    margin-top: 0.5rem;
-    font-size: 0.875rem;
-}
-
-.security-note {
-    display: flex;
-    align-items: flex-start;
-    background: var(--surface-ground);
-    padding: 1rem;
-    border-radius: 8px;
-    border-left: 3px solid var(--primary-color);
-    font-size: 0.875rem;
-    color: var(--text-color-secondary);
-}
-
-.security-note i {
-    color: var(--primary-color);
-    margin-top: 0.125rem;
-}
-
-/* Discovery Section */
-.discovery-section {
-    background: var(--surface-ground);
-    padding: 1.5rem;
-    border-radius: 8px;
-    border: 1px solid var(--surface-border);
-}
-
-.section-header h3 {
-    margin: 0;
-}
-
-.discovery-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem 1rem;
-}
-
-.discovery-error {
-    display: flex;
-    align-items: center;
-    background: var(--red-50);
-    color: var(--red-700);
-    padding: 0.75rem;
-    border-radius: 6px;
-    border: 1px solid var(--red-200);
-}
-
-.discovery-error i {
-    font-size: 1.25rem;
-}
-
-.server-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.discovery-actions {
-    display: flex;
-    justify-content: center;
-}
-
-.no-servers-found {
-    text-align: center;
-}
-
-.no-servers-message {
-    padding: 2rem 1rem;
-    background: var(--surface-card);
-    border-radius: 8px;
-    border: 2px dashed var(--surface-border);
-}
-
-.no-servers-message i {
-    color: var(--text-color-secondary);
-}
-
-.no-servers-actions {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-/* Manual Entry Section */
-.manual-entry-form {
-    margin-top: 1rem;
-}
-
-.manual-entry-input-wrapper {
-    margin-bottom: 1rem;
-}
-
-.error-text {
-    display: flex;
-    align-items: center;
-    margin-top: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--red-600);
-}
-
-.manual-entry-help {
-    background: var(--surface-card);
-    padding: 1rem;
-    border-radius: 6px;
-    border: 1px solid var(--surface-border);
-}
-
-.example-list {
-    list-style: none;
-    padding: 0;
-    margin: 0.5rem 0;
-}
-
-.example-list li {
-    padding: 0.25rem 0;
-    font-size: 0.875rem;
-    color: var(--text-color-secondary);
-}
-
-.example-list code {
-    background: var(--surface-ground);
-    padding: 0.125rem 0.375rem;
-    border-radius: 3px;
-    font-family: monospace;
-    font-size: 0.8125rem;
-    color: var(--primary-color);
-}
-
-.manual-entry-actions {
-    display: flex;
-    justify-content: center;
-}
-
-/* Validation Section */
-.validation-section {
-    background: var(--surface-ground);
-    padding: 1.5rem;
-    border-radius: 8px;
-    border: 1px solid var(--surface-border);
-}
-
-.validation-trigger {
-    text-align: center;
-}
-
-.validation-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem 1rem;
-}
-
-.validation-success {
-    text-align: left;
-}
-
-.validation-success .success-content {
-    margin-left: 0.5rem;
-}
-
-.validation-success .server-details {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    margin-top: 0.5rem;
-}
-
-.validation-success .detail-item {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.875rem;
-    color: var(--text-color-secondary);
-}
-
-.validation-error {
-    text-align: left;
-}
-
-.validation-error .error-content {
-    margin-left: 0.5rem;
-}
-
-.validation-actions {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .step-content {
-        padding: 1rem 0;
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
     }
-
-    .instructions-card {
-        padding: 1rem;
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
+}
 
-    .token-input-wrapper {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .toggle-visibility-btn {
-        width: 100%;
-    }
-
-    .discovery-section {
-        padding: 1rem;
-    }
-
-    .no-servers-message {
-        padding: 1.5rem 1rem;
-    }
-
-    .no-servers-actions {
-        flex-direction: column;
-    }
-
-    .no-servers-actions button {
-        width: 100%;
-    }
-
-    .validation-section {
-        padding: 1rem;
-    }
-
-    .validation-actions {
-        flex-direction: column;
-    }
-
-    .validation-actions button {
-        width: 100%;
-    }
-
-    .validation-success .server-details {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
+.auth-initial,
+.auth-waiting,
+.auth-success,
+.auth-error {
+    animation: fadeIn 0.3s ease-in;
 }
 </style>

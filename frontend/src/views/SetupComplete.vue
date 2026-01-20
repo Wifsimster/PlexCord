@@ -1,32 +1,47 @@
 <script setup>
+import { onMounted } from 'vue';
 import DiscordPreview from '@/components/setup/DiscordPreview.vue';
+import { StartSessionPolling } from '../../wailsjs/go/main/App';
 
 // Note: The "Finish Setup" button is handled by SetupWizard.vue
-// This component just displays the completion content
+// This component displays the completion content with live preview
+
+// Start polling when component mounts so preview shows live playback
+onMounted(async () => {
+    try {
+        await StartSessionPolling();
+        console.log('Session polling started for preview');
+    } catch (error) {
+        // Silently handle error - polling might already be running
+        console.log('Session polling start skipped:', error);
+    }
+});
 </script>
 
 <template>
-    <div class="setup-step">
-        <div class="step-content">
+    <div class="max-w-4xl mx-auto">
+        <div class="py-4">
             <!-- Success Header -->
-            <div class="success-header text-center mb-6">
-                <div class="success-icon mb-4">
-                    <i class="pi pi-check-circle" style="font-size: 3rem; color: var(--green-500)"></i>
+            <div class="text-center mb-6">
+                <div class="mb-4 animate-[scaleIn_0.3s_ease-out]">
+                    <i class="pi pi-check-circle text-5xl text-green-500"></i>
                 </div>
                 <h2 class="text-2xl font-bold mb-2">You're All Set!</h2>
-                <p class="text-muted-color">
+                <p class="text-surface-600 dark:text-surface-400">
                     PlexCord is ready to display your Plex music activity on Discord.
                 </p>
             </div>
 
             <!-- Discord Preview Section -->
-            <div class="preview-section mb-6">
+            <div class="mb-6">
                 <h3 class="text-lg font-semibold mb-4 text-center">Discord Status Preview</h3>
-                <DiscordPreview />
+                <div class="bg-surface-50 dark:bg-surface-900 p-6 rounded-lg">
+                    <DiscordPreview />
+                </div>
             </div>
 
             <!-- What's Next Section -->
-            <div class="next-steps">
+            <div class="bg-surface-50 dark:bg-surface-900 p-6 rounded-lg">
                 <h3 class="text-lg font-semibold mb-3">What happens next?</h3>
                 <ul class="list-none p-0 m-0 space-y-3">
                     <li class="flex items-start gap-3">
@@ -45,12 +60,12 @@ import DiscordPreview from '@/components/setup/DiscordPreview.vue';
             </div>
 
             <!-- Tip Section -->
-            <div class="tip-section mt-6">
+            <div class="mt-6 bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border-l-4 border-blue-500">
                 <div class="flex items-start gap-3">
                     <i class="pi pi-info-circle text-blue-500 mt-1"></i>
                     <div>
                         <span class="font-semibold">Tip:</span>
-                        <span class="text-muted-color ml-1">
+                        <span class="text-surface-600 dark:text-surface-400 ml-1">
                             Start playing music on Plex now to see the live preview update above!
                         </span>
                     </div>
@@ -61,19 +76,6 @@ import DiscordPreview from '@/components/setup/DiscordPreview.vue';
 </template>
 
 <style scoped>
-.setup-step {
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.step-content {
-    padding: 1rem 0;
-}
-
-.success-icon {
-    animation: scaleIn 0.3s ease-out;
-}
-
 @keyframes scaleIn {
     from {
         transform: scale(0);
@@ -81,30 +83,5 @@ import DiscordPreview from '@/components/setup/DiscordPreview.vue';
     to {
         transform: scale(1);
     }
-}
-
-.preview-section {
-    background: var(--surface-ground);
-    padding: 1.5rem;
-    border-radius: 8px;
-}
-
-.next-steps {
-    background: var(--surface-ground);
-    padding: 1.5rem;
-    border-radius: 8px;
-}
-
-.tip-section {
-    background: var(--blue-50);
-    padding: 1rem;
-    border-radius: 8px;
-    border-left: 4px solid var(--blue-500);
-}
-
-/* Dark mode adjustments */
-:root[data-theme='dark'] .tip-section,
-.dark .tip-section {
-    background: rgba(59, 130, 246, 0.1);
 }
 </style>

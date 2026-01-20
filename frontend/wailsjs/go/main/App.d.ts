@@ -8,6 +8,8 @@ import {errors} from '../models';
 
 export function CheckForUpdate():Promise<version.UpdateInfo>;
 
+export function CheckPlexPINAuth(arg1:number):Promise<Record<string, any>>;
+
 export function CheckSetupComplete():Promise<boolean>;
 
 export function ClearDiscordPresence():Promise<void>;
@@ -91,6 +93,8 @@ export function SetPollingInterval(arg1:number):Promise<void>;
 export function ShowWindow():Promise<void>;
 
 export function SkipSetup():Promise<void>;
+
+export function StartPlexPINAuth():Promise<Record<string, any>>;
 
 export function StartSessionPolling():Promise<void>;
 

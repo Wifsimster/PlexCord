@@ -26,46 +26,24 @@ const selectServer = () => {
 
 <template>
     <Card
-        :class="['server-card', { 'selected': isSelected }]"
+        :class="[
+            'group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg',
+            { 'ring-2 ring-primary-500 border-primary-500': isSelected }
+        ]"
         @click="selectServer"
     >
         <template #title>
-            {{ server.name }}
+            <div class="flex items-center justify-between gap-3">
+                <h4 class="font-semibold text-lg">{{ server.name }}</h4>
+                <Badge :severity="badgeType" :value="badgeLabel" />
+            </div>
         </template>
         <template #content>
-            <div class="server-details">
-                <p class="server-address">{{ server.address }}:{{ server.port }}</p>
-                <Badge :severity="badgeType" :value="badgeLabel" />
+            <div class="mt-3">
+                <p class="font-mono text-sm text-surface-600 dark:text-surface-400">
+                    {{ server.address }}:{{ server.port }}
+                </p>
             </div>
         </template>
     </Card>
 </template>
-
-<style scoped>
-.server-card {
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-bottom: 1rem;
-}
-
-.server-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.server-card.selected {
-    border: 2px solid var(--primary-color);
-}
-
-.server-details {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.server-address {
-    font-family: monospace;
-    color: var(--text-color-secondary);
-    margin: 0;
-}
-</style>

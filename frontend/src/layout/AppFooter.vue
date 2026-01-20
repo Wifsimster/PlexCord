@@ -1,10 +1,22 @@
 <script setup>
-import URL from "@/components/URL.vue";
+import { ref, onMounted } from 'vue';
+import { GetVersion } from '../../wailsjs/go/main/App';
+
+const version = ref('');
+
+onMounted(async () => {
+    try {
+        const versionInfo = await GetVersion();
+        version.value = `v${versionInfo.version}`;
+    } catch (error) {
+        console.error('Failed to get version:', error);
+        version.value = 'Unknown';
+    }
+});
 </script>
 
 <template>
-    <div class="layout-footer font-bold text-lg">
-        <span>Wails + PrimeVue + Sakai</span><span>by</span>
-        <URL href="https://github.com/TekWizely/wails-template-primevue-sakai" rel="noopener noreferrer" class="text-primary hover:underline">TekWizely</URL>
+    <div class="layout-footer">
+        <span class="font-semibold">PlexCord {{ version }}</span>
     </div>
 </template>

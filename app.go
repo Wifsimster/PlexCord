@@ -40,6 +40,10 @@ type App struct {
 	// Retry managers (Story 6.4)
 	plexRetry    *retry.Manager
 	discordRetry *retry.Manager
+
+	// PIN authentication (maintain same client ID for PIN lifecycle)
+	plexAuth   *plex.Authenticator
+	plexAuthMu sync.Mutex
 }
 
 // NewApp creates a new App application struct
@@ -188,6 +192,93 @@ func (a *App) SetAutoStart(enabled bool) error {
 // the user should be redirected to the setup wizard on first launch
 func (a *App) CheckSetupComplete() bool {
 	return config.IsSetupComplete()
+}
+
+// StartPlexPINAuth initiates PIN-based authentication with Plex.
+// Returns a PIN code that the user must enter at plex.tv/link and the auth URL.
+// This is the easiest and most secure way for users to authenticate.
+func (a *App) StartPlexPINAuth() (map[string]interface{}, error) {
+	log.Println("Starting Plex PIN authentication")
+
+	a.plexAuthMu.Lock()
+	defer a.plexAuthMu.Unlock()
+
+	// Create a new authenticator for this PIN request
+	// This ensures we get a fresh client ID for this authentication session
+	a.plexAuth = plex.NewAuthenticator()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pinResp, err := a.plexAuth.RequestPIN(ctx)
+	if err != nil {
+		log.Printf("ERROR: Failed to request PIN: %v", err)
+		return nil, err
+	}
+
+	authURL := a.plexAuth.GetAuthURL(pinResp.Code)
+
+	log.Printf("PIN generated: %s (ID: %d, expires in %d seconds)", pinResp.Code, pinResp.ID, pinResp.ExpiresIn)
+
+	return map[string]interface{}{
+		"pinCode":   pinResp.Code,
+		"pinID":     pinResp.ID,
+		"authURL":   authURL,
+		"expiresIn": pinResp.ExpiresIn,
+		"expiresAt": pinResp.ExpiresAt.Format(time.RFC3339),
+	}, nil
+}
+
+// CheckPlexPINAuth checks if the user has authorized the PIN.
+// Returns the auth token if authorized, or an error if still pending or expired.
+func (a *App) CheckPlexPINAuth(pinID int) (map[string]interface{}, error) {
+	a.plexAuthMu.Lock()
+	auth := a.plexAuth
+	a.plexAuthMu.Unlock()
+
+	if auth == nil {
+		return nil, errors.New(errors.PLEX_CONN_FAILED, "PIN authentication not started")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pinResp, err := auth.CheckPIN(ctx, pinID)
+	if err != nil {
+		return nil, err
+	}
+
+	if pinResp.AuthToken != "" {
+		log.Printf("PIN authorized successfully, token received")
+
+		// Clear the authenticator after successful auth
+		a.plexAuthMu.Lock()
+		a.plexAuth = nil
+		a.plexAuthMu.Unlock()
+
+		return map[string]interface{}{
+			"authorized": true,
+			"authToken":  pinResp.AuthToken,
+		}, nil
+	}
+
+	// Check if expired
+	if time.Now().After(pinResp.ExpiresAt) {
+		// Clear the authenticator after expiration
+		a.plexAuthMu.Lock()
+		a.plexAuth = nil
+		a.plexAuthMu.Unlock()
+
+		return map[string]interface{}{
+			"authorized": false,
+			"expired":    true,
+		}, nil
+	}
+
+	return map[string]interface{}{
+		"authorized": false,
+		"expired":    false,
+	}, nil
 }
 
 // SavePlexToken stores the Plex token securely in OS keychain.

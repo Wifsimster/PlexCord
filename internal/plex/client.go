@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -52,6 +53,15 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Check if this is a claim token (not valid for API authentication)
+	if strings.HasPrefix(c.token, "claim-") {
+		return nil, errors.New(errors.PLEX_AUTH_FAILED,
+			"Invalid token type: You provided a claim token (starts with 'claim-'). "+
+				"Claim tokens are only used to link servers to your Plex account. "+
+				"Please get your authentication token from plex.tv instead. "+
+				"Visit: https://www.plex.tv/claim and sign in, then go to Settings > Account to get your X-Plex-Token.")
+	}
+
 	// Step 1: Get server identity using /identity endpoint
 	// Note: This endpoint doesn't require authentication
 	identityURL := fmt.Sprintf("%s/identity", c.serverURL)
@@ -84,7 +94,8 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 	}
 
 	// Step 2: Get library count
-	libraryURL := fmt.Sprintf("%s/library/sections?X-Plex-Token=%s", c.serverURL, url.QueryEscape(c.token))
+	libraryURL := fmt.Sprintf("%s/library/sections/?X-Plex-Token=%s", c.serverURL, url.QueryEscape(c.token))
+
 	libraryReq, err := http.NewRequestWithContext(ctx, "GET", libraryURL, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to create library request")
@@ -99,7 +110,12 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 	}
 	defer libraryResp.Body.Close()
 
+	log.Printf("Library validation response status: %d %s", libraryResp.StatusCode, libraryResp.Status)
+
 	if libraryResp.StatusCode != http.StatusOK {
+		// Read the response body for debugging
+		bodyBytes, _ := io.ReadAll(libraryResp.Body)
+		log.Printf("Library validation failed with status %d, body: %s", libraryResp.StatusCode, string(bodyBytes))
 		return nil, mapHTTPStatusCode(libraryResp.StatusCode)
 	}
 
@@ -165,9 +181,15 @@ func (c *Client) GetUsers() ([]PlexUser, error) {
 
 	users := make([]PlexUser, len(accounts.Accounts))
 	for i, acc := range accounts.Accounts {
+		name := acc.Name
+		// Use fallback name if account name is empty
+		if name == "" {
+			name = fmt.Sprintf("User %s", acc.ID)
+		}
+
 		users[i] = PlexUser{
 			ID:    acc.ID,
-			Name:  acc.Name,
+			Name:  name,
 			Thumb: acc.Thumb,
 		}
 	}
@@ -255,7 +277,6 @@ func (c *Client) GetMusicSessions(userID string) ([]MusicSession, error) {
 
 	req.Header.Set("User-Agent", "PlexCord/1.0")
 	req.Header.Set("Accept", "application/xml")
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, mapHTTPError(err, ctx)
@@ -368,6 +389,9 @@ func mapHTTPError(err error, ctx context.Context) error {
 // mapHTTPStatusCode maps HTTP status codes to appropriate error codes
 func mapHTTPStatusCode(statusCode int) error {
 	switch statusCode {
+	case http.StatusBadRequest:
+		// 400 Bad Request - often indicates token format issues
+		return errors.New(errors.PLEX_AUTH_FAILED, "invalid request - check token format")
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return errors.New(errors.PLEX_AUTH_FAILED, "invalid Plex token - authentication failed")
 	case http.StatusNotFound:

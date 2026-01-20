@@ -102,38 +102,38 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="setup-step">
-        <div class="step-header">
+    <div class="max-w-5xl mx-auto p-8">
+        <div class="text-center">
             <h2 class="text-2xl font-bold mb-2">Select User Account</h2>
-            <p class="text-muted-color">
+            <p class="text-surface-600 dark:text-surface-400">
                 Choose which Plex user account to monitor for playback activity
             </p>
         </div>
 
-        <div class="step-content mt-6">
+        <div class="min-h-75 mt-6">
             <!-- Loading State -->
-            <div v-if="isLoading" class="loading-container">
+            <div v-if="isLoading" class="flex flex-col items-center justify-center p-12">
                 <ProgressSpinner
                     style="width: 50px; height: 50px"
                     strokeWidth="4"
                     fill="transparent"
                     animationDuration="1s"
                 />
-                <p class="text-muted-color mt-3">Loading users...</p>
+                <p class="text-surface-600 dark:text-surface-400 mt-3">Loading users...</p>
             </div>
 
             <!-- Error State -->
-            <div v-else-if="error" class="error-container">
+            <div v-else-if="error" class="text-center">
                 <Message severity="error" :closable="false" class="w-full mb-4">
                     <template #icon>
                         <i class="pi pi-times-circle text-2xl"></i>
                     </template>
-                    <div class="error-content">
+                    <div class="text-left ml-2">
                         <h4 class="font-semibold mb-2">Failed to Load Users</h4>
                         <p class="text-sm">{{ error }}</p>
                     </div>
                 </Message>
-                <div class="error-actions">
+                <div class="flex justify-center gap-2 mt-4">
                     <Button
                         label="Retry"
                         icon="pi pi-refresh"
@@ -152,7 +152,7 @@ onMounted(() => {
             </div>
 
             <!-- No Users Found -->
-            <div v-else-if="users.length === 0 && !isLoading" class="no-users-container">
+            <div v-else-if="users.length === 0 && !isLoading" class="text-center">
                 <Message severity="warn" :closable="false" class="w-full mb-4">
                     <template #icon>
                         <i class="pi pi-info-circle text-2xl"></i>
@@ -165,7 +165,7 @@ onMounted(() => {
                         </p>
                     </div>
                 </Message>
-                <div class="no-users-actions">
+                <div class="flex justify-center mt-4">
                     <Button
                         label="Retry"
                         icon="pi pi-refresh"
@@ -176,7 +176,7 @@ onMounted(() => {
             </div>
 
             <!-- User List -->
-            <div v-else class="users-section">
+            <div v-else class="flex flex-col">
                 <!-- Auto-select info message -->
                 <Message v-if="autoSelected" severity="info" :closable="false" class="w-full mb-4">
                     <template #icon>
@@ -185,7 +185,7 @@ onMounted(() => {
                     Only one user found - automatically selected
                 </Message>
 
-                <div class="user-grid">
+                <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 justify-center">
                     <UserCard
                         v-for="user in users"
                         :key="user.id"
@@ -196,12 +196,12 @@ onMounted(() => {
                 </div>
 
                 <!-- Selection confirmation -->
-                <div v-if="selectedUser && !autoSelected" class="selection-info mt-4">
+                <div v-if="selectedUser && !autoSelected" class="text-center mt-4">
                     <Message severity="success" :closable="false" class="w-full">
                         <template #icon>
                             <i class="pi pi-user text-xl"></i>
                         </template>
-                        Monitoring playback for: <strong>{{ selectedUser.name }}</strong>
+                        Monitoring playback for: <strong>{{ selectedUser.name || `User ${selectedUser.id}` }}</strong>
                     </Message>
                 </div>
             </div>
@@ -211,86 +211,10 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.setup-step {
-    max-width: 700px;
-    margin: 0 auto;
-    padding: 2rem;
-}
-
-.step-header {
-    text-align: center;
-}
-
-.step-content {
-    min-height: 300px;
-}
-
-.loading-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 3rem 1rem;
-}
-
-.error-container {
-    text-align: center;
-}
-
-.error-content {
-    text-align: left;
-    margin-left: 0.5rem;
-}
-
-.error-actions {
-    display: flex;
-    justify-content: center;
-    gap: 0.5rem;
-    margin-top: 1rem;
-}
-
-.no-users-container {
-    text-align: center;
-}
-
-.no-users-actions {
-    display: flex;
-    justify-content: center;
-    margin-top: 1rem;
-}
-
-.users-section {
-    display: flex;
-    flex-direction: column;
-}
-
-.user-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 1rem;
-    justify-content: center;
-}
-
-.selection-info {
-    text-align: center;
-}
-
-/* Responsive adjustments */
+/* Responsive adjustments for grid */
 @media (max-width: 600px) {
-    .setup-step {
-        padding: 1rem;
-    }
-
-    .user-grid {
+    .grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    }
-
-    .error-actions {
-        flex-direction: column;
-    }
-
-    .error-actions button {
-        width: 100%;
     }
 }
 </style>
