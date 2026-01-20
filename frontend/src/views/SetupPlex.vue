@@ -247,8 +247,10 @@ const validateConnection = async () => {
         await SavePlexToken(setupStore.plexToken);
 
         // Validate the connection
-        const result = await ValidatePlexConnection(setupStore.plexServerUrl);
-        setupStore.setValidationResult(result);
+        await ValidatePlexConnection(setupStore.plexServerUrl);
+        
+        // If no error was thrown, validation was successful
+        setupStore.setValidationResult({ success: true });
         validationError.value = '';
 
         // Save server URL to backend config after successful validation
@@ -316,7 +318,7 @@ onMounted(() => {
             <p class="text-lg mb-6 text-surface-600 dark:text-surface-400">Authenticate with Plex using a secure PIN code - no password required!</p>
 
             <!-- PIN Authentication Section -->
-            <div class="min-h-50 mb-6">
+            <div class="mb-6" :class="{ 'min-h-50': authStep !== 'success' }">
                 <!-- Initial State: Show Connect Button -->
                 <div v-if="authStep === 'initial'" class="animate-fadein">
                     <div class="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-surface-300 dark:border-surface-600 rounded-lg">
