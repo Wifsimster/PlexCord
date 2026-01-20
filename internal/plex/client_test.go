@@ -51,7 +51,7 @@ func TestValidateConnectionSuccess(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <MediaContainer size="0" friendlyName="TestPlexServer" version="1.40.0.7998" machineIdentifier="abc123def456" claimed="1"/>`))
-		case "/library/sections":
+		case "/library/sections/":
 			// Verify token query parameter is present for authenticated endpoints
 			token := r.URL.Query().Get("X-Plex-Token")
 			if token != "valid-token" {
@@ -308,7 +308,7 @@ func TestValidateConnectionLibraryRequestFails(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <MediaContainer size="0" friendlyName="TestPlexServer" version="1.40.0.7998" machineIdentifier="abc123" claimed="1"/>`))
-		case "/library/sections":
+		case "/library/sections/":
 			// Return auth failure for library request
 			w.WriteHeader(http.StatusUnauthorized)
 		default:
@@ -459,7 +459,7 @@ func TestValidateConnectionZeroLibraries(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <MediaContainer size="0" friendlyName="EmptyServer" version="1.0" machineIdentifier="empty123" claimed="1"/>`))
-		case "/library/sections":
+		case "/library/sections/":
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
