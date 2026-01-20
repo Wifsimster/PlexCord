@@ -102,25 +102,48 @@ func (a *App) startup(ctx context.Context) {
 			}
 
 			// Auto-connect to Plex and start session polling
-			if a.config.ServerURL != "" && token != "" {
-				log.Printf("Auto-connecting to Plex on startup...")
-				err := a.ValidatePlexConnection(a.config.ServerURL)
-				if err != nil {
-					log.Printf("Warning: Failed to validate Plex connection on startup: %v", err)
-					// Start retry mechanism for automatic reconnection
-					a.startPlexRetry(err)
-				} else {
-					// Connection successful, start session polling
-					err = a.StartSessionPolling()
-					if err != nil {
-						log.Printf("Warning: Failed to start session polling on startup: %v", err)
-					} else {
-						log.Printf("Plex connection restored and session polling started")
-					}
-				}
-			}
+			a.autoConnectPlex()
 		}()
 	}
+}
+
+// autoConnectPlex attempts to restore the Plex connection using persisted config.
+// This mirrors Discord auto-connect behavior by validating and restarting polling.
+func (a *App) autoConnectPlex() {
+	if a.config.ServerURL == "" {
+		log.Printf("Auto-connect skipped: Plex server URL not configured")
+		return
+	}
+	if a.config.SelectedPlexUserID == "" {
+		log.Printf("Auto-connect skipped: Plex user not selected")
+		return
+	}
+
+	token, err := keychain.GetToken()
+	if err != nil {
+		log.Printf("Warning: Failed to retrieve Plex token on startup: %v", err)
+		a.startPlexRetry(err)
+		return
+	}
+	if token == "" {
+		log.Printf("Warning: No Plex token found on startup")
+		return
+	}
+
+	log.Printf("Auto-connecting to Plex on startup...")
+	if err := a.ValidatePlexConnection(a.config.ServerURL); err != nil {
+		log.Printf("Warning: Failed to validate Plex connection on startup: %v", err)
+		a.startPlexRetry(err)
+		return
+	}
+
+	if err := a.StartSessionPolling(); err != nil {
+		log.Printf("Warning: Failed to start session polling on startup: %v", err)
+		a.startPlexRetry(err)
+		return
+	}
+
+	log.Printf("Plex connection restored and session polling started")
 }
 
 // domReady is called after front-end resources have been loaded
@@ -1259,6 +1282,9 @@ func (a *App) startPlexRetry(err error) {
 	// Only retry for connection errors, not auth errors
 	if errors.IsAuthError(code) {
 		return // Auth errors require user action
+	}
+	if code != "" && !errors.IsRetryable(code) {
+		return
 	}
 	a.plexRetry.Start(err, code)
 }

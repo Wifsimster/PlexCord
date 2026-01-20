@@ -101,45 +101,45 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="max-w-5xl mx-auto p-8">
-        <div class="text-center">
-            <h2 class="text-2xl font-bold mb-2">Select User Account</h2>
-            <p class="text-surface-600 dark:text-surface-400">Choose which Plex user account to monitor for playback activity</p>
+    <div class="max-w-5xl mx-auto p-4 md:p-8">
+        <div class="text-center mb-8">
+            <h2 class="text-3xl font-bold mb-2 text-surface-900 dark:text-surface-0">Select User Account</h2>
+            <p class="text-lg text-surface-600 dark:text-surface-400">Choose which Plex user account to monitor for playback activity</p>
         </div>
 
-        <div class="min-h-75 mt-6">
+        <div class="min-h-[300px]">
             <!-- Loading State -->
-            <div v-if="isLoading" class="flex flex-col items-center justify-center p-12">
+            <div v-if="isLoading" class="flex flex-col items-center justify-center py-12">
                 <ProgressSpinner style="width: 50px; height: 50px" strokeWidth="4" fill="transparent" animationDuration="1s" />
-                <p class="text-surface-600 dark:text-surface-400 mt-3">Loading users...</p>
+                <p class="text-surface-600 dark:text-surface-400 mt-4">Loading users...</p>
             </div>
 
             <!-- Error State -->
-            <div v-else-if="error" class="text-center">
-                <Message severity="error" :closable="false" class="w-full mb-4">
+            <div v-else-if="error" class="text-center max-w-2xl mx-auto">
+                <Message severity="error" :closable="false" class="w-full mb-6">
                     <template #icon>
                         <i class="pi pi-times-circle text-2xl"></i>
                     </template>
-                    <div class="text-left ml-2">
-                        <h4 class="font-semibold mb-2">Failed to Load Users</h4>
-                        <p class="text-sm">{{ error }}</p>
+                    <div class="w-full text-left ml-2">
+                        <h4 class="font-semibold mb-1 text-lg">Failed to Load Users</h4>
+                        <p class="text-sm opacity-90">{{ error }}</p>
                     </div>
                 </Message>
-                <div class="flex justify-center gap-2 mt-4">
-                    <Button label="Retry" icon="pi pi-refresh" @click="fetchUsers" severity="danger" class="mr-2" />
+                <div class="flex justify-center gap-3">
+                    <Button label="Retry" icon="pi pi-refresh" @click="fetchUsers" severity="danger" />
                     <Button label="Go Back" icon="pi pi-arrow-left" @click="goBack" severity="secondary" outlined />
                 </div>
             </div>
 
             <!-- No Users Found -->
-            <div v-else-if="users.length === 0 && !isLoading" class="text-center">
-                <Message severity="warn" :closable="false" class="w-full mb-4">
+            <div v-else-if="users.length === 0 && !isLoading" class="text-center max-w-2xl mx-auto">
+                <Message severity="warn" :closable="false" class="w-full mb-6">
                     <template #icon>
                         <i class="pi pi-info-circle text-2xl"></i>
                     </template>
-                    <div>
-                        <h4 class="font-semibold mb-2">No Users Found</h4>
-                        <p class="text-sm">No user accounts were found on this Plex server. This may happen if the server is configured for admin-only access.</p>
+                    <div class="w-full text-left ml-2">
+                        <h4 class="font-semibold mb-1 text-lg">No Users Found</h4>
+                        <p class="text-sm opacity-90">No user accounts were found on this Plex server. This may happen if the server is configured for admin-only access.</p>
                     </div>
                 </Message>
                 <div class="flex justify-center mt-4">
@@ -150,25 +150,30 @@ onMounted(() => {
             <!-- User List -->
             <div v-else class="flex flex-col">
                 <!-- Auto-select info message -->
-                <Message v-if="autoSelected" severity="info" :closable="false" class="w-full mb-4">
-                    <template #icon>
-                        <i class="pi pi-check-circle text-xl"></i>
-                    </template>
-                    Only one user found - automatically selected
-                </Message>
+                <div v-if="autoSelected" class="mb-6 flex justify-center">
+                    <Message severity="info" :closable="false" class="w-full max-w-2xl">
+                        <div class="flex items-center gap-2">
+                            <i class="pi pi-check-circle text-xl"></i>
+                            <span>Only one user found - automatically selected</span>
+                        </div>
+                    </Message>
+                </div>
 
                 <!-- User Grid -->
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                     <UserCard v-for="user in users" :key="user.id" :user="user" :selected="selectedUser?.id === user.id" @select="selectUser" />
                 </div>
 
                 <!-- Selection confirmation -->
-                <div v-if="selectedUser && !autoSelected" class="text-center mt-4">
-                    <Message severity="success" :closable="false" class="w-full">
-                        <template #icon>
-                            <i class="pi pi-user text-xl"></i>
-                        </template>
-                        Monitoring playback for: <strong>{{ selectedUser.name || `User ${selectedUser.id}` }}</strong>
+                <div v-if="selectedUser && !autoSelected" class="text-center mt-8 animate-fadein">
+                    <Message severity="success" :closable="false" class="inline-flex max-w-2xl">
+                        <div class="flex items-center gap-3 px-2">
+                            <i class="pi pi-user text-xl bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 p-2 rounded-full"></i>
+                            <div class="text-left">
+                                <span class="block text-sm text-surface-600 dark:text-surface-400">Currently monitoring:</span>
+                                <strong class="text-lg">{{ selectedUser.name || `User ${selectedUser.id}` }}</strong>
+                            </div>
+                        </div>
                     </Message>
                 </div>
             </div>
@@ -177,10 +182,18 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Responsive adjustments for grid */
-@media (max-width: 600px) {
-    .grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+.animate-fadein {
+    animation: fadein 0.3s ease-out;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 </style>

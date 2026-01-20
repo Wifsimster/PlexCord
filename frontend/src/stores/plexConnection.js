@@ -87,12 +87,12 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
          * Setup Wails event listeners for Plex
          */
         setupEventListeners() {
-            EventsOn('PlexConnectionLost', async (data) => {
+            EventsOn('PlexConnectionError', async (data) => {
                 this.connected = false;
                 this.inErrorState = true;
                 console.log('Plex connection error:', data);
 
-                const errorCode = data?.code || 'PLEX_UNREACHABLE';
+                const errorCode = data?.errorCode || data?.code || 'PLEX_UNREACHABLE';
                 await this.setError(errorCode);
             });
 
@@ -112,7 +112,7 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
          * Cleanup event listeners
          */
         cleanup() {
-            EventsOff('PlexConnectionLost');
+            EventsOff('PlexConnectionError');
             EventsOff('PlexConnectionRestored');
             EventsOff('PlexRetryState');
             this.initialized = false;

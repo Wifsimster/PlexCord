@@ -9,6 +9,7 @@ import PrimeVue from 'primevue/config';
 import ConfirmationService from 'primevue/confirmationservice';
 import ToastService from 'primevue/toastservice';
 
+import '@/assets/tailwind.css';
 import '@/assets/styles.scss';
 
 const PlexCordPreset = definePreset(Aura, {
@@ -38,7 +39,7 @@ app.use(PrimeVue, {
     theme: {
         preset: PlexCordPreset,
         options: {
-            darkModeSelector: '.app-dark'
+            darkModeSelector: '.dark'
         }
     }
 });

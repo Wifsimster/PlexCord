@@ -34,46 +34,44 @@ const artworkUrl = computed(() => {
 </script>
 
 <template>
-    <div class="discord-preview-wrapper">
+    <div class="discord-preview-container">
         <!-- Discord-style Rich Presence Card -->
-        <div class="discord-presence-card">
+        <div class="discord-card">
             <!-- Header -->
-            <div class="presence-header">
-                <i class="pi pi-headphones"></i>
+            <div class="discord-header">
+                <i class="pi pi-headphones text-[#3ba55c] mr-2"></i>
                 <span>Listening to Plex</span>
             </div>
 
             <!-- Content when music is playing -->
-            <div v-if="hasActiveSession" class="presence-content">
+            <div v-if="hasActiveSession" class="discord-content">
                 <!-- Album artwork -->
-                <div class="presence-artwork">
+                <div class="discord-artwork">
                     <img :src="artworkUrl" :alt="currentTrack?.album || 'Album artwork'" @error="(e) => (e.target.src = placeholderImage)" />
                 </div>
 
                 <!-- Track info -->
-                <div class="presence-info">
-                    <div class="presence-title">{{ currentTrack?.track || 'Unknown Track' }}</div>
-                    <div class="presence-artist">by {{ currentTrack?.artist || 'Unknown Artist' }}</div>
-                    <div class="presence-album">on {{ currentTrack?.album || 'Unknown Album' }}</div>
-                    <div class="presence-time">
-                        <span v-if="isPaused" class="paused-indicator">
-                            <i class="pi pi-pause"></i> Paused
-                        </span>
-                        <span v-else>
-                            <i class="pi pi-play"></i> {{ formattedPosition }} / {{ formattedDuration }}
-                        </span>
+                <div class="discord-info">
+                    <div class="track-title" :title="currentTrack?.track">
+                        {{ currentTrack?.track || 'Unknown Track' }}
+                    </div>
+                    <div class="track-artist" :title="currentTrack?.artist">by {{ currentTrack?.artist || 'Unknown Artist' }}</div>
+                    <div class="track-album" :title="currentTrack?.album">on {{ currentTrack?.album || 'Unknown Album' }}</div>
+                    <div class="track-progress">
+                        <span v-if="isPaused" class="paused-state"> <i class="pi pi-pause text-[10px] mr-1"></i> Paused </span>
+                        <span v-else class="playing-state"> <i class="pi pi-play text-[10px] mr-1"></i> {{ formattedPosition }} / {{ formattedDuration }} </span>
                     </div>
                 </div>
             </div>
 
             <!-- Empty state when no music playing -->
-            <div v-else class="presence-empty">
+            <div v-else class="discord-empty">
                 <div class="empty-icon">
                     <i class="pi pi-volume-off"></i>
                 </div>
                 <div class="empty-text">
-                    <p class="font-semibold">No music playing</p>
-                    <p class="text-sm text-muted-color">Start playing music on Plex to see the preview</p>
+                    <p class="empty-title">No music playing</p>
+                    <p class="empty-subtitle">Start playing music on Plex to see the preview</p>
                 </div>
             </div>
         </div>
@@ -81,119 +79,147 @@ const artworkUrl = computed(() => {
 </template>
 
 <style scoped>
-.discord-preview-wrapper {
+.discord-preview-container {
+    width: 100%;
     max-width: 400px;
     margin: 0 auto;
 }
 
-.discord-presence-card {
-    background: #2f3136;
+.discord-card {
+    background-color: #2f3136;
     border-radius: 8px;
     overflow: hidden;
-    color: #dcddde;
     font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: #dcddde;
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-.presence-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: #202225;
-    font-size: 0.75rem;
+.discord-header {
+    background-color: #202225;
+    padding: 12px 16px;
+    font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.025em;
     color: #b9bbbe;
-}
-
-.presence-header i {
-    color: #3ba55c;
-}
-
-.presence-content {
     display: flex;
-    gap: 1rem;
-    padding: 1rem;
+    align-items: center;
 }
 
-.presence-artwork {
+.discord-content {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+}
+
+.discord-artwork {
     flex-shrink: 0;
 }
 
-.presence-artwork img {
+.discord-artwork img {
     width: 80px;
     height: 80px;
     border-radius: 8px;
     object-fit: cover;
+    background-color: #202225;
 }
 
-.presence-info {
+.discord-info {
     display: flex;
     flex-direction: column;
     justify-content: center;
     min-width: 0;
     flex: 1;
+    gap: 2px;
 }
 
-.presence-title {
+.track-title {
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 14px;
     color: #ffffff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 0.25rem;
+    cursor: pointer;
 }
 
-.presence-artist,
-.presence-album {
-    font-size: 0.8rem;
+.track-title:hover {
+    text-decoration: underline;
+}
+
+.track-artist,
+.track-album {
+    font-size: 12px;
     color: #b9bbbe;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    cursor: pointer;
 }
 
-.presence-time {
-    margin-top: 0.5rem;
-    font-size: 0.75rem;
-    color: #72767d;
+.track-artist:hover,
+.track-album:hover {
+    text-decoration: underline;
+}
+
+.track-progress {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #b9bbbe;
     display: flex;
     align-items: center;
-    gap: 0.25rem;
 }
 
-.presence-time i {
-    font-size: 0.65rem;
-}
-
-.paused-indicator {
+.paused-state {
     color: #faa61a;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
 }
 
-.presence-empty {
+.playing-state {
+    display: flex;
+    align-items: center;
+}
+
+.discord-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem 1rem;
+    padding: 32px 16px;
     text-align: center;
 }
 
 .empty-icon {
-    font-size: 2.5rem;
-    color: #72767d;
-    margin-bottom: 1rem;
+    width: 64px;
+    height: 64px;
+    background-color: #36393f;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
 }
 
-.empty-text p {
-    margin: 0;
+.empty-icon i {
+    font-size: 24px;
+    color: #72767d;
+}
+
+.empty-text {
     color: #b9bbbe;
 }
 
-.empty-text .text-sm {
+.empty-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.empty-subtitle {
+    font-size: 12px;
     color: #72767d;
-    margin-top: 0.25rem;
 }
 </style>

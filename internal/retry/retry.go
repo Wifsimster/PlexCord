@@ -136,6 +136,12 @@ func (m *Manager) ManualRetry() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Ensure retry context exists so manual retry works even if not already running
+	if m.ctx == nil || m.ctx.Err() != nil {
+		m.ctx, m.cancel = context.WithCancel(context.Background())
+		m.running = true
+	}
+
 	// Stop any pending timer
 	if m.timer != nil {
 		m.timer.Stop()

@@ -1,23 +1,76 @@
-<script setup></script>
+<script setup>
+import Button from 'primevue/button';
+import { useRouter } from 'vue-router';
+import { useSetupStore } from '@/stores/setup';
+
+const router = useRouter();
+const setupStore = useSetupStore();
+
+const startSetup = () => {
+    setupStore.nextStep();
+    router.push('/setup/plex');
+};
+</script>
 
 <template>
-    <div class="max-w-4xl mx-auto">
-        <div class="py-8">
-            <h2 class="text-3xl font-bold mb-4">Welcome to PlexCord</h2>
-            <p class="text-lg mb-6">PlexCord bridges your Plex Media Server with Discord Rich Presence, letting your friends see what you're watching or listening to.</p>
+    <div class="flex flex-col items-center justify-center py-10">
+        <!-- Hero Section -->
+        <div class="text-center mb-12 max-w-2xl mx-auto animate-fadein">
+            <h2 class="text-3xl md:text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-indigo-500">Bridge Your Music</h2>
+            <p class="text-xl text-surface-600 dark:text-surface-300 leading-relaxed mb-8">
+                Seamlessly display your Plex music activity on Discord. <br />
+                Rich Presence, automatic updates, and zero hassle.
+            </p>
+            <Button label="Get Started" icon="pi pi-arrow-right" iconPos="right" size="large" rounded @click="startSetup" class="px-8 py-4 text-xl shadow-lg hover:shadow-xl transition-all" />
+        </div>
 
-            <div class="mb-8">
-                <h3 class="text-xl font-semibold mb-3">What you'll need:</h3>
-                <div class="bg-surface-50 dark:bg-surface-900 p-6 rounded-lg">
-                    <ul class="list-disc list-inside space-y-2">
-                        <li>A Plex account and media server</li>
-                        <li>Discord desktop application</li>
-                        <li>Just a few minutes to set everything up</li>
-                    </ul>
+        <!-- Features Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl mb-12">
+            <div class="bg-surface-50 dark:bg-surface-800/50 p-6 rounded-xl border border-surface-100 dark:border-surface-700 hover:border-primary-500/50 transition-colors">
+                <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mb-4 text-orange-500">
+                    <i class="pi pi-server text-2xl"></i>
                 </div>
+                <h3 class="text-lg font-semibold mb-2">Connect Plex</h3>
+                <p class="text-surface-600 dark:text-surface-400 text-sm">Link your Plex Media Server securely with a PIN code. Supports local and remote servers.</p>
             </div>
 
-            <p class="text-surface-600 dark:text-surface-400 mb-4">This wizard will guide you through the setup process step by step.</p>
+            <div class="bg-surface-50 dark:bg-surface-800/50 p-6 rounded-xl border border-surface-100 dark:border-surface-700 hover:border-primary-500/50 transition-colors">
+                <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-4 text-indigo-500">
+                    <i class="pi pi-discord text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Sync Discord</h3>
+                <p class="text-surface-600 dark:text-surface-400 text-sm">Automatically updates your status on Discord with rich album art and track details.</p>
+            </div>
+
+            <div class="bg-surface-50 dark:bg-surface-800/50 p-6 rounded-xl border border-surface-100 dark:border-surface-700 hover:border-primary-500/50 transition-colors">
+                <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4 text-green-500">
+                    <i class="pi pi-bolt text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Set & Forget</h3>
+                <p class="text-surface-600 dark:text-surface-400 text-sm">Runs silently in the background. Auto-starts with your system and minimizes to tray.</p>
+            </div>
+        </div>
+
+        <!-- Requirements -->
+        <div class="text-center text-sm text-surface-500 dark:text-surface-500">
+            <p>Requires Plex Media Server and Discord Desktop App</p>
         </div>
     </div>
 </template>
+
+<style scoped>
+.animate-fadein {
+    animation: fadein 0.8s ease-out;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>

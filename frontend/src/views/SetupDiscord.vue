@@ -218,43 +218,45 @@ watch(showCustomClientId, () => {
 <template>
     <div class="max-w-4xl mx-auto">
         <div class="py-8">
-            <h2 class="text-3xl font-bold mb-4">Connect to Discord</h2>
-            <p class="text-lg mb-6">PlexCord will display your Plex music activity on Discord using Rich Presence.</p>
+            <h2 class="text-3xl font-bold mb-4 text-surface-900 dark:text-surface-0">Connect to Discord</h2>
+            <p class="text-lg mb-6 text-surface-600 dark:text-surface-400">PlexCord will display your Plex music activity on Discord using Rich Presence.</p>
 
             <!-- Discord Client Detection Notice -->
-            <Message v-if="connectionState === 'initial'" severity="info" :closable="false" class="mb-6">
-                <div class="flex items-center gap-3">
-                    <i class="pi pi-discord text-xl"></i>
-                    <span>Make sure Discord is running on your computer before connecting.</span>
-                </div>
-            </Message>
+            <div v-if="connectionState === 'initial'" class="mb-6">
+                <Message severity="info" :closable="false">
+                    <div class="flex items-center gap-3">
+                        <i class="pi pi-discord text-xl"></i>
+                        <span>Make sure Discord is running on your computer before connecting.</span>
+                    </div>
+                </Message>
+            </div>
 
             <!-- Connection Status Section -->
-            <div class="connection-section mb-6">
+            <div class="mb-8">
                 <!-- Initial State: Show Connect Button -->
-                <div v-if="connectionState === 'initial'" class="connection-initial">
-                    <div class="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-gray-600 rounded-lg">
-                        <h3 class="text-xl font-semibold">Discord Rich Presence</h3>
-                        <p class="text-center text-muted-color">Connect to Discord to show your Plex music activity on your profile.</p>
+                <div v-if="connectionState === 'initial'" class="animate-fadein">
+                    <div class="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-surface-300 dark:border-surface-600 rounded-lg">
+                        <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0">Discord Rich Presence</h3>
+                        <p class="text-center text-surface-600 dark:text-surface-400">Connect to Discord to show your Plex music activity on your profile.</p>
                         <Button label="Connect to Discord" icon="pi pi-link" @click="connectToDiscord" size="large" class="mt-2" :disabled="!isClientIdValid" />
                     </div>
                 </div>
 
                 <!-- Connecting State -->
-                <div v-if="connectionState === 'connecting'" class="connection-loading">
+                <div v-if="connectionState === 'connecting'" class="animate-fadein">
                     <div class="flex flex-col items-center gap-4 p-8 bg-surface-100 dark:bg-surface-800 rounded-lg">
                         <ProgressSpinner style="width: 50px; height: 50px" />
-                        <h3 class="text-xl font-semibold">Connecting to Discord...</h3>
-                        <p class="text-muted-color">Establishing connection with your Discord client</p>
+                        <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0">Connecting to Discord...</h3>
+                        <p class="text-surface-600 dark:text-surface-400">Establishing connection with your Discord client</p>
                     </div>
                 </div>
 
                 <!-- Connected State -->
-                <div v-if="connectionState === 'connected'" class="connection-success">
+                <div v-if="connectionState === 'connected'" class="animate-fadein">
                     <div class="flex flex-col items-center gap-4 p-8 bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-lg">
                         <i class="pi pi-check-circle text-6xl text-green-500"></i>
                         <h3 class="text-xl font-semibold text-green-600 dark:text-green-400">Connected to Discord!</h3>
-                        <p class="text-center text-muted-color">PlexCord is now connected and will update your Discord status when you play music.</p>
+                        <p class="text-center text-surface-600 dark:text-surface-400">PlexCord is now connected and will update your Discord status when you play music.</p>
 
                         <!-- Test Success Message -->
                         <Message v-if="testSuccess" severity="success" :closable="true" class="w-full"> Test presence sent successfully! Check your Discord profile. </Message>
@@ -264,7 +266,7 @@ watch(showCustomClientId, () => {
                             {{ testError }}
                         </Message>
 
-                        <div class="flex gap-3 flex-wrap justify-center">
+                        <div class="flex gap-3 flex-wrap justify-center mt-2">
                             <Button label="Send Test Presence" icon="pi pi-send" @click="testPresence" :loading="isTesting" severity="info" />
                             <Button label="Test Again" icon="pi pi-refresh" @click="retryConnection" outlined severity="secondary" />
                             <Button label="Disconnect" icon="pi pi-times" @click="disconnect" outlined severity="danger" />
@@ -273,17 +275,17 @@ watch(showCustomClientId, () => {
                 </div>
 
                 <!-- Error State -->
-                <div v-if="connectionState === 'error'" class="connection-error">
+                <div v-if="connectionState === 'error'" class="animate-fadein">
                     <Message severity="error" :closable="false" class="mb-4">
                         <div class="flex flex-col gap-2">
                             <div class="flex items-center gap-2">
-                                <i class="pi pi-times-circle"></i>
-                                <span class="font-semibold">Connection Failed</span>
+                                <i class="pi pi-times-circle text-xl"></i>
+                                <span class="font-semibold text-lg">Connection Failed</span>
                             </div>
                             <p>{{ connectionError }}</p>
                         </div>
                     </Message>
-                    <div class="flex flex-col gap-3">
+                    <div class="flex flex-col gap-3 sm:flex-row justify-center">
                         <Button label="Retry Connection" icon="pi pi-refresh" @click="retryConnection" :loading="isConnecting" />
                         <Button label="Back to Setup" icon="pi pi-arrow-left" @click="disconnect" outlined severity="secondary" />
                     </div>
@@ -293,39 +295,39 @@ watch(showCustomClientId, () => {
             <!-- Advanced Configuration -->
             <div class="border-t border-surface-200 dark:border-surface-700 pt-8">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold">Advanced Configuration</h3>
+                    <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-0">Advanced Configuration</h3>
                     <Button :icon="showCustomClientId ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" @click="toggleCustomClientId" text size="small" :label="showCustomClientId ? 'Hide' : 'Show'" />
                 </div>
 
-                <div v-if="showCustomClientId" class="custom-client-id-section p-4 bg-surface-50 dark:bg-surface-900 rounded-lg">
+                <div v-if="showCustomClientId" class="animate-slideDown p-6 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
                     <div class="mb-4">
-                        <label class="block mb-2 font-medium">Custom Discord Application Client ID</label>
-                        <p class="text-sm text-muted-color mb-3">Use your own Discord application for custom branding or testing. Leave empty to use the default PlexCord application.</p>
+                        <label class="block mb-2 font-medium text-surface-900 dark:text-surface-0">Custom Discord Application Client ID</label>
+                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">Use your own Discord application for custom branding or testing. Leave empty to use the default PlexCord application.</p>
                         <div class="flex flex-col gap-2">
                             <InputText v-model="customClientId" placeholder="Enter Discord Application Client ID (17+ digits)" @blur="handleClientIdChange" @input="handleClientIdChange" :class="{ 'p-invalid': !isClientIdValid }" class="w-full" />
                             <small v-if="clientIdError" class="text-red-500">{{ clientIdError }}</small>
-                            <small v-else class="text-muted-color"> Default: {{ defaultClientId }} </small>
+                            <small v-else class="text-surface-500"> Default: {{ defaultClientId }} </small>
                         </div>
                     </div>
 
                     <!-- Instructions Toggle -->
-                    <div class="instructions-toggle">
+                    <div class="mt-4">
                         <Button label="How to create a Discord application" icon="pi pi-question-circle" @click="showInstructions = !showInstructions" text size="small" />
                     </div>
 
                     <!-- Instructions Panel -->
-                    <div v-if="showInstructions" class="instructions-panel mt-4 p-4 bg-surface-100 dark:bg-surface-800 rounded-lg">
-                        <h4 class="font-semibold mb-3">Creating a Custom Discord Application:</h4>
-                        <ol class="list-decimal list-inside space-y-2 text-sm">
-                            <li>Go to the <a href="#" @click.prevent="openDeveloperPortal" class="text-primary hover:underline">Discord Developer Portal</a></li>
+                    <div v-if="showInstructions" class="mt-4 p-4 bg-surface-100 dark:bg-surface-900/50 rounded-lg animate-fadein">
+                        <h4 class="font-semibold mb-3 text-surface-900 dark:text-surface-0">Creating a Custom Discord Application:</h4>
+                        <ol class="list-decimal list-inside space-y-2 text-sm text-surface-700 dark:text-surface-300">
+                            <li>Go to the <a href="#" @click.prevent="openDeveloperPortal" class="text-primary-500 hover:underline">Discord Developer Portal</a></li>
                             <li>Click "New Application" and give it a name</li>
                             <li>Copy the "Application ID" from the General Information page</li>
                             <li>Paste it in the field above</li>
                             <li>(Optional) Upload custom images in the Rich Presence Art Assets section</li>
                         </ol>
-                        <Message severity="warn" :closable="false" class="mt-4">
-                            <p class="text-sm">Custom applications require additional setup. Most users should use the default PlexCord application.</p>
-                        </Message>
+                        <div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded text-yellow-700 dark:text-yellow-300 text-sm">
+                            <p>Custom applications require additional setup. Most users should use the default PlexCord application.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -334,7 +336,25 @@ watch(showCustomClientId, () => {
 </template>
 
 <style scoped>
-/* Tailwind animations for custom transitions */
+.animate-fadein {
+    animation: fadein 0.3s ease-out;
+}
+
+.animate-slideDown {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 @keyframes slideDown {
     from {
         opacity: 0;
@@ -344,10 +364,5 @@ watch(showCustomClientId, () => {
         opacity: 1;
         transform: translateY(0);
     }
-}
-
-.custom-client-id-section,
-.instructions-panel {
-    animation: slideDown 0.3s ease-out;
 }
 </style>

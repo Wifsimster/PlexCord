@@ -87,7 +87,10 @@ func (a *Authenticator) RequestPIN(ctx context.Context) (*PINResponse, error) {
 	}()
 
 	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body) // Ignore error - best effort for error message
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			body = []byte("unable to read error response")
+		}
 		return nil, errors.New(errors.PLEX_CONN_FAILED,
 			fmt.Sprintf("PIN request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
@@ -129,7 +132,10 @@ func (a *Authenticator) CheckPIN(ctx context.Context, pinID int) (*PINResponse, 
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body) // Ignore error - best effort for error message
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			body = []byte("unable to read error response")
+		}
 		return nil, errors.New(errors.PLEX_CONN_FAILED,
 			fmt.Sprintf("PIN check failed with status %d: %s", resp.StatusCode, string(body)))
 	}

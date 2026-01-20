@@ -157,12 +157,12 @@ export const useConnectionStore = defineStore('connection', {
          */
         setupEventListeners() {
             // Plex connection events
-            EventsOn('PlexConnectionLost', (_data) => {
+            EventsOn('PlexConnectionError', (_data) => {
                 this.plex.connected = false;
                 this.plex.inErrorState = true;
                 console.log('Plex connection error:', _data);
                 // Add error banner with fallback error code
-                const errorCode = _data?.code || 'PLEX_UNREACHABLE';
+                const errorCode = _data?.errorCode || _data?.code || 'PLEX_UNREACHABLE';
                 this.addError('plex', errorCode);
             });
 
