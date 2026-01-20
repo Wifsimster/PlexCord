@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "Skill(bmad:bmm:workflows:sprint-planning)",
+      "Skill(bmad:bmm:workflows:sprint-planning:*)",
+      "Skill(bmad:bmm:workflows:create-story)",
+      "Skill(bmad:bmm:workflows:create-story:*)",
+      "Skill(bmad:bmm:workflows:dev-story)",
+      "Skill(bmad:bmm:workflows:dev-story:*)",
+      "Bash(go version:*)",
+      "Bash(node --version:*)",
+      "Bash(wails version:*)",
+      "Bash(cmd.exe /c \"go version\")",
+      "Bash(cmd.exe /c \"wails version\")",
+      "Bash(powershell.exe -Command \"go version\")",
+      "Bash(powershell.exe -Command \"node --version\")",
+      "Bash(powershell.exe -Command \"wails version\")",
+      "Bash(powershell.exe -Command \"Get-Process | Where-Object {$_ProcessName -like ''*go*'' -or $_ProcessName -like ''*install*'' -or $_ProcessName -like ''*msi*''} | Select-Object Id, ProcessName, CPU | Format-Table\")",
+      "Bash(powershell.exe -Command \"Get-Process msiexec -ErrorAction SilentlyContinue | Stop-Process -Force; Write-Host ''MSI processes killed''\")",
+      "Bash(powershell.exe -Command \"Get-Process -Name ''*setup*'',''*install*'' -ErrorAction SilentlyContinue | Stop-Process -Force; Write-Host ''Installer processes killed''\")",
+      "Bash(taskkill:*)",
+      "Bash(powershell.exe -Command \"taskkill /F /IM msiexec.exe\")"
+    ]
+  }
+}

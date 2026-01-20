@@ -1,0 +1,15 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "plexcord",
+  "outputfilename": "PlexCord",
+  "frontend:dir": "frontend",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:build": "npm run dev-build",
+  "frontend:dev:watcher": "npm run dev-build-watch",
+  "debounceMS": 2000,
+  "author": {
+    "name": "",
+    "email": ""
+  }
+}
