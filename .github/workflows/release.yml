@@ -54,7 +54,7 @@ jobs:
           certutil -hashfile PlexCord-windows-amd64.exe SHA256 > PlexCord-windows-amd64.exe.sha256
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-build
           path: |
@@ -112,7 +112,7 @@ jobs:
           shasum -a 256 PlexCord-darwin-universal.dmg > PlexCord-darwin-universal.dmg.sha256
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: macos-build
           path: |
@@ -205,7 +205,7 @@ jobs:
           sha256sum PlexCord-linux-amd64.AppImage > PlexCord-linux-amd64.AppImage.sha256
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux-build
           path: |
