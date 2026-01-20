@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import NowPlaying from '@/components/NowPlaying.vue';
+import DiscordPreview from '@/components/setup/DiscordPreview.vue';
 import ConnectionStatus from '@/components/ConnectionStatus.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Button from 'primevue/button';
@@ -77,53 +77,19 @@ const handleRetry = (source) => {
         </div>
 
         <!-- Header -->
-        <div class="col-span-12 flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-surface-900 dark:text-surface-0">Dashboard</h1>
-                <p class="text-muted-color">PlexCord status at a glance</p>
-            </div>
-            <div class="flex items-center gap-3">
-                <span v-if="version" class="text-sm text-muted-color">{{ version }}</span>
-                <Button
-                    icon="pi pi-cog"
-                    severity="secondary"
-                    rounded
-                    @click="goToSettings"
-                    v-tooltip.left="'Settings'"
-                />
-            </div>
+        <div class="col-span-12">
+            <h1 class="text-2xl font-bold text-surface-900 dark:text-surface-0">Dashboard</h1>
+            <p class="text-muted-color">PlexCord status at a glance</p>
         </div>
 
-        <!-- Now Playing Widget - Full width on mobile, half on desktop -->
+        <!-- Discord Preview Widget - Full width on mobile, half on desktop -->
         <div class="col-span-12 lg:col-span-6">
-            <NowPlaying />
+            <DiscordPreview />
         </div>
 
         <!-- Connection Status Widget -->
         <div class="col-span-12 lg:col-span-6">
             <ConnectionStatus />
-        </div>
-
-        <!-- Quick Actions Card -->
-        <div class="col-span-12">
-            <div class="card">
-                <div class="text-xl font-semibold mb-4">Quick Actions</div>
-                <div class="flex flex-wrap gap-3">
-                    <Button
-                        label="Settings"
-                        icon="pi pi-cog"
-                        severity="secondary"
-                        @click="goToSettings"
-                    />
-                    <Button
-                        label="View Changelog"
-                        icon="pi pi-history"
-                        severity="secondary"
-                        outlined
-                        @click="() => import('../../../wailsjs/go/main/App').then(m => m.OpenReleasesPage())"
-                    />
-                </div>
-            </div>
         </div>
     </div>
 </template>

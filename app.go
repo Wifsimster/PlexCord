@@ -25,10 +25,12 @@ type App struct {
 	config *config.Config
 
 	// Session polling
-	poller     *plex.Poller
-	pollerMu   sync.Mutex
-	pollerCtx  context.Context
-	pollerStop context.CancelFunc
+	poller         *plex.Poller
+	pollerMu       sync.Mutex
+	pollerCtx      context.Context
+	pollerStop     context.CancelFunc
+	currentSession *plex.MusicSession // Track current playback for page refresh restoration
+	sessionMu      sync.RWMutex       // Protect currentSession access
 
 	// Discord integration
 	discord   *discord.PresenceManager
@@ -83,10 +85,45 @@ func (a *App) startup(ctx context.Context) {
 	} else {
 		log.Printf("No Plex token found - user needs to complete setup")
 	}
+
+	// Auto-connect to Discord and Plex if setup is complete
+	if config.IsSetupComplete() {
+		go func() {
+			// Small delay to allow UI to initialize
+			time.Sleep(500 * time.Millisecond)
+
+			// Auto-connect to Discord
+			log.Printf("Auto-connecting to Discord on startup...")
+			err := a.ConnectDiscord("")
+			if err != nil {
+				log.Printf("Warning: Failed to auto-connect Discord: %v", err)
+				// This is not critical - user can manually connect if needed
+			}
+
+			// Auto-connect to Plex and start session polling
+			if a.config.ServerURL != "" && token != "" {
+				log.Printf("Auto-connecting to Plex on startup...")
+				_, err := a.ValidatePlexConnection(a.config.ServerURL)
+				if err != nil {
+					log.Printf("Warning: Failed to validate Plex connection on startup: %v", err)
+					// Start retry mechanism for automatic reconnection
+					a.startPlexRetry(err)
+				} else {
+					// Connection successful, start session polling
+					err = a.StartSessionPolling()
+					if err != nil {
+						log.Printf("Warning: Failed to start session polling on startup: %v", err)
+					} else {
+						log.Printf("Plex connection restored and session polling started")
+					}
+				}
+			}
+		}()
+	}
 }
 
 // domReady is called after front-end resources have been loaded
-func (a App) domReady(ctx context.Context) {
+func (a *App) domReady(ctx context.Context) {
 	// Add your action here
 }
 
@@ -449,6 +486,7 @@ func (a *App) SavePlexUserSelection(userID, userName string) error {
 // It marks SetupCompleted as true in config.json so that subsequent app launches
 // go directly to the dashboard instead of the setup wizard.
 // Also starts session polling if server and user are configured.
+// Also ensures Discord connection is active.
 func (a *App) CompleteSetup() error {
 	log.Printf("Completing setup wizard...")
 
@@ -462,6 +500,24 @@ func (a *App) CompleteSetup() error {
 	}
 
 	log.Printf("Setup wizard completed successfully")
+
+	// Ensure Discord is connected for Rich Presence
+	a.discordMu.Lock()
+	if !a.discord.IsConnected() {
+		log.Printf("Discord not connected during setup completion, attempting to connect...")
+		clientID := a.config.DiscordClientID
+		if clientID == "" {
+			clientID = discord.DefaultClientID
+		}
+		if err := a.discord.Connect(clientID); err != nil {
+			log.Printf("Warning: Failed to connect to Discord after setup: %v", err)
+			// Don't fail setup - user might not have Discord running
+		} else {
+			a.updateDiscordConnectionTime()
+			log.Printf("Discord connected successfully after setup completion")
+		}
+	}
+	a.discordMu.Unlock()
 
 	// Try to start session polling if configured
 	// This is non-blocking - errors are logged but don't fail setup completion
@@ -625,6 +681,11 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 			// Music is playing - update Discord presence and emit frontend event
 			log.Printf("Playback detected: %s - %s", session.Track, session.Artist)
 
+			// Store current session for page refresh restoration
+			a.sessionMu.Lock()
+			a.currentSession = session
+			a.sessionMu.Unlock()
+
 			// Update Discord Rich Presence if connected
 			a.updateDiscordFromSession(session)
 
@@ -633,6 +694,11 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 		} else if lastSession != nil {
 			// Music stopped - clear Discord presence and emit frontend event
 			log.Printf("Playback stopped")
+
+			// Clear current session
+			a.sessionMu.Lock()
+			a.currentSession = nil
+			a.sessionMu.Unlock()
 
 			// Clear Discord Rich Presence
 			a.clearDiscordOnStop()
@@ -824,6 +890,15 @@ func (a *App) GetPollingInterval() int {
 	return a.config.PollingInterval
 }
 
+// GetCurrentSession returns the current music session if music is playing.
+// Returns nil if no music is currently playing.
+// This is used by the frontend to restore playback state after page refresh.
+func (a *App) GetCurrentSession() *plex.MusicSession {
+	a.sessionMu.RLock()
+	defer a.sessionMu.RUnlock()
+	return a.currentSession
+}
+
 // ConnectDiscord establishes a connection to Discord using the provided Client ID.
 // If clientID is empty, the default PlexCord Client ID is used.
 // Returns an error if connection fails (e.g., Discord not running).
@@ -972,6 +1047,37 @@ func (a *App) ClearDiscordPresence() error {
 	}
 
 	return a.discord.ClearPresence()
+}
+
+// TestDiscordPresence sends a test presence message to Discord to verify the connection.
+// This displays a sample "Now Playing" message on the user's Discord profile.
+// Returns an error if not connected or if the test fails.
+func (a *App) TestDiscordPresence() error {
+	a.discordMu.Lock()
+	defer a.discordMu.Unlock()
+
+	if !a.discord.IsConnected() {
+		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
+	}
+
+	log.Printf("Sending test presence to Discord...")
+
+	// Create test presence data
+	testPresence := &discord.PresenceData{
+		Track:  "Test Song - PlexCord",
+		Artist: "PlexCord Test",
+		Album:  "Connection Test",
+		State:  "playing",
+	}
+
+	err := a.discord.SetPresence(testPresence)
+	if err != nil {
+		log.Printf("ERROR: Failed to send test presence: %v", err)
+		return err
+	}
+
+	log.Printf("Test presence sent successfully")
+	return nil
 }
 
 // ============================================================================

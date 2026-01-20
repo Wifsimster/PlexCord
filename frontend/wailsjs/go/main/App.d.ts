@@ -26,6 +26,8 @@ export function GetAutoStart():Promise<boolean>;
 
 export function GetConnectionHistory():Promise<main.ConnectionHistory>;
 
+export function GetCurrentSession():Promise<plex.MusicSession>;
+
 export function GetDefaultDiscordClientID():Promise<string>;
 
 export function GetDiscordClientID():Promise<string>;
@@ -99,6 +101,8 @@ export function StartPlexPINAuth():Promise<Record<string, any>>;
 export function StartSessionPolling():Promise<void>;
 
 export function StopSessionPolling():Promise<void>;
+
+export function TestDiscordPresence():Promise<void>;
 
 export function UpdateDiscordPresence(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number,arg6:number):Promise<void>;
 

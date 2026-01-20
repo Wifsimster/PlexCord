@@ -1,19 +1,26 @@
 <script setup>
 import { onMounted } from 'vue';
 import DiscordPreview from '@/components/setup/DiscordPreview.vue';
-import { StartSessionPolling } from '../../wailsjs/go/main/App';
+import { StartSessionPolling, ConnectDiscord, IsDiscordConnected } from '../../wailsjs/go/main/App';
 
 // Note: The "Finish Setup" button is handled by SetupWizard.vue
 // This component displays the completion content with live preview
 
-// Start polling when component mounts so preview shows live playback
+// Start polling and ensure Discord is connected when component mounts
 onMounted(async () => {
     try {
+        // Ensure Discord is connected for live preview
+        const isConnected = await IsDiscordConnected();
+        if (!isConnected) {
+            console.log('Discord not connected, connecting now...');
+            await ConnectDiscord('');
+        }
+        
         await StartSessionPolling();
         console.log('Session polling started for preview');
     } catch (error) {
         // Silently handle error - polling might already be running
-        console.log('Session polling start skipped:', error);
+        console.log('Setup complete initialization:', error);
     }
 });
 </script>

@@ -42,6 +42,10 @@ export function GetConnectionHistory() {
   return window['go']['main']['App']['GetConnectionHistory']();
 }
 
+export function GetCurrentSession() {
+  return window['go']['main']['App']['GetCurrentSession']();
+}
+
 export function GetDefaultDiscordClientID() {
   return window['go']['main']['App']['GetDefaultDiscordClientID']();
 }
@@ -188,6 +192,10 @@ export function StartSessionPolling() {
 
 export function StopSessionPolling() {
   return window['go']['main']['App']['StopSessionPolling']();
+}
+
+export function TestDiscordPresence() {
+  return window['go']['main']['App']['TestDiscordPresence']();
 }
 
 export function UpdateDiscordPresence(arg1, arg2, arg3, arg4, arg5, arg6) {

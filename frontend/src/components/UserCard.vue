@@ -23,7 +23,7 @@ const selectUser = () => {
 <template>
     <Card
         :class="[
-            'cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl min-w-45',
+            'cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl',
             { 'border-2 border-primary-500 bg-primary-50 dark:bg-primary-900/20': selected }
         ]"
         @click="selectUser"

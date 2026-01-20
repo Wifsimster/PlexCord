@@ -115,10 +115,10 @@ func TestIsValidClientID(t *testing.T) {
 
 func TestValidateClientID(t *testing.T) {
 	tests := []struct {
-		name      string
-		clientID  string
-		wantErr   bool
-		wantCode  string
+		name     string
+		clientID string
+		wantErr  bool
+		wantCode string
 	}{
 		{
 			name:     "valid client ID",
@@ -186,9 +186,9 @@ func TestBuildActivity(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name     string
-		data     *PresenceData
-		checkFn  func(t *testing.T, activity interface{})
+		name    string
+		data    *PresenceData
+		checkFn func(t *testing.T, activity interface{})
 	}{
 		{
 			name: "basic playing activity",
@@ -248,18 +248,18 @@ func TestBuildActivity(t *testing.T) {
 				t.Errorf("Expected Details=%q, got %q", tt.data.Track, activity.Details)
 			}
 
-			if activity.LargeImage != "plex-logo" {
-				t.Errorf("Expected LargeImage='plex-logo', got %q", activity.LargeImage)
+			if activity.LargeImage != "plex" {
+				t.Errorf("Expected LargeImage='plex', got %q", activity.LargeImage)
 			}
 
-			if activity.LargeText != "Plex" {
-				t.Errorf("Expected LargeText='Plex', got %q", activity.LargeText)
+			if activity.LargeText != "Plex Music" {
+				t.Errorf("Expected LargeText='Plex Music', got %q", activity.LargeText)
 			}
 
 			// Check state line
 			if tt.data.Artist != "" {
 				if tt.data.Album != "" {
-					expected := "by " + tt.data.Artist + " on " + tt.data.Album
+					expected := "by " + tt.data.Artist + " • " + tt.data.Album
 					if activity.State != expected {
 						t.Errorf("Expected State=%q, got %q", expected, activity.State)
 					}

@@ -1,7 +1,13 @@
 <script setup>
+import { useRouter } from 'vue-router';
 import { useLayout } from '@/layout/composables/layout';
 
 const { toggleDarkMode, isDarkTheme } = useLayout();
+const router = useRouter();
+
+const goToSettings = () => {
+    router.push('/settings');
+};
 </script>
 
 <template>
@@ -21,6 +27,9 @@ const { toggleDarkMode, isDarkTheme } = useLayout();
         </div>
 
         <div class="layout-topbar-actions">
+            <button type="button" class="layout-topbar-action" @click="goToSettings" title="Settings">
+                <i class="pi pi-cog"></i>
+            </button>
             <button type="button" class="layout-topbar-action" @click="toggleDarkMode">
                 <i :class="['pi', { 'pi-moon': !isDarkTheme, 'pi-sun': isDarkTheme }]"></i>
             </button>

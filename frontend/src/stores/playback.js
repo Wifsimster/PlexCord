@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
+import { GetCurrentSession } from '../../wailsjs/go/main/App';
 
 /**
  * Playback Store
@@ -79,7 +80,7 @@ export const usePlaybackStore = defineStore('playback', {
          * Initialize event listeners for Wails events
          * Should be called once when the app starts
          */
-        initializeEventListeners() {
+        async initializeEventListeners() {
             if (this.initialized) {
                 return;
             }
@@ -95,6 +96,18 @@ export const usePlaybackStore = defineStore('playback', {
             });
 
             this.initialized = true;
+
+            // Restore current session after page refresh
+            // This ensures the preview shows current playback immediately
+            try {
+                const currentSession = await GetCurrentSession();
+                if (currentSession) {
+                    console.log('Restoring current playback session after page refresh');
+                    this.setTrack(currentSession);
+                }
+            } catch (error) {
+                console.error('Failed to restore current session:', error);
+            }
         },
 
         /**

@@ -36,12 +36,6 @@ const artworkUrl = computed(() => {
 
 <template>
     <div class="discord-preview-wrapper">
-        <!-- Preview Label -->
-        <div class="preview-label">
-            <Badge value="Preview" severity="info" />
-            <span class="text-sm text-muted-color ml-2">This is how your Discord status will appear</span>
-        </div>
-
         <!-- Discord-style Rich Presence Card -->
         <div class="discord-presence-card">
             <!-- Header -->

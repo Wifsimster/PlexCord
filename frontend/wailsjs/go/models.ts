@@ -104,6 +104,42 @@ export namespace main {
 
 export namespace plex {
 	
+	export class MusicSession {
+	    sessionKey: string;
+	    userId: string;
+	    userName: string;
+	    type: string;
+	    state: string;
+	    playerName: string;
+	    track: string;
+	    artist: string;
+	    album: string;
+	    thumb: string;
+	    thumbUrl: string;
+	    duration: number;
+	    viewOffset: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MusicSession(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionKey = source["sessionKey"];
+	        this.userId = source["userId"];
+	        this.userName = source["userName"];
+	        this.type = source["type"];
+	        this.state = source["state"];
+	        this.playerName = source["playerName"];
+	        this.track = source["track"];
+	        this.artist = source["artist"];
+	        this.album = source["album"];
+	        this.thumb = source["thumb"];
+	        this.thumbUrl = source["thumbUrl"];
+	        this.duration = source["duration"];
+	        this.viewOffset = source["viewOffset"];
+	    }
+	}
 	export class PlexUser {
 	    id: string;
 	    name: string;

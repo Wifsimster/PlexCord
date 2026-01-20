@@ -176,13 +176,83 @@ try {
 
 ### Playback Detection Flow
 
-1. **Polling Timer** (backend) triggers every 5 seconds (configurable)
+1. **Polling Timer** (backend) triggers every 2 seconds (configurable, default per NFR4)
 2. **Plex Client** fetches `/status/sessions` from Plex API
 3. **Session Parser** extracts music sessions and track metadata
 4. **Event Emitter** sends update to frontend via Wails runtime
 5. **Playback Store** updates current track state
 6. **UI Components** reactively update to show new track
 7. **Discord Manager** (backend) updates Rich Presence
+
+### Music Playback to Discord Rich Presence Flow
+
+```mermaid
+sequenceDiagram
+    participant Timer as Polling Timer
+    participant Poller as Session Poller
+    participant PlexAPI as Plex API
+    participant Handler as Session Handler
+    participant Discord as Discord Manager
+    participant RichGo as rich-go Library
+    participant DiscordClient as Discord Client
+    participant Frontend as Frontend Store
+
+    Note over Timer,DiscordClient: Every 2 seconds (configurable)
+    
+    Timer->>Poller: Tick (interval elapsed)
+    Poller->>PlexAPI: GET /status/sessions
+    PlexAPI-->>Poller: XML Response (Track metadata)
+    
+    Poller->>Poller: Filter music sessions<br/>(type="track")
+    Poller->>Poller: sessionChanged()?<br/>(track/state/artist/album)
+    
+    alt Session Changed
+        Poller->>Handler: Send to sessionChannel
+        Handler->>Handler: updateDiscordFromSession()
+        
+        alt Discord Not Connected
+            Handler->>Discord: tryDiscordReconnect()
+            Discord->>DiscordClient: Connect via IPC
+            DiscordClient-->>Discord: Connection established
+        end
+        
+        Handler->>Discord: UpdatePresenceFromPlayback()<br/>(track, artist, album, state, position)
+        Discord->>Discord: buildActivity()<br/>(format presence data)
+        Discord->>RichGo: SetActivity(activity)
+        RichGo->>DiscordClient: IPC: Update Presence
+        DiscordClient-->>DiscordClient: Display "Listening to Plex"
+        
+        Handler->>Frontend: Emit PlaybackUpdated event
+        Frontend->>Frontend: Update UI with track info
+    else No Change
+        Note over Poller,Frontend: Skip update to avoid redundancy
+    end
+    
+    alt Playback Stopped
+        Poller->>Handler: Send nil to sessionChannel
+        Handler->>Discord: ClearPresence()
+        Discord->>RichGo: Logout + Re-login
+        RichGo->>DiscordClient: IPC: Clear Presence
+        Handler->>Frontend: Emit PlaybackStopped event
+        Frontend->>Frontend: Clear now playing UI
+    end
+```
+
+**Key Components:**
+
+- **Session Poller** (`internal/plex/poller.go`): Background goroutine polling at 2-second intervals
+- **Change Detection** (`sessionChanged()`): Detects track changes, state transitions (play/pause), metadata updates
+- **Session Handler** (`app.go:handleSessionUpdates()`): Processes session updates from poller
+- **Discord Manager** (`internal/discord/presence.go`): Manages Discord RPC connection and presence updates
+- **Activity Builder** (`buildActivity()`): Formats track metadata into Discord Rich Presence format
+- **Auto-Recovery**: Reconnects to Discord if connection lost during playback
+
+**Presence Format:**
+- **Details**: Track title (e.g., "Bohemian Rhapsody")
+- **State**: "by {Artist} • {Album}" (e.g., "by Queen • A Night at the Opera")
+- **Large Image**: Plex logo
+- **Small Image**: Play/pause icon
+- **Timestamps**: Elapsed time based on playback position
 
 ### Error Handling Flow
 

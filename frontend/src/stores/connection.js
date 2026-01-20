@@ -126,7 +126,40 @@ export const useConnectionStore = defineStore('connection', {
             // Fetch initial status
             await this.refreshStatus();
 
+            // Auto-reconnect if connections are down after page refresh
+            // This ensures connections are restored after frontend reload
+            this.autoReconnect();
+
             this.initialized = true;
+        },
+
+        /**
+         * Auto-reconnect to services if they're disconnected
+         * Called after page refresh to restore connections
+         */
+        async autoReconnect() {
+            // Small delay to let initial status settle
+            setTimeout(async () => {
+                // Auto-reconnect Discord if not connected
+                if (!this.discord.connected && !this.loading.discord && !this.isDiscordRetrying) {
+                    console.log('Auto-reconnecting to Discord after page refresh...');
+                    try {
+                        await this.connectDiscord('');
+                    } catch (error) {
+                        console.log('Auto-reconnect to Discord failed:', error);
+                    }
+                }
+
+                // Auto-reconnect Plex if not connected or not polling
+                if ((!this.plex.connected || !this.plex.polling) && !this.loading.plex && !this.isPlexRetrying) {
+                    console.log('Auto-reconnecting to Plex after page refresh...');
+                    try {
+                        await this.retryPlex();
+                    } catch (error) {
+                        console.log('Auto-reconnect to Plex failed:', error);
+                    }
+                }
+            }, 500);
         },
 
         /**

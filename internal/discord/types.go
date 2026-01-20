@@ -5,7 +5,7 @@ import "time"
 // DefaultClientID is the official PlexCord Discord Application Client ID.
 // Users can override this with their own application ID if desired.
 // This is a public identifier, not a secret.
-const DefaultClientID = "1330628940692885534"
+const DefaultClientID = "1463211692656689172"
 
 // ConnectionStatus represents the current Discord connection state
 type ConnectionStatus string
@@ -53,11 +53,11 @@ type Error struct {
 
 // PresenceState represents the current presence state for frontend display
 type PresenceState struct {
-	Active   bool          `json:"active"`
-	Track    string        `json:"track,omitempty"`
-	Artist   string        `json:"artist,omitempty"`
-	Album    string        `json:"album,omitempty"`
-	State    string        `json:"state,omitempty"` // "playing", "paused"
-	Duration int64         `json:"duration,omitempty"`
-	Position int64         `json:"position,omitempty"`
+	Active   bool   `json:"active"`
+	Track    string `json:"track,omitempty"`
+	Artist   string `json:"artist,omitempty"`
+	Album    string `json:"album,omitempty"`
+	State    string `json:"state,omitempty"` // "playing", "paused"
+	Duration int64  `json:"duration,omitempty"`
+	Position int64  `json:"position,omitempty"`
 }

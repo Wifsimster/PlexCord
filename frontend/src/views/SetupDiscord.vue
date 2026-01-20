@@ -8,7 +8,8 @@ import {
     GetDefaultDiscordClientID,
     GetDiscordClientID,
     SaveDiscordClientID,
-    ValidateDiscordClientID
+    ValidateDiscordClientID,
+    TestDiscordPresence
 } from '../../wailsjs/go/main/App';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
@@ -23,6 +24,11 @@ const setupStore = useSetupStore();
 const connectionState = ref('initial'); // 'initial', 'connecting', 'connected', 'error'
 const connectionError = ref('');
 const isConnecting = ref(false);
+
+// Test presence state
+const isTesting = ref(false);
+const testSuccess = ref(false);
+const testError = ref('');
 
 // Client ID state
 const showCustomClientId = ref(false);
@@ -170,8 +176,31 @@ const disconnect = async () => {
         await DisconnectDiscord();
         connectionState.value = 'initial';
         connectionError.value = '';
+        testSuccess.value = false;
+        testError.value = '';
     } catch (error) {
         console.error('Failed to disconnect:', error);
+    }
+};
+
+// Test Discord presence
+const testPresence = async () => {
+    isTesting.value = true;
+    testError.value = '';
+    testSuccess.value = false;
+
+    try {
+        await TestDiscordPresence();
+        testSuccess.value = true;
+        // Auto-hide success message after 3 seconds
+        setTimeout(() => {
+            testSuccess.value = false;
+        }, 3000);
+    } catch (error) {
+        console.error('Test presence failed:', error);
+        testError.value = error?.message || 'Failed to send test presence';
+    } finally {
+        isTesting.value = false;
     }
 };
 
@@ -252,7 +281,25 @@ watch(showCustomClientId, () => {
                         <p class="text-center text-muted-color">
                             PlexCord is now connected and will update your Discord status when you play music.
                         </p>
-                        <div class="flex gap-3">
+                        
+                        <!-- Test Success Message -->
+                        <Message v-if="testSuccess" severity="success" :closable="true" class="w-full">
+                            Test presence sent successfully! Check your Discord profile.
+                        </Message>
+                        
+                        <!-- Test Error Message -->
+                        <Message v-if="testError" severity="error" :closable="true" class="w-full" @close="testError = ''">
+                            {{ testError }}
+                        </Message>
+                        
+                        <div class="flex gap-3 flex-wrap justify-center">
+                            <Button
+                                label="Send Test Presence"
+                                icon="pi pi-send"
+                                @click="testPresence"
+                                :loading="isTesting"
+                                severity="info"
+                            />
                             <Button
                                 label="Test Again"
                                 icon="pi pi-refresh"
@@ -361,20 +408,6 @@ watch(showCustomClientId, () => {
                                 Custom applications require additional setup. Most users should use the default PlexCord application.
                             </p>
                         </Message>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Skip Option -->
-            <div class="skip-section mt-8 p-4 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-300 dark:border-surface-700">
-                <div class="flex items-start gap-3">
-                    <i class="pi pi-info-circle text-surface-600 dark:text-surface-400 mt-0.5"></i>
-                    <div>
-                        <p class="font-medium mb-1">Optional Step</p>
-                        <p class="text-sm text-surface-600 dark:text-surface-400">
-                            You can skip Discord configuration and set it up later from Settings. 
-                            PlexCord will still work, but won't display your status on Discord.
-                        </p>
                     </div>
                 </div>
             </div>

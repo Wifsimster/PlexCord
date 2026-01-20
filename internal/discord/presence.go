@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hugolgst/rich-go/client"
 	"plexcord/internal/errors"
+
+	"github.com/hugolgst/rich-go/client"
 )
 
 // PresenceManager handles Discord Rich Presence updates.
@@ -175,34 +176,45 @@ func (pm *PresenceManager) GetCurrentPresence() *PresenceData {
 // buildActivity creates a rich-go Activity from PresenceData.
 func buildActivity(data *PresenceData) client.Activity {
 	activity := client.Activity{
-		Details:    data.Track,
-		LargeImage: "plex-logo",
-		LargeText:  "Plex",
+		Details: data.Track,
 	}
 
-	// Build state line: "by Artist on Album" or just state
+	// Build state line: "by Artist • Album" or just state
 	if data.Artist != "" {
 		if data.Album != "" {
-			activity.State = "by " + data.Artist + " on " + data.Album
+			activity.State = "by " + data.Artist + " • " + data.Album
 		} else {
 			activity.State = "by " + data.Artist
 		}
 	}
 
-	// Add small image for playback state
-	if data.State == "paused" {
-		activity.SmallImage = "pause"
-		activity.SmallText = "Paused"
-	} else if data.State == "playing" {
-		activity.SmallImage = "play"
-		activity.SmallText = "Playing"
+	// Add playback state to state line if no artist
+	if data.Artist == "" && data.State != "" {
+		if data.State == "paused" {
+			activity.State = "Paused"
+		} else {
+			activity.State = "Playing on Plex"
+		}
 	}
 
-	// Set timestamps for elapsed time display
+	// Set timestamps for elapsed time display (only when playing)
 	if data.StartTime != nil && data.State == "playing" {
 		activity.Timestamps = &client.Timestamps{
 			Start: data.StartTime,
 		}
+	}
+
+	// Use Plex logo for large image
+	activity.LargeImage = "plex"
+	activity.LargeText = "Plex Music"
+
+	// Add small image to show playback state
+	if data.State == "paused" {
+		activity.SmallImage = "pause"
+		activity.SmallText = "Paused"
+	} else {
+		activity.SmallImage = "play"
+		activity.SmallText = "Playing"
 	}
 
 	return activity
