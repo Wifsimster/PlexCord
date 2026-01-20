@@ -20,7 +20,7 @@
         "pinia": "^2.1.7",
         "primeicons": "^7.0.0",
         "primevue": "^4.3.1",
-        "tailwindcss-primeui": "^0.5.0",
+        "tailwindcss-primeui": "^0.6.1",
         "vue": "^3.4.34",
         "vue-router": "^4.4.0"
     },
