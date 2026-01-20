@@ -248,7 +248,7 @@ const validateConnection = async () => {
 
         // Validate the connection
         const result = await ValidatePlexConnection(setupStore.plexServerUrl);
-        
+
         // If no error was thrown, validation was successful
         setupStore.setValidationResult(result);
         validationError.value = '';
@@ -543,7 +543,7 @@ onMounted(() => {
                                 </p>
                             </div>
                         </div>
-                        
+
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div class="bg-white dark:bg-surface-800 p-4 rounded-lg border border-surface-200 dark:border-surface-700 flex items-center gap-3 shadow-sm">
                                 <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-700 flex items-center justify-center shrink-0">
@@ -554,7 +554,7 @@ onMounted(() => {
                                     <div class="font-mono text-sm font-medium text-surface-900 dark:text-surface-0">{{ setupStore.validationResult.serverVersion || 'Unknown' }}</div>
                                 </div>
                             </div>
-                            
+
                             <div class="bg-white dark:bg-surface-800 p-4 rounded-lg border border-surface-200 dark:border-surface-700 flex items-center gap-3 shadow-sm">
                                 <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-700 flex items-center justify-center shrink-0">
                                     <i class="pi pi-folder text-lg text-primary-500"></i>
