@@ -247,10 +247,10 @@ const validateConnection = async () => {
         await SavePlexToken(setupStore.plexToken);
 
         // Validate the connection
-        await ValidatePlexConnection(setupStore.plexServerUrl);
+        const result = await ValidatePlexConnection(setupStore.plexServerUrl);
         
         // If no error was thrown, validation was successful
-        setupStore.setValidationResult({ success: true });
+        setupStore.setValidationResult(result);
         validationError.value = '';
 
         // Save server URL to backend config after successful validation
@@ -350,7 +350,7 @@ onMounted(() => {
 
                         <div class="text-center py-4">
                             <div class="text-sm text-surface-600 dark:text-surface-400 mb-2">Your PIN Code:</div>
-                            <div class="text-6xl font-bold tracking-widest text-primary-500 font-mono">{{ pinCode }}</div>
+                            <div class="text-3xl font-bold text-primary-500 font-mono break-all select-all px-4">{{ pinCode }}</div>
                             <div class="text-sm text-surface-600 dark:text-surface-400 mt-2">Enter this code at plex.tv/link</div>
                         </div>
 
@@ -531,26 +531,44 @@ onMounted(() => {
 
                 <!-- Validation Success -->
                 <div v-if="setupStore.isConnectionValidated && setupStore.validationResult" class="animate-fadein">
-                    <Message severity="success" :closable="false" class="w-full">
-                        <template #icon>
-                            <i class="pi pi-check-circle text-2xl"></i>
-                        </template>
-                        <div class="w-full">
-                            <h4 class="font-semibold text-lg mb-4">Connected to Plex Media Server</h4>
-                            <div class="flex flex-col gap-3">
-                                <span class="flex items-center gap-3 text-sm">
-                                    <i class="pi pi-server text-base"></i>
-                                    <span>Version {{ setupStore.validationResult.serverVersion }}</span>
-                                </span>
-                                <span class="flex items-center gap-3 text-sm">
-                                    <i class="pi pi-folder text-base"></i>
-                                    <span>{{ setupStore.validationResult.libraryCount }} libraries found</span>
-                                </span>
+                    <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center shrink-0">
+                                <i class="pi pi-check text-2xl text-green-600 dark:text-green-400"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-bold text-green-900 dark:text-green-100">Successfully Connected</h4>
+                                <p class="text-green-700 dark:text-green-300">
+                                    Connected to <span class="font-semibold">{{ setupStore.validationResult.serverName || 'Plex Media Server' }}</span>
+                                </p>
                             </div>
                         </div>
-                    </Message>
-                    <div class="mt-6 flex justify-center">
-                        <Button label="Re-validate" icon="pi pi-refresh" @click="retryValidation" severity="secondary" outlined size="small" />
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="bg-white dark:bg-surface-800 p-4 rounded-lg border border-surface-200 dark:border-surface-700 flex items-center gap-3 shadow-sm">
+                                <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-700 flex items-center justify-center shrink-0">
+                                    <i class="pi pi-server text-lg text-primary-500"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-surface-500 uppercase font-bold tracking-wider">Version</div>
+                                    <div class="font-mono text-sm font-medium text-surface-900 dark:text-surface-0">{{ setupStore.validationResult.serverVersion || 'Unknown' }}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white dark:bg-surface-800 p-4 rounded-lg border border-surface-200 dark:border-surface-700 flex items-center gap-3 shadow-sm">
+                                <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-700 flex items-center justify-center shrink-0">
+                                    <i class="pi pi-folder text-lg text-primary-500"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-surface-500 uppercase font-bold tracking-wider">Content</div>
+                                    <div class="font-mono text-sm font-medium text-surface-900 dark:text-surface-0">{{ setupStore.validationResult.libraryCount }} Libraries</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex justify-center sm:justify-end">
+                            <Button label="Re-validate Connection" icon="pi pi-refresh" @click="retryValidation" severity="success" text size="small" />
+                        </div>
                     </div>
                 </div>
 

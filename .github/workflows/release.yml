@@ -9,76 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ steps.get_version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Get version from tag
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get the previous tag
-          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
-
-          if [ -z "$PREV_TAG" ]; then
-            # First release - get all commits
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
-          else
-            # Get commits since previous tag
-            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-          fi
-
-          # Save to file for release notes
-          echo "$CHANGELOG" > changelog.txt
-
-          # Also save to output (escape newlines)
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: PlexCord v${{ steps.get_version.outputs.version }}
-          body: |
-            ## PlexCord v${{ steps.get_version.outputs.version }}
-
-            ### What's Changed
-            ${{ steps.changelog.outputs.changelog }}
-
-            ### Installation
-
-            Download the appropriate binary for your platform:
-            - **Windows**: `PlexCord-windows-amd64.exe`
-            - **macOS**: `PlexCord-darwin-universal.dmg`
-            - **Linux**: `PlexCord-linux-amd64.AppImage`
-
-            ### Checksums
-            See `checksums.txt` for SHA256 checksums of all release files.
-
-            ---
-
-            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.changelog.outputs.prev_tag }}...${{ github.ref_name }}
-          draft: false
-          prerelease: false
-
   build-windows:
     name: Build Windows
-    needs: release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +27,11 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Get version from tag
+        id: get_version
+        shell: bash
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
@@ -103,8 +40,9 @@ jobs:
         run: npm ci
 
       - name: Build application
+        shell: bash
         run: |
-          wails build -clean -platform windows/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          wails build -clean -platform windows/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ steps.get_version.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
       - name: Rename binary
         run: |
@@ -115,29 +53,16 @@ jobs:
           cd build/bin
           certutil -hashfile PlexCord-windows-amd64.exe SHA256 > PlexCord-windows-amd64.exe.sha256
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./build/bin/PlexCord-windows-amd64.exe
-          asset_name: PlexCord-windows-amd64.exe
-          asset_content_type: application/octet-stream
-
-      - name: Upload Checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./build/bin/PlexCord-windows-amd64.exe.sha256
-          asset_name: PlexCord-windows-amd64.exe.sha256
-          asset_content_type: text/plain
+          name: windows-build
+          path: |
+            build/bin/PlexCord-windows-amd64.exe
+            build/bin/PlexCord-windows-amd64.exe.sha256
 
   build-macos:
     name: Build macOS
-    needs: release
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -154,6 +79,10 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
@@ -163,7 +92,7 @@ jobs:
 
       - name: Build application
         run: |
-          wails build -clean -platform darwin/universal -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          wails build -clean -platform darwin/universal -ldflags "-X plexcord/internal/version.Version=v${{ steps.get_version.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
       - name: Create DMG
         run: |
@@ -182,29 +111,16 @@ jobs:
           cd build/bin
           shasum -a 256 PlexCord-darwin-universal.dmg > PlexCord-darwin-universal.dmg.sha256
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./build/bin/PlexCord-darwin-universal.dmg
-          asset_name: PlexCord-darwin-universal.dmg
-          asset_content_type: application/octet-stream
-
-      - name: Upload Checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./build/bin/PlexCord-darwin-universal.dmg.sha256
-          asset_name: PlexCord-darwin-universal.dmg.sha256
-          asset_content_type: text/plain
+          name: macos-build
+          path: |
+            build/bin/PlexCord-darwin-universal.dmg
+            build/bin/PlexCord-darwin-universal.dmg.sha256
 
   build-linux:
     name: Build Linux
-    needs: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -221,6 +137,10 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -235,7 +155,7 @@ jobs:
 
       - name: Build application
         run: |
-          wails build -clean -platform linux/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          wails build -clean -platform linux/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ steps.get_version.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
       - name: Install AppImage tools
         run: |
@@ -284,22 +204,85 @@ jobs:
           cd build/bin
           sha256sum PlexCord-linux-amd64.AppImage > PlexCord-linux-amd64.AppImage.sha256
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./build/bin/PlexCord-linux-amd64.AppImage
-          asset_name: PlexCord-linux-amd64.AppImage
-          asset_content_type: application/octet-stream
+          name: linux-build
+          path: |
+            build/bin/PlexCord-linux-amd64.AppImage
+            build/bin/PlexCord-linux-amd64.AppImage.sha256
 
-      - name: Upload Checksum
-        uses: actions/upload-release-asset@v1
+  create-release:
+    name: Create Release
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+          ls -la release-files/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            # First release - get all commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Get commits since previous tag
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save to output (escape newlines)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: PlexCord v${{ steps.get_version.outputs.version }}
+          body: |
+            ## PlexCord v${{ steps.get_version.outputs.version }}
+
+            ### What's Changed
+            ${{ steps.changelog.outputs.changelog }}
+
+            ### Installation
+
+            Download the appropriate binary for your platform:
+            - **Windows**: `PlexCord-windows-amd64.exe`
+            - **macOS**: `PlexCord-darwin-universal.dmg`
+            - **Linux**: `PlexCord-linux-amd64.AppImage`
+
+            ### Checksums
+            SHA256 checksums are provided for each binary.
+
+            ---
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}
+          files: release-files/*
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./build/bin/PlexCord-linux-amd64.AppImage.sha256
-          asset_name: PlexCord-linux-amd64.AppImage.sha256
-          asset_content_type: text/plain

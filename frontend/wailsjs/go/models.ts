@@ -178,6 +178,26 @@ export namespace plex {
 	        this.version = source["version"];
 	    }
 	}
+	export class ValidationResult {
+	    success: boolean;
+	    serverName: string;
+	    serverVersion: string;
+	    libraryCount: number;
+	    machineIdentifier: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ValidationResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.serverName = source["serverName"];
+	        this.serverVersion = source["serverVersion"];
+	        this.libraryCount = source["libraryCount"];
+	        this.machineIdentifier = source["machineIdentifier"];
+	    }
+	}
 
 }
 

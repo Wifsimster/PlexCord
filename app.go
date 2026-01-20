@@ -131,7 +131,7 @@ func (a *App) autoConnectPlex() {
 	}
 
 	log.Printf("Auto-connecting to Plex on startup...")
-	if err := a.ValidatePlexConnection(a.config.ServerURL); err != nil {
+	if _, err := a.ValidatePlexConnection(a.config.ServerURL); err != nil {
 		log.Printf("Warning: Failed to validate Plex connection on startup: %v", err)
 		a.startPlexRetry(err)
 		return
@@ -412,30 +412,30 @@ func (a *App) DiscoverPlexServers() ([]plex.Server, error) {
 //
 // Returns validation details or an error with appropriate code.
 // Validation completes within 5 seconds maximum with automatic timeout.
-func (a *App) ValidatePlexConnection(serverURL string) error {
+func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, error) {
 	log.Printf("Validating Plex connection to: %s", serverURL)
 
 	// Retrieve token from keychain
 	token, err := keychain.GetToken()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve token: %v", err)
-		return errors.Wrap(err, errors.CONFIG_READ_FAILED, "failed to retrieve token")
+		return nil, errors.Wrap(err, errors.CONFIG_READ_FAILED, "failed to retrieve token")
 	}
 
 	if token == "" {
 		log.Printf("ERROR: No Plex token found")
-		return errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
+		return nil, errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
 	}
 
 	// Create Plex client and validate connection
 	client := plex.NewClient(token, serverURL)
-	_, err = client.ValidateConnection()
+	result, err := client.ValidateConnection()
 	if err != nil {
 		log.Printf("ERROR: Connection validation failed: %v", err)
-		return err
+		return nil, err
 	}
 
-	log.Printf("Connection validated successfully")
+	log.Printf("Connection validated successfully: %s v%s (%d libraries)", result.ServerName, result.ServerVersion, result.LibraryCount)
 
 	// Update connection history
 	a.updatePlexConnectionTime()
@@ -443,7 +443,7 @@ func (a *App) ValidatePlexConnection(serverURL string) error {
 	// Stop any pending retries
 	a.stopPlexRetry()
 
-	return nil
+	return result, nil
 }
 
 // GetPlexUsers retrieves the list of Plex user accounts from the server.
@@ -1228,7 +1228,7 @@ func (a *App) setupRetryCallbacks() {
 	a.plexRetry.SetCallbacks(
 		func() error {
 			// Try to reconnect to Plex
-			err := a.ValidatePlexConnection(a.config.ServerURL)
+			_, err := a.ValidatePlexConnection(a.config.ServerURL)
 			if err != nil {
 				return err
 			}
