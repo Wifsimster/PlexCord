@@ -24,12 +24,6 @@ const isPlexRetrying = computed(() => connectionStore.isPlexRetrying);
 const isDiscordRetrying = computed(() => connectionStore.isDiscordRetrying);
 
 // Status indicator classes
-const getStatusClass = (connected, inError = false) => {
-    if (inError) return 'bg-red-500';
-    if (connected) return 'bg-green-500';
-    return 'bg-yellow-500';
-};
-
 const getStatusText = (connected, inError = false) => {
     if (inError) return 'Error';
     if (connected) return 'Connected';

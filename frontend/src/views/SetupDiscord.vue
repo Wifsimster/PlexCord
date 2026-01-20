@@ -1,6 +1,5 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { useSetupStore } from '@/stores/setup';
 import { 
     ConnectDiscord, 
     DisconnectDiscord,
@@ -15,7 +14,6 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
 import ProgressSpinner from 'primevue/progressspinner';
-import Tooltip from 'primevue/tooltip';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
 
 const setupStore = useSetupStore();

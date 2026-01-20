@@ -1,305 +1,305 @@
 name: Release
 
 on:
-    push:
-        tags:
-            - "v*.*.*"
+  push:
+    tags:
+      - "v*.*.*"
 
 permissions:
-    contents: write
+  contents: write
 
 jobs:
-    release:
-        name: Create Release
-        runs-on: ubuntu-latest
-        outputs:
-            upload_url: ${{ steps.create_release.outputs.upload_url }}
-            version: ${{ steps.get_version.outputs.version }}
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-            - name: Get version from tag
-              id: get_version
-              run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-            - name: Generate changelog
-              id: changelog
-              run: |
-                  # Get the previous tag
-                  PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
 
-                  if [ -z "$PREV_TAG" ]; then
-                    # First release - get all commits
-                    CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
-                  else
-                    # Get commits since previous tag
-                    CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-                  fi
+          if [ -z "$PREV_TAG" ]; then
+            # First release - get all commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Get commits since previous tag
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
 
-                  # Save to file for release notes
-                  echo "$CHANGELOG" > changelog.txt
+          # Save to file for release notes
+          echo "$CHANGELOG" > changelog.txt
 
-                  # Also save to output (escape newlines)
-                  echo "changelog<<EOF" >> $GITHUB_OUTPUT
-                  echo "$CHANGELOG" >> $GITHUB_OUTPUT
-                  echo "EOF" >> $GITHUB_OUTPUT
+          # Also save to output (escape newlines)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-            - name: Create Release
-              id: create_release
-              uses: actions/create-release@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  tag_name: ${{ github.ref }}
-                  release_name: PlexCord v${{ steps.get_version.outputs.version }}
-                  body: |
-                      ## PlexCord v${{ steps.get_version.outputs.version }}
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: PlexCord v${{ steps.get_version.outputs.version }}
+          body: |
+            ## PlexCord v${{ steps.get_version.outputs.version }}
 
-                      ### What's Changed
-                      ${{ steps.changelog.outputs.changelog }}
+            ### What's Changed
+            ${{ steps.changelog.outputs.changelog }}
 
-                      ### Installation
+            ### Installation
 
-                      Download the appropriate binary for your platform:
-                      - **Windows**: `PlexCord-windows-amd64.exe`
-                      - **macOS**: `PlexCord-darwin-universal.dmg`
-                      - **Linux**: `PlexCord-linux-amd64.AppImage`
+            Download the appropriate binary for your platform:
+            - **Windows**: `PlexCord-windows-amd64.exe`
+            - **macOS**: `PlexCord-darwin-universal.dmg`
+            - **Linux**: `PlexCord-linux-amd64.AppImage`
 
-                      ### Checksums
-                      See `checksums.txt` for SHA256 checksums of all release files.
+            ### Checksums
+            See `checksums.txt` for SHA256 checksums of all release files.
 
-                      ---
+            ---
 
-                      **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.changelog.outputs.prev_tag }}...${{ github.ref_name }}
-                  draft: false
-                  prerelease: false
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.changelog.outputs.prev_tag }}...${{ github.ref_name }}
+          draft: false
+          prerelease: false
 
-    build-windows:
-        name: Build Windows
-        needs: release
-        runs-on: windows-latest
-        steps:
-            - uses: actions/checkout@v4
+  build-windows:
+    name: Build Windows
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: "1.24"
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "20"
-                  cache: "npm"
-                  cache-dependency-path: frontend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
-            - name: Install Wails
-              run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-            - name: Install frontend dependencies
-              working-directory: frontend
-              run: npm ci
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
-            - name: Build application
-              run: |
-                  wails build -clean -platform windows/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }}"
+      - name: Build application
+        run: |
+          wails build -clean -platform windows/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-            - name: Rename binary
-              run: |
-                  mv build/bin/PlexCord.exe build/bin/PlexCord-windows-amd64.exe
+      - name: Rename binary
+        run: |
+          mv build/bin/PlexCord.exe build/bin/PlexCord-windows-amd64.exe
 
-            - name: Generate checksum
-              run: |
-                  cd build/bin
-                  certutil -hashfile PlexCord-windows-amd64.exe SHA256 > PlexCord-windows-amd64.exe.sha256
+      - name: Generate checksum
+        run: |
+          cd build/bin
+          certutil -hashfile PlexCord-windows-amd64.exe SHA256 > PlexCord-windows-amd64.exe.sha256
 
-            - name: Upload Release Asset
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ needs.release.outputs.upload_url }}
-                  asset_path: ./build/bin/PlexCord-windows-amd64.exe
-                  asset_name: PlexCord-windows-amd64.exe
-                  asset_content_type: application/octet-stream
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./build/bin/PlexCord-windows-amd64.exe
+          asset_name: PlexCord-windows-amd64.exe
+          asset_content_type: application/octet-stream
 
-            - name: Upload Checksum
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ needs.release.outputs.upload_url }}
-                  asset_path: ./build/bin/PlexCord-windows-amd64.exe.sha256
-                  asset_name: PlexCord-windows-amd64.exe.sha256
-                  asset_content_type: text/plain
+      - name: Upload Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./build/bin/PlexCord-windows-amd64.exe.sha256
+          asset_name: PlexCord-windows-amd64.exe.sha256
+          asset_content_type: text/plain
 
-    build-macos:
-        name: Build macOS
-        needs: release
-        runs-on: macos-latest
-        steps:
-            - uses: actions/checkout@v4
+  build-macos:
+    name: Build macOS
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: "1.24"
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "20"
-                  cache: "npm"
-                  cache-dependency-path: frontend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
-            - name: Install Wails
-              run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-            - name: Install frontend dependencies
-              working-directory: frontend
-              run: npm ci
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
-            - name: Build application
-              run: |
-                  wails build -clean -platform darwin/universal -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }}"
+      - name: Build application
+        run: |
+          wails build -clean -platform darwin/universal -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-            - name: Create DMG
-              run: |
-                  # Create a temporary directory for DMG contents
-                  mkdir -p dmg-contents
-                  cp -r build/bin/PlexCord.app dmg-contents/
+      - name: Create DMG
+        run: |
+          # Create a temporary directory for DMG contents
+          mkdir -p dmg-contents
+          cp -r build/bin/PlexCord.app dmg-contents/
 
-                  # Create symbolic link to Applications folder
-                  ln -s /Applications dmg-contents/Applications
+          # Create symbolic link to Applications folder
+          ln -s /Applications dmg-contents/Applications
 
-                  # Create DMG
-                  hdiutil create -volname "PlexCord" -srcfolder dmg-contents -ov -format UDZO build/bin/PlexCord-darwin-universal.dmg
+          # Create DMG
+          hdiutil create -volname "PlexCord" -srcfolder dmg-contents -ov -format UDZO build/bin/PlexCord-darwin-universal.dmg
 
-            - name: Generate checksum
-              run: |
-                  cd build/bin
-                  shasum -a 256 PlexCord-darwin-universal.dmg > PlexCord-darwin-universal.dmg.sha256
+      - name: Generate checksum
+        run: |
+          cd build/bin
+          shasum -a 256 PlexCord-darwin-universal.dmg > PlexCord-darwin-universal.dmg.sha256
 
-            - name: Upload Release Asset
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ needs.release.outputs.upload_url }}
-                  asset_path: ./build/bin/PlexCord-darwin-universal.dmg
-                  asset_name: PlexCord-darwin-universal.dmg
-                  asset_content_type: application/octet-stream
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./build/bin/PlexCord-darwin-universal.dmg
+          asset_name: PlexCord-darwin-universal.dmg
+          asset_content_type: application/octet-stream
 
-            - name: Upload Checksum
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ needs.release.outputs.upload_url }}
-                  asset_path: ./build/bin/PlexCord-darwin-universal.dmg.sha256
-                  asset_name: PlexCord-darwin-universal.dmg.sha256
-                  asset_content_type: text/plain
+      - name: Upload Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./build/bin/PlexCord-darwin-universal.dmg.sha256
+          asset_name: PlexCord-darwin-universal.dmg.sha256
+          asset_content_type: text/plain
 
-    build-linux:
-        name: Build Linux
-        needs: release
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
+  build-linux:
+    name: Build Linux
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: "1.24"
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "20"
-                  cache: "npm"
-                  cache-dependency-path: frontend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
-            - name: Install dependencies
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
 
-            - name: Install Wails
-              run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-            - name: Install frontend dependencies
-              working-directory: frontend
-              run: npm ci
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
-            - name: Build application
-              run: |
-                  wails build -clean -platform linux/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }}"
+      - name: Build application
+        run: |
+          wails build -clean -platform linux/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ needs.release.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-            - name: Install AppImage tools
-              run: |
-                  wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-                  chmod +x linuxdeploy-x86_64.AppImage
+      - name: Install AppImage tools
+        run: |
+          wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
 
-            - name: Create AppImage
-              run: |
-                  # Create AppDir structure
-                  mkdir -p AppDir/usr/bin
-                  mkdir -p AppDir/usr/share/applications
-                  mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+      - name: Create AppImage
+        run: |
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 
-                  # Copy binary
-                  cp build/bin/PlexCord AppDir/usr/bin/plexcord
+          # Copy binary
+          cp build/bin/PlexCord AppDir/usr/bin/plexcord
 
-                  # Create desktop file
-                  cat > AppDir/usr/share/applications/plexcord.desktop << EOF
-                  [Desktop Entry]
-                  Name=PlexCord
-                  Exec=plexcord
-                  Icon=plexcord
-                  Type=Application
-                  Categories=Utility;AudioVideo;
-                  Comment=Discord Rich Presence for Plex
-                  EOF
+          # Create desktop file
+          cat > AppDir/usr/share/applications/plexcord.desktop << EOF
+          [Desktop Entry]
+          Name=PlexCord
+          Exec=plexcord
+          Icon=plexcord
+          Type=Application
+          Categories=Utility;AudioVideo;
+          Comment=Discord Rich Presence for Plex
+          EOF
 
-                  # Create a placeholder icon (you should replace this with actual icon)
-                  # For now, create a simple SVG
-                  cat > AppDir/usr/share/icons/hicolor/256x256/apps/plexcord.svg << EOF
-                  <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
-                    <rect width="256" height="256" fill="#E5A00D"/>
-                    <text x="128" y="140" font-size="80" text-anchor="middle" fill="white" font-family="Arial, sans-serif">PC</text>
-                  </svg>
-                  EOF
+          # Create a placeholder icon (you should replace this with actual icon)
+          # For now, create a simple SVG
+          cat > AppDir/usr/share/icons/hicolor/256x256/apps/plexcord.svg << EOF
+          <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
+            <rect width="256" height="256" fill="#E5A00D"/>
+            <text x="128" y="140" font-size="80" text-anchor="middle" fill="white" font-family="Arial, sans-serif">PC</text>
+          </svg>
+          EOF
 
-                  # Create AppImage
-                  ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          # Create AppImage
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
 
-                  # Rename to expected name
-                  mv PlexCord-*.AppImage build/bin/PlexCord-linux-amd64.AppImage || true
-                  mv PlexCord-x86_64.AppImage build/bin/PlexCord-linux-amd64.AppImage || true
+          # Rename to expected name
+          mv PlexCord-*.AppImage build/bin/PlexCord-linux-amd64.AppImage || true
+          mv PlexCord-x86_64.AppImage build/bin/PlexCord-linux-amd64.AppImage || true
 
-            - name: Generate checksum
-              run: |
-                  cd build/bin
-                  sha256sum PlexCord-linux-amd64.AppImage > PlexCord-linux-amd64.AppImage.sha256
+      - name: Generate checksum
+        run: |
+          cd build/bin
+          sha256sum PlexCord-linux-amd64.AppImage > PlexCord-linux-amd64.AppImage.sha256
 
-            - name: Upload Release Asset
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ needs.release.outputs.upload_url }}
-                  asset_path: ./build/bin/PlexCord-linux-amd64.AppImage
-                  asset_name: PlexCord-linux-amd64.AppImage
-                  asset_content_type: application/octet-stream
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./build/bin/PlexCord-linux-amd64.AppImage
+          asset_name: PlexCord-linux-amd64.AppImage
+          asset_content_type: application/octet-stream
 
-            - name: Upload Checksum
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ needs.release.outputs.upload_url }}
-                  asset_path: ./build/bin/PlexCord-linux-amd64.AppImage.sha256
-                  asset_name: PlexCord-linux-amd64.AppImage.sha256
-                  asset_content_type: text/plain
+      - name: Upload Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./build/bin/PlexCord-linux-amd64.AppImage.sha256
+          asset_name: PlexCord-linux-amd64.AppImage.sha256
+          asset_content_type: text/plain

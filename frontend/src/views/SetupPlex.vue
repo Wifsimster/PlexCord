@@ -7,7 +7,6 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import ProgressSpinner from 'primevue/progressspinner';
 import Message from 'primevue/message';
-import Tooltip from 'primevue/tooltip';
 import ServerCard from '@/components/ServerCard.vue';
 
 const setupStore = useSetupStore();

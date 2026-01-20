@@ -19,7 +19,6 @@ const autoSelected = ref(false);
 // Computed properties
 const users = computed(() => setupStore.plexUsers);
 const selectedUser = computed(() => setupStore.selectedPlexUser);
-const isUserSelected = computed(() => setupStore.isUserSelected);
 
 // Fetch users from Plex server
 const fetchUsers = async () => {

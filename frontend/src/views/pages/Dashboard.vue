@@ -1,14 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
 import DiscordPreview from '@/components/setup/DiscordPreview.vue';
 import ConnectionStatus from '@/components/ConnectionStatus.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
-import Button from 'primevue/button';
 import { GetVersion } from '../../../wailsjs/go/main/App';
 import { useConnectionStore } from '@/stores/connection';
-
-const router = useRouter();
 const connectionStore = useConnectionStore();
 
 // Version info
@@ -22,11 +18,6 @@ onMounted(async () => {
         console.error('Failed to get version:', error);
     }
 });
-
-// Navigation
-const goToSettings = () => {
-    router.push('/settings');
-};
 
 // Error banner computed properties
 const activeErrors = computed(() => connectionStore.activeErrors);

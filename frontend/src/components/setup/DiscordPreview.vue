@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue';
 import { usePlaybackStore } from '@/stores/playback';
-import Badge from 'primevue/badge';
 
 const playbackStore = usePlaybackStore();
 
@@ -18,7 +17,6 @@ onUnmounted(() => {
 // Computed properties for template
 const hasActiveSession = computed(() => playbackStore.hasActiveSession);
 const currentTrack = computed(() => playbackStore.currentTrack);
-const isPlaying = computed(() => playbackStore.isPlaying);
 const isPaused = computed(() => playbackStore.isPaused);
 const formattedPosition = computed(() => playbackStore.formattedPosition);
 const formattedDuration = computed(() => playbackStore.formattedDuration);

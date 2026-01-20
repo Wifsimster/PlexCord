@@ -2,21 +2,27 @@
 import { ref, onMounted } from 'vue';
 import { GetVersion } from '../../wailsjs/go/main/App';
 
-const version = ref('');
+const versionInfo = ref(null);
+const versionDisplay = ref('');
 
 onMounted(async () => {
     try {
-        const versionInfo = await GetVersion();
-        version.value = `v${versionInfo.version}`;
+        versionInfo.value = await GetVersion();
+        versionDisplay.value = versionInfo.value.version;
     } catch (error) {
         console.error('Failed to get version:', error);
-        version.value = 'Unknown';
+        versionDisplay.value = 'Unknown';
     }
 });
 </script>
 
 <template>
     <div class="layout-footer">
-        <span class="font-semibold">PlexCord {{ version }}</span>
+        <span 
+            class="font-semibold" 
+            :title="versionInfo ? `Commit: ${versionInfo.commit}\nBuild Date: ${versionInfo.buildDate}` : ''"
+        >
+            PlexCord {{ versionDisplay }}
+        </span>
     </div>
 </template>

@@ -259,7 +259,6 @@ onUnmounted(() => {
                             v-for="step in steps"
                             :key="step.value"
                             :value="step.value"
-                            v-slot="{ activateCallback }"
                         >
                             <!-- Step View Content -->
                             <div class="step-view-container">

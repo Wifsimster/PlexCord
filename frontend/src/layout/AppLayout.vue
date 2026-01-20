@@ -1,10 +1,7 @@
 <script setup>
-import { useLayout } from '@/layout/composables/layout';
 import { computed } from 'vue';
 import AppFooter from './AppFooter.vue';
 import AppTopbar from './AppTopbar.vue';
-
-const { layoutConfig, layoutState } = useLayout();
 
 const containerClass = computed(() => {
     return {};

@@ -1,7 +1,4 @@
 <script setup>
-import { useSetupStore } from '@/stores/setup';
-
-const setupStore = useSetupStore();
 </script>
 
 <template>
