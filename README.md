@@ -1,191 +1,177 @@
 # PlexCord
 
-A cross-platform desktop application that displays your Plex music playback in Discord Rich Presence.
+> Show off what you're listening to on Plex in your Discord status
 
-Built with [Wails](https://wails.io) (Go + Vue 3), PlexCord bridges your Plex Media Server and Discord to show what you're listening to.
-
-## Quick Links
-
-- 🚀 [Getting Started](docs/getting-started.md) - Installation and setup guide
-- 📚 [Documentation](#documentation) - Complete documentation
-- 🛠️ [Development](docs/development.md) - Build from source and contribute
-- 🐛 [Report an Issue](../../issues) - Found a bug?
-- 💬 [Discussions](../../discussions) - Questions and feedback
+PlexCord is a lightweight, cross-platform desktop application that seamlessly integrates your Plex music playback with Discord Rich Presence. Built with modern technologies (Go + Vue 3 + Wails), it runs efficiently in the background while displaying your currently playing music on Discord.
 
 ## Features
 
-- 🎵 Real-time music playback detection from Plex
-- 💬 Discord Rich Presence integration
-- 🖥️ Cross-platform support (Windows, macOS, Linux)
-- ⚡ Lightweight and fast (<20MB binary)
-- 🎨 Modern UI with dark mode support
-- 🔐 Secure credential storage using OS keychain
-- 📦 Single binary distribution - no dependencies
+- **Real-Time Sync** - Automatically detects and displays your current Plex music playback
+- **Rich Presence Integration** - Shows track name, artist, album, and playback state in Discord
+- **Cross-Platform** - Native support for Windows, macOS, and Linux
+- **Secure** - Credentials stored safely using OS keychain (Windows Credential Manager, macOS Keychain, Linux Secret Service)
+- **Lightweight** - Small memory footprint, runs quietly in system tray
+- **Easy Setup** - Intuitive setup wizard guides you through configuration
+- **Auto-Recovery** - Automatically reconnects if Discord or Plex connection is lost
+- **No Dependencies** - Single standalone binary, no runtime requirements
+
+
+## Installation
+
+### Download Pre-Built Binaries
+
+Download the latest release for your platform from the [Releases](../../releases) page:
+
+- **Windows** - `PlexCord-windows-amd64.exe`
+- **macOS** - `PlexCord-darwin-universal.app` (Intel & Apple Silicon)
+- **Linux** - `PlexCord-linux-amd64`
+
+### Quick Setup
+
+1. **Download** the appropriate binary for your operating system
+2. **Launch** PlexCord - the setup wizard will guide you through:
+   - Connecting to your Plex server (via auto-discovery or manual entry)
+   - Entering your Plex authentication token
+   - Verifying Discord connection
+3. **Start listening** - Play music on Plex/Plexamp and watch your Discord status update!
+
+For detailed setup instructions, see the [Getting Started Guide](docs/getting-started.md).
+
+## How It Works
+
+1. PlexCord connects to your Plex Media Server using your authentication token
+2. It continuously monitors your active sessions for music playback
+3. When music is detected, it extracts metadata (track, artist, album, artwork)
+4. This information is sent to Discord via Rich Presence API
+5. Your Discord status shows what you're listening to in real-time
+
+## Requirements
+
+- **Plex Media Server** with at least one music library
+- **Plex Pass** (optional but recommended for best experience)
+- **Discord Desktop App** running (Rich Presence only works with desktop client)
+- **Supported OS:**
+  - Windows 10 or later
+  - macOS 11 (Big Sur) or later
+  - Linux with X11/Wayland (Ubuntu 20.04+, Fedora, Arch, etc.)
 
 ## Documentation
 
-### Getting Started
-
-- **[Getting Started Guide](docs/getting-started.md)** - First-time setup and usage
-  - Installation instructions
-  - Setup wizard walkthrough
-  - Troubleshooting common issues
-
-### Technical Documentation
-
-- **[Architecture Overview](docs/architecture.md)** - System design and structure
-  - High-level architecture diagram
-  - Technology stack
-  - Package structure
-  - Design patterns
-  - Data flow
-
-- **[API Reference](docs/api.md)** - Backend API documentation
-  - Plex API methods
-  - Discord API methods
-  - Configuration API
-  - Events and error codes
-
-- **[Development Guide](docs/development.md)** - Build and develop PlexCord
-  - Development environment setup
-  - Project structure
-  - Development workflow
-  - Building and debugging
-  - Testing
-
-### Contributing
-
-- **[Contributing Guide](docs/contributing.md)** - How to contribute
-  - Code of conduct
-  - Reporting bugs
-  - Suggesting features
-  - Pull request process
-  - Coding guidelines
-
-- **[Project Roadmap](docs/roadmap.md)** - Future plans
-  - Current status
-  - Release plan
-  - Feature requests
-  - Version history
-
-## Quick Start
-
-### Installation
-
-Download the latest release for your platform:
-
-- **Windows**: `PlexCord.exe`
-- **macOS**: `PlexCord.app`
-- **Linux**: `plexcord`
-
-👉 [Download from Releases](../../releases)
-
-### First Launch
-
-1. Launch PlexCord
-2. Follow the Setup Wizard to connect your Plex server
-3. Make sure Discord is running
-4. Start playing music in Plex or Plexamp
-5. Your Discord status updates automatically!
-
-📖 See the [Getting Started Guide](docs/getting-started.md) for detailed instructions.
-
-## System Requirements
-
-- **Operating System**: Windows 10+, macOS 11+, or Linux (Ubuntu 20.04+)
-- **Discord**: Desktop application (web version not supported)
-- **Plex**: Active Plex Media Server with music library
-- **No runtime dependencies** - just download and run!
-
-## Platform-Specific Notes
-
-### Windows
-
-- No administrator privileges required
-- Binary runs standalone, no installation needed
-- Configuration stored in: `%APPDATA%\PlexCord\config.json`
-
-### macOS
-
-- Universal binary supports both Intel and Apple Silicon
-- For unsigned builds, you may need to bypass Gatekeeper:
-
-  ```bash
-  xattr -cr PlexCord.app
-  ```
-
-- Configuration stored in: `~/Library/Application Support/PlexCord/config.json`
-
-### Linux
-
-- Make binary executable after download:
-
-  ```bash
-  chmod +x plexcord
-  ```
-
-- Requires X11 or Wayland display server
-- Configuration stored in: `~/.config/plexcord/config.json`
-- Works on Ubuntu, Fedora, Arch, and other major distributions
+- [Getting Started](docs/getting-started.md) - Installation and first-time setup
+- [Architecture](docs/architecture.md) - Technical overview and design
+- [API Reference](docs/api.md) - Backend API documentation
+- [Development](docs/development.md) - Build from source and contribute
+- [Contributing](docs/contributing.md) - Contribution guidelines
+- [Roadmap](docs/roadmap.md) - Future plans and features
 
 ## Building from Source
 
-Want to build PlexCord yourself or contribute to development?
+### Prerequisites
 
-👉 See the [Development Guide](docs/development.md) for complete instructions on:
+- [Go 1.21+](https://golang.org/dl/)
+- [Node.js 18+](https://nodejs.org/)
+- [Wails CLI](https://wails.io/docs/gettingstarted/installation)
 
-- Setting up your development environment
-- Running in development mode
-- Building for different platforms
-- Running tests
-- Project structure overview
-
-### Quick Build
+### Build Steps
 
 ```bash
-# Clone and install dependencies
-git clone https://github.com/yourusername/PlexCord.git
+# Clone repository
+git clone https://github.com/Wifsimster/PlexCord.git
 cd PlexCord
+
+# Install dependencies
 go mod download
 cd frontend && npm install && cd ..
 
-# Build for current platform
+# Development mode with hot reload
+wails dev
+
+# Build production binary
 wails build
 
-# Output: build/bin/
+# Output: build/bin/PlexCord (or PlexCord.exe on Windows)
 ```
+
+For platform-specific builds and advanced options, see [Development Guide](docs/development.md).
+
+## Configuration
+
+PlexCord stores configuration in platform-specific locations:
+
+- **Windows:** `%APPDATA%\PlexCord\config.json`
+- **macOS:** `~/Library/Application Support/PlexCord/config.json`
+- **Linux:** `~/.config/plexcord/config.json`
+
+Credentials are securely stored in:
+- **Windows:** Windows Credential Manager
+- **macOS:** macOS Keychain
+- **Linux:** Secret Service API (GNOME Keyring, KWallet, etc.)
+
+## Troubleshooting
+
+### Discord Not Showing Status
+
+- Ensure Discord desktop app is running (not web version)
+- Check that "Display current activity as a status message" is enabled in Discord settings
+- Restart both PlexCord and Discord
+
+### Can't Connect to Plex
+
+- Verify your Plex token is correct
+- Check that Plex Media Server is running and accessible
+- For remote servers, ensure port forwarding/network access is configured
+- Try manual server entry if auto-discovery fails
+
+### Linux Specific Issues
+
+- If binary won't run, make it executable: `chmod +x PlexCord`
+- Ensure Secret Service is available for credential storage
+- Check that D-Bus is running for Discord RPC
+
+For more issues, see [Getting Started - Troubleshooting](docs/getting-started.md#troubleshooting) or [open an issue](../../issues).
 
 ## Contributing
 
-We welcome contributions! Please see:
+Contributions are welcome! Here's how you can help:
 
-- 📖 [Contributing Guide](docs/contributing.md) - Guidelines for contributing
-- 🏗️ [Architecture Overview](docs/architecture.md) - Understand the codebase
-- 🛠️ [Development Guide](docs/development.md) - Set up your environment
+- **Report Bugs** - [Open an issue](../../issues) with details and reproduction steps
+- **Suggest Features** - [Start a discussion](../../discussions) with your ideas
+- **Submit PRs** - See [Contributing Guide](docs/contributing.md) for guidelines
+- **Improve Docs** - Help make documentation clearer and more comprehensive
+
+Please read the [Contributing Guide](docs/contributing.md) before submitting pull requests.
 
 ## Project Status
 
-**Current Version:** v0.1.0 (In Development)
+**Current Version:** v0.1.0-dev
 
-**Development Phase:** Epic 1-2 (Foundation & Setup Wizard)
+**Status:** Active Development
 
-See the [Project Roadmap](docs/roadmap.md) for upcoming features and release plans.
+This project is in early development. Core features are functional but expect bugs and missing features. See [Roadmap](docs/roadmap.md) for planned features and timeline.
+
+## Tech Stack
+
+- **Backend:** Go 1.21+
+- **Frontend:** Vue 3 (Composition API) + PrimeVue + TailwindCSS
+- **Framework:** Wails v2 (Go + Web GUI)
+- **Discord:** Rich Presence via [rich-go](https://github.com/hugolgst/rich-go)
+- **Plex:** Official Plex API
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- Built with [Wails](https://wails.io)
-- UI components by [PrimeVue](https://primevue.org/)
-- Styling with [TailwindCSS](https://tailwindcss.com/)
-- Discord RPC integration via [rich-go](https://github.com/hugolgst/rich-go)
+- [Wails](https://wails.io) - Amazing Go + Web framework
+- [PrimeVue](https://primevue.org) - Beautiful Vue UI components
+- [TailwindCSS](https://tailwindcss.com) - Utility-first CSS framework
+- [rich-go](https://github.com/hugolgst/rich-go) - Discord Rich Presence for Go
 
-## Support
+## Disclaimer
 
-For issues, questions, or feature requests, please open an issue on GitHub.
+This project is not affiliated with, endorsed by, or connected to Plex Inc. or Discord Inc. All product names, trademarks, and registered trademarks are property of their respective owners.
 
 ---
 
-**Note**: This project is not affiliated with or endorsed by Plex Inc. or Discord Inc.
+**Made with ❤️ for music lovers who want to share what they're listening to**
