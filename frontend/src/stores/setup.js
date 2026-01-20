@@ -26,7 +26,7 @@ export const useSetupStore = defineStore('setup', {
         selectedPlexUser: null,
 
         // Discord configuration
-        discordClientId: '',
+        discordClientId: ''
     }),
 
     getters: {
@@ -94,7 +94,7 @@ export const useSetupStore = defineStore('setup', {
          */
         isUserSelected: (state) => {
             return state.selectedPlexUser !== null;
-        },
+        }
     },
 
     actions: {
@@ -259,7 +259,7 @@ export const useSetupStore = defineStore('setup', {
                 validationResult: this.validationResult,
                 plexUsers: this.plexUsers,
                 selectedPlexUser: this.selectedPlexUser,
-                discordClientId: this.discordClientId,
+                discordClientId: this.discordClientId
             };
             localStorage.setItem('plexcord-setup-wizard', JSON.stringify(state));
         },
@@ -321,6 +321,6 @@ export const useSetupStore = defineStore('setup', {
             this.selectedPlexUser = null;
             this.discordClientId = '';
             localStorage.removeItem('plexcord-setup-wizard');
-        },
-    },
+        }
+    }
 });

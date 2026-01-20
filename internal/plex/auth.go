@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -79,10 +80,14 @@ func (a *Authenticator) RequestPIN(ctx context.Context) (*PINResponse, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to request PIN")
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) // Ignore error - best effort for error message
 		return nil, errors.New(errors.PLEX_CONN_FAILED,
 			fmt.Sprintf("PIN request failed with status %d: %s", resp.StatusCode, string(body)))
 	}
@@ -117,10 +122,14 @@ func (a *Authenticator) CheckPIN(ctx context.Context, pinID int) (*PINResponse, 
 	if err != nil {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to check PIN status")
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) // Ignore error - best effort for error message
 		return nil, errors.New(errors.PLEX_CONN_FAILED,
 			fmt.Sprintf("PIN check failed with status %d: %s", resp.StatusCode, string(body)))
 	}

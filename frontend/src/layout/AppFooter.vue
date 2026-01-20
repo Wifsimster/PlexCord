@@ -18,11 +18,6 @@ onMounted(async () => {
 
 <template>
     <div class="layout-footer">
-        <span 
-            class="font-semibold" 
-            :title="versionInfo ? `Commit: ${versionInfo.commit}\nBuild Date: ${versionInfo.buildDate}` : ''"
-        >
-            PlexCord {{ versionDisplay }}
-        </span>
+        <span class="font-semibold" :title="versionInfo ? `Commit: ${versionInfo.commit}\nBuild Date: ${versionInfo.buildDate}` : ''"> PlexCord {{ versionDisplay }} </span>
     </div>
 </template>

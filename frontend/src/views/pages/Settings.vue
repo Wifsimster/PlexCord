@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { useSetupStore } from '@/stores/setup';
 import Button from 'primevue/button';
 import InputNumber from 'primevue/inputnumber';
-import InputSwitch from 'primevue/inputswitch';
+import ToggleSwitch from 'primevue/toggleswitch';
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import { useToast } from 'primevue/usetoast';
@@ -23,7 +23,7 @@ import {
     CheckForUpdate,
     OpenReleasesPage,
     OpenReleaseURL,
-    ResetApplication,
+    ResetApplication
 } from '../../../wailsjs/go/main/App';
 
 const router = useRouter();
@@ -48,7 +48,7 @@ const loading = ref({
     autoStart: false,
     minimizeToTray: false,
     clientId: false,
-    reset: false,
+    reset: false
 });
 
 // Reset confirmation dialog
@@ -255,13 +255,7 @@ const goToDashboard = () => {
     <div class="max-w-7xl mx-auto">
         <!-- Header -->
         <div class="flex items-center gap-4 mb-6">
-            <Button
-                icon="pi pi-arrow-left"
-                severity="secondary"
-                text
-                rounded
-                @click="goToDashboard"
-            />
+            <Button icon="pi pi-arrow-left" severity="secondary" text rounded @click="goToDashboard" />
             <div>
                 <h1 class="text-2xl font-bold text-surface-900 dark:text-surface-0">Settings</h1>
                 <p class="text-muted-color">Configure PlexCord behavior</p>
@@ -279,20 +273,8 @@ const goToDashboard = () => {
                     <div class="text-sm text-muted-color">How often to check for playback changes (1-60 seconds)</div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <InputNumber
-                        v-model="pollingInterval"
-                        :min="1"
-                        :max="60"
-                        suffix=" sec"
-                        :disabled="loading.polling"
-                        class="w-24"
-                    />
-                    <Button
-                        label="Save"
-                        size="small"
-                        :loading="loading.polling"
-                        @click="updatePollingInterval"
-                    />
+                    <InputNumber v-model="pollingInterval" :min="1" :max="60" suffix=" sec" :disabled="loading.polling" class="w-24" />
+                    <Button label="Save" size="small" :loading="loading.polling" @click="updatePollingInterval" />
                 </div>
             </div>
 
@@ -305,26 +287,11 @@ const goToDashboard = () => {
                             {{ isUsingDefaultClientId ? 'Using default PlexCord application' : 'Using custom application' }}
                         </div>
                     </div>
-                    <Button
-                        v-if="!isUsingDefaultClientId"
-                        label="Reset to Default"
-                        severity="secondary"
-                        size="small"
-                        @click="resetToDefaultClientId"
-                    />
+                    <Button v-if="!isUsingDefaultClientId" label="Reset to Default" severity="secondary" size="small" @click="resetToDefaultClientId" />
                 </div>
                 <div class="flex gap-2">
-                    <InputText
-                        v-model="discordClientId"
-                        :placeholder="defaultClientId"
-                        class="flex-grow"
-                        :disabled="loading.clientId"
-                    />
-                    <Button
-                        label="Save"
-                        :loading="loading.clientId"
-                        @click="saveDiscordClientId"
-                    />
+                    <InputText v-model="discordClientId" :placeholder="defaultClientId" class="flex-grow" :disabled="loading.clientId" />
+                    <Button label="Save" :loading="loading.clientId" @click="saveDiscordClientId" />
                 </div>
             </div>
         </div>
@@ -339,11 +306,7 @@ const goToDashboard = () => {
                     <div class="font-medium">Start on Login</div>
                     <div class="text-sm text-muted-color">Automatically launch PlexCord when you log in</div>
                 </div>
-                <InputSwitch
-                    :modelValue="autoStart"
-                    @update:modelValue="updateAutoStart"
-                    :disabled="loading.autoStart"
-                />
+                <ToggleSwitch :modelValue="autoStart" @update:modelValue="updateAutoStart" :disabled="loading.autoStart" />
             </div>
 
             <!-- Minimize to Tray -->
@@ -352,11 +315,7 @@ const goToDashboard = () => {
                     <div class="font-medium">Minimize to Tray</div>
                     <div class="text-sm text-muted-color">Keep running in system tray when window is closed</div>
                 </div>
-                <InputSwitch
-                    :modelValue="minimizeToTray"
-                    @update:modelValue="updateMinimizeToTray"
-                    :disabled="loading.minimizeToTray"
-                />
+                <ToggleSwitch :modelValue="minimizeToTray" @update:modelValue="updateMinimizeToTray" :disabled="loading.minimizeToTray" />
             </div>
         </div>
 
@@ -370,42 +329,21 @@ const goToDashboard = () => {
                     <div class="font-medium">Version</div>
                     <div class="text-sm text-muted-color">
                         {{ version?.version || 'Loading...' }}
-                        <span v-if="version?.commit && version.commit !== 'unknown'" class="ml-1">
-                            ({{ version.commit.substring(0, 7) }})
-                        </span>
+                        <span v-if="version?.commit && version.commit !== 'unknown'" class="ml-1"> ({{ version.commit.substring(0, 7) }}) </span>
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <Button
-                        label="Check for Updates"
-                        icon="pi pi-refresh"
-                        severity="secondary"
-                        size="small"
-                        :loading="checkingUpdate"
-                        @click="checkForUpdates"
-                    />
+                    <Button label="Check for Updates" icon="pi pi-refresh" severity="secondary" size="small" :loading="checkingUpdate" @click="checkForUpdates" />
                 </div>
             </div>
 
             <!-- Update available banner -->
-            <div
-                v-if="updateInfo?.available"
-                class="mt-3 p-3 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-between"
-            >
+            <div v-if="updateInfo?.available" class="mt-3 p-3 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-between">
                 <div>
-                    <div class="font-medium text-blue-700 dark:text-blue-400">
-                        Update Available: {{ updateInfo.latestVersion }}
-                    </div>
-                    <div class="text-sm text-blue-600 dark:text-blue-500">
-                        {{ updateInfo.releaseNotes?.substring(0, 100) }}{{ updateInfo.releaseNotes?.length > 100 ? '...' : '' }}
-                    </div>
+                    <div class="font-medium text-blue-700 dark:text-blue-400">Update Available: {{ updateInfo.latestVersion }}</div>
+                    <div class="text-sm text-blue-600 dark:text-blue-500">{{ updateInfo.releaseNotes?.substring(0, 100) }}{{ updateInfo.releaseNotes?.length > 100 ? '...' : '' }}</div>
                 </div>
-                <Button
-                    label="Download"
-                    icon="pi pi-download"
-                    size="small"
-                    @click="openUpdatePage"
-                />
+                <Button label="Download" icon="pi pi-download" size="small" @click="openUpdatePage" />
             </div>
 
             <!-- Changelog link -->
@@ -414,13 +352,7 @@ const goToDashboard = () => {
                     <div class="font-medium">Changelog</div>
                     <div class="text-sm text-muted-color">View release notes and version history</div>
                 </div>
-                <Button
-                    label="View Changelog"
-                    icon="pi pi-external-link"
-                    severity="secondary"
-                    size="small"
-                    @click="OpenReleasesPage"
-                />
+                <Button label="View Changelog" icon="pi pi-external-link" severity="secondary" size="small" @click="OpenReleasesPage" />
             </div>
         </div>
 
@@ -433,48 +365,23 @@ const goToDashboard = () => {
                     <div class="font-medium">Reset Application</div>
                     <div class="text-sm text-muted-color">Clear all settings and return to setup wizard</div>
                 </div>
-                <Button
-                    label="Reset"
-                    icon="pi pi-trash"
-                    severity="danger"
-                    size="small"
-                    outlined
-                    @click="confirmReset"
-                />
+                <Button label="Reset" icon="pi pi-trash" severity="danger" size="small" outlined @click="confirmReset" />
             </div>
         </div>
 
         <!-- Reset Confirmation Dialog -->
-        <Dialog
-            v-model:visible="showResetDialog"
-            modal
-            header="Reset Application?"
-            :style="{ width: '400px' }"
-        >
-            <p class="mb-4">
-                This will remove all your settings, including:
-            </p>
+        <Dialog v-model:visible="showResetDialog" modal header="Reset Application?" :style="{ width: '400px' }">
+            <p class="mb-4">This will remove all your settings, including:</p>
             <ul class="list-disc list-inside mb-4 text-muted-color">
                 <li>Plex token and server configuration</li>
                 <li>Discord settings</li>
                 <li>All preferences</li>
             </ul>
-            <p class="font-medium text-red-600 dark:text-red-400">
-                This action cannot be undone.
-            </p>
+            <p class="font-medium text-red-600 dark:text-red-400">This action cannot be undone.</p>
 
             <template #footer>
-                <Button
-                    label="Cancel"
-                    severity="secondary"
-                    @click="showResetDialog = false"
-                />
-                <Button
-                    label="Reset Application"
-                    severity="danger"
-                    :loading="loading.reset"
-                    @click="executeReset"
-                />
+                <Button label="Cancel" severity="secondary" @click="showResetDialog = false" />
+                <Button label="Reset Application" severity="danger" :loading="loading.reset" @click="executeReset" />
             </template>
         </Dialog>
     </div>

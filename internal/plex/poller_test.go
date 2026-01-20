@@ -323,10 +323,8 @@ func TestPollerChannelClosedOnStop(t *testing.T) {
 
 	// Channel should be closed - reading should return immediately with zero value
 	select {
-	case _, ok := <-sessionCh:
-		if ok {
-			// Got a value, that's fine - drain it
-		}
+	case <-sessionCh:
+		// Channel closed or got a value - both are acceptable
 		// Channel closed is expected
 	case <-time.After(500 * time.Millisecond):
 		t.Error("Channel should be closed after stop, but read blocked")

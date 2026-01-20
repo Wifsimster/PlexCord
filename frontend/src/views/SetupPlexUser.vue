@@ -104,20 +104,13 @@ onMounted(() => {
     <div class="max-w-5xl mx-auto p-8">
         <div class="text-center">
             <h2 class="text-2xl font-bold mb-2">Select User Account</h2>
-            <p class="text-surface-600 dark:text-surface-400">
-                Choose which Plex user account to monitor for playback activity
-            </p>
+            <p class="text-surface-600 dark:text-surface-400">Choose which Plex user account to monitor for playback activity</p>
         </div>
 
         <div class="min-h-75 mt-6">
             <!-- Loading State -->
             <div v-if="isLoading" class="flex flex-col items-center justify-center p-12">
-                <ProgressSpinner
-                    style="width: 50px; height: 50px"
-                    strokeWidth="4"
-                    fill="transparent"
-                    animationDuration="1s"
-                />
+                <ProgressSpinner style="width: 50px; height: 50px" strokeWidth="4" fill="transparent" animationDuration="1s" />
                 <p class="text-surface-600 dark:text-surface-400 mt-3">Loading users...</p>
             </div>
 
@@ -133,20 +126,8 @@ onMounted(() => {
                     </div>
                 </Message>
                 <div class="flex justify-center gap-2 mt-4">
-                    <Button
-                        label="Retry"
-                        icon="pi pi-refresh"
-                        @click="fetchUsers"
-                        severity="danger"
-                        class="mr-2"
-                    />
-                    <Button
-                        label="Go Back"
-                        icon="pi pi-arrow-left"
-                        @click="goBack"
-                        severity="secondary"
-                        outlined
-                    />
+                    <Button label="Retry" icon="pi pi-refresh" @click="fetchUsers" severity="danger" class="mr-2" />
+                    <Button label="Go Back" icon="pi pi-arrow-left" @click="goBack" severity="secondary" outlined />
                 </div>
             </div>
 
@@ -158,19 +139,11 @@ onMounted(() => {
                     </template>
                     <div>
                         <h4 class="font-semibold mb-2">No Users Found</h4>
-                        <p class="text-sm">
-                            No user accounts were found on this Plex server.
-                            This may happen if the server is configured for admin-only access.
-                        </p>
+                        <p class="text-sm">No user accounts were found on this Plex server. This may happen if the server is configured for admin-only access.</p>
                     </div>
                 </Message>
                 <div class="flex justify-center mt-4">
-                    <Button
-                        label="Retry"
-                        icon="pi pi-refresh"
-                        @click="fetchUsers"
-                        severity="secondary"
-                    />
+                    <Button label="Retry" icon="pi pi-refresh" @click="fetchUsers" severity="secondary" />
                 </div>
             </div>
 
@@ -186,13 +159,7 @@ onMounted(() => {
 
                 <!-- User Grid -->
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    <UserCard
-                        v-for="user in users"
-                        :key="user.id"
-                        :user="user"
-                        :selected="selectedUser?.id === user.id"
-                        @select="selectUser"
-                    />
+                    <UserCard v-for="user in users" :key="user.id" :user="user" :selected="selectedUser?.id === user.id" @select="selectUser" />
                 </div>
 
                 <!-- Selection confirmation -->
@@ -206,7 +173,6 @@ onMounted(() => {
                 </div>
             </div>
         </div>
-
     </div>
 </template>
 

@@ -19,8 +19,8 @@ export default defineConfig({
         // To disable Hot Module Reload (see wails-nohmr.json + template README):
         // hmr: false
         hmr: {
-            host: "localhost",
-            protocol: "ws",
+            host: 'localhost',
+            protocol: 'ws'
         }
     },
     plugins: [

@@ -18,7 +18,11 @@ func (m *AutoStartManager) IsEnabled() bool {
 	if err != nil {
 		return false
 	}
-	defer key.Close()
+	defer func() {
+		if err := key.Close(); err != nil {
+			log.Printf("Warning: Failed to close registry key: %v", err)
+		}
+	}()
 
 	_, _, err = key.GetStringValue(m.appName)
 	return err == nil
@@ -36,7 +40,11 @@ func (m *AutoStartManager) Enable() error {
 		log.Printf("ERROR: Failed to open registry key: %v", err)
 		return err
 	}
-	defer key.Close()
+	defer func() {
+		if err := key.Close(); err != nil {
+			log.Printf("Warning: Failed to close registry key: %v", err)
+		}
+	}()
 
 	// Use quoted path to handle spaces in the executable path
 	if err := key.SetStringValue(m.appName, `"`+m.executable+`"`); err != nil {
@@ -60,7 +68,11 @@ func (m *AutoStartManager) Disable() error {
 		log.Printf("ERROR: Failed to open registry key: %v", err)
 		return err
 	}
-	defer key.Close()
+	defer func() {
+		if err := key.Close(); err != nil {
+			log.Printf("Warning: Failed to close registry key: %v", err)
+		}
+	}()
 
 	if err := key.DeleteValue(m.appName); err != nil {
 		log.Printf("ERROR: Failed to delete registry value: %v", err)

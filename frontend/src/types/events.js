@@ -26,10 +26,10 @@
  * @enum {string}
  */
 export const SessionEvents = {
-  /** Emitted when music playback is detected or track changes */
-  PLAYBACK_UPDATED: 'PlaybackUpdated',
-  /** Emitted when music playback stops */
-  PLAYBACK_STOPPED: 'PlaybackStopped'
+    /** Emitted when music playback is detected or track changes */
+    PLAYBACK_UPDATED: 'PlaybackUpdated',
+    /** Emitted when music playback stops */
+    PLAYBACK_STOPPED: 'PlaybackStopped'
 };
 
 // Export empty object to make this a module

@@ -15,7 +15,7 @@ onMounted(async () => {
             console.log('Discord not connected, connecting now...');
             await ConnectDiscord('');
         }
-        
+
         await StartSessionPolling();
         console.log('Session polling started for preview');
     } catch (error) {
@@ -34,9 +34,7 @@ onMounted(async () => {
                     <i class="pi pi-check-circle text-5xl text-green-500"></i>
                 </div>
                 <h2 class="text-2xl font-bold mb-2">You're All Set!</h2>
-                <p class="text-surface-600 dark:text-surface-400">
-                    PlexCord is ready to display your Plex music activity on Discord.
-                </p>
+                <p class="text-surface-600 dark:text-surface-400">PlexCord is ready to display your Plex music activity on Discord.</p>
             </div>
 
             <!-- Discord Preview Section -->
@@ -72,9 +70,7 @@ onMounted(async () => {
                     <i class="pi pi-info-circle text-blue-500 mt-1"></i>
                     <div>
                         <span class="font-semibold">Tip:</span>
-                        <span class="text-surface-600 dark:text-surface-400 ml-1">
-                            Start playing music on Plex now to see the live preview update above!
-                        </span>
+                        <span class="text-surface-600 dark:text-surface-400 ml-1"> Start playing music on Plex now to see the live preview update above! </span>
                     </div>
                 </div>
             </div>

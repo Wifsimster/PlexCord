@@ -337,11 +337,9 @@ func TestValidateConnectionLibraryRequestFails(t *testing.T) {
 // TestValidationResultJSONSerialization tests that ValidationResult serializes correctly
 func TestValidationResultJSONSerialization(t *testing.T) {
 	result := ValidationResult{
-		Success:           true,
-		ServerName:        "My Plex Server",
-		ServerVersion:     "1.40.0",
-		LibraryCount:      5,
-		MachineIdentifier: "test123",
+		Success:      true,
+		ServerName:   "My Plex Server",
+		LibraryCount: 5,
 	}
 
 	// Verify JSON tags are using camelCase (important for Wails binding)
@@ -392,9 +390,8 @@ func TestIdentityResponseParsing(t *testing.T) {
 </MediaContainer>`)
 
 	var identity IdentityResponse
-	if err := identity.XMLName.Space; err != "" {
-		// This is just to use the variable
-	}
+	// Verify XMLName.Space is accessible
+	_ = identity.XMLName.Space
 
 	// Test that the struct can unmarshal XML
 	// The actual parsing is tested in TestValidateConnectionSuccess

@@ -3,6 +3,7 @@ package plex
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 	"time"
@@ -36,7 +37,11 @@ func (s *GDMScanner) Scan() ([]Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create UDP connection: %w", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Warning: Failed to close UDP connection: %v", err)
+		}
+	}()
 
 	// Send GDM discovery packet
 	_, err = conn.WriteToUDP([]byte(gdmRequest), addr)
@@ -45,7 +50,9 @@ func (s *GDMScanner) Scan() ([]Server, error) {
 	}
 
 	// Set read timeout
-	conn.SetReadDeadline(time.Now().Add(s.timeout))
+	if err := conn.SetReadDeadline(time.Now().Add(s.timeout)); err != nil {
+		return nil, fmt.Errorf("failed to set read deadline: %w", err)
+	}
 
 	// Collect responses
 	servers := make([]Server, 0)
@@ -80,11 +87,12 @@ func parseGDMResponse(data []byte, ip string) (Server, error) {
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "Name: ") {
+		switch {
+		case strings.HasPrefix(line, "Name: "):
 			server.Name = strings.TrimPrefix(line, "Name: ")
-		} else if strings.HasPrefix(line, "Port: ") {
+		case strings.HasPrefix(line, "Port: "):
 			server.Port = strings.TrimPrefix(line, "Port: ")
-		} else if strings.HasPrefix(line, "Resource-Identifier: ") {
+		case strings.HasPrefix(line, "Resource-Identifier: "):
 			server.ID = strings.TrimPrefix(line, "Resource-Identifier: ")
 		}
 	}

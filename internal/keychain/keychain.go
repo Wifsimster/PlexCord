@@ -1,10 +1,9 @@
 package keychain
 
 import (
-	"log"
+	"plexcord/internal/errors"
 
 	"github.com/zalando/go-keyring"
-	"plexcord/internal/errors"
 )
 
 const (
@@ -35,11 +34,6 @@ func SetToken(token string) error {
 
 	err := keyring.Set(ServiceName, TokenKey, token)
 	if err != nil {
-		// If keychain unavailable, use fallback encryption
-		if isKeychainUnavailable(err) {
-			log.Printf("WARNING: OS keychain unavailable, using encrypted fallback storage")
-			return setTokenFallback(token)
-		}
 		return errors.Wrap(err, errors.KEYCHAIN_STORE_FAILED, "failed to store token in keychain")
 	}
 
@@ -63,11 +57,6 @@ func SetToken(token string) error {
 func GetToken() (string, error) {
 	token, err := keyring.Get(ServiceName, TokenKey)
 	if err != nil {
-		// If keychain unavailable, try fallback
-		if isKeychainUnavailable(err) {
-			return getTokenFallback()
-		}
-
 		// Token not found is not an error (user hasn't set it up yet)
 		if err == keyring.ErrNotFound {
 			return "", nil
@@ -91,11 +80,6 @@ func GetToken() (string, error) {
 func DeleteToken() error {
 	err := keyring.Delete(ServiceName, TokenKey)
 	if err != nil {
-		// If keychain unavailable, try fallback
-		if isKeychainUnavailable(err) {
-			return deleteTokenFallback()
-		}
-
 		// Token not found is not an error
 		if err == keyring.ErrNotFound {
 			return nil
@@ -105,17 +89,4 @@ func DeleteToken() error {
 	}
 
 	return nil
-}
-
-// isKeychainUnavailable checks if the error indicates that the OS keychain
-// is not available (e.g., running in a restricted environment)
-func isKeychainUnavailable(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	// go-keyring returns specific errors when keychain is unavailable
-	// This is a simplified check - in production you'd check error strings
-	// For now, we'll return false to always use keychain (fallback is backup)
-	return false
 }

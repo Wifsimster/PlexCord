@@ -1,11 +1,12 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import DiscordPreview from '@/components/setup/DiscordPreview.vue';
 import ConnectionStatus from '@/components/ConnectionStatus.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { GetVersion } from '../../../wailsjs/go/main/App';
-import { useConnectionStore } from '@/stores/connection';
-const connectionStore = useConnectionStore();
+import { useConnectionStatus } from '@/composables/useConnectionStatus';
+
+const { errors, plex, discord } = useConnectionStatus();
 
 // Version info
 const version = ref('');
@@ -19,34 +20,20 @@ onMounted(async () => {
     }
 });
 
-// Error banner computed properties
-const activeErrors = computed(() => connectionStore.activeErrors);
-
-// Get retry state for a specific source
-const getRetryState = (source) => {
-    return source === 'plex'
-        ? connectionStore.plex.retryState
-        : connectionStore.discord.retryState;
-};
-
-// Check if retry is in progress for a source
-const isRetrying = (source) => {
-    return source === 'plex'
-        ? connectionStore.loading.plex || connectionStore.isPlexRetrying
-        : connectionStore.loading.discord || connectionStore.isDiscordRetrying;
-};
-
-// Handle error dismissal
+// Error banner handling
 const handleDismissError = (source) => {
-    connectionStore.dismissError(source);
+    if (source === 'plex') {
+        plex.error.value = null;
+    } else {
+        discord.error.value = null;
+    }
 };
 
-// Handle retry request
 const handleRetry = (source) => {
     if (source === 'plex') {
-        connectionStore.retryPlex();
+        plex.retry();
     } else {
-        connectionStore.retryDiscord();
+        discord.retry();
     }
 };
 </script>
@@ -54,14 +41,14 @@ const handleRetry = (source) => {
 <template>
     <div class="grid grid-cols-12 gap-6">
         <!-- Error Banners - Positioned at top -->
-        <div v-if="activeErrors.length > 0" class="col-span-12 space-y-3">
+        <div v-if="errors.length > 0" class="col-span-12 space-y-3">
             <ErrorBanner
-                v-for="error in activeErrors"
+                v-for="error in errors"
                 :key="error.source"
-                :error-info="error.errorInfo"
-                :retry-state="getRetryState(error.source)"
+                :error-info="error"
+                :retry-state="error.source === 'plex' ? plex.retryState : discord.retryState"
                 :source="error.source"
-                :is-retrying="isRetrying(error.source)"
+                :is-retrying="error.source === 'plex' ? plex.isRetrying : discord.isRetrying"
                 @dismiss="handleDismissError(error.source)"
                 @retry="handleRetry(error.source)"
             />

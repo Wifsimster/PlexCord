@@ -22,10 +22,10 @@ type Poller struct {
 	sessionC chan *MusicSession // nil indicates no session / stopped playback
 
 	// Error handling (Story 6.5)
-	onError       func(err error)    // Called when poll errors occur
-	onRecovered   func()             // Called when connection recovers after error
-	lastErrorTime time.Time          // Track when last error occurred
-	inErrorState  bool               // Whether currently in error state
+	onError       func(err error) // Called when poll errors occur
+	onRecovered   func()          // Called when connection recovers after error
+	lastErrorTime time.Time       // Track when last error occurred
+	inErrorState  bool            // Whether currently in error state
 }
 
 // NewPoller creates a new session poller for the specified user.

@@ -24,7 +24,8 @@ const formattedDuration = computed(() => playbackStore.formattedDuration);
 const progressPercent = computed(() => playbackStore.progressPercent);
 
 // Placeholder image for missing artwork
-const placeholderImage = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIGZpbGw9IiM0YjU1NjMiLz48dGV4dCB4PSIzMiIgeT0iMzYiIGZvbnQtc2l6ZT0iMjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Y2EzYWYiPjwvdGV4dD48L3N2Zz4=';
+const placeholderImage =
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIGZpbGw9IiM0YjU1NjMiLz48dGV4dCB4PSIzMiIgeT0iMzYiIGZvbnQtc2l6ZT0iMjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Y2EzYWYiPjwvdGV4dD48L3N2Zz4=';
 
 const artworkUrl = computed(() => {
     if (currentTrack.value?.thumbUrl) {
@@ -67,13 +68,7 @@ const playbackStateText = computed(() => {
         <div v-else class="flex gap-4">
             <!-- Album artwork -->
             <div class="flex-shrink-0">
-                <img
-                    :src="artworkUrl"
-                    :alt="currentTrack?.album || 'Album artwork'"
-                    class="rounded-border shadow-md"
-                    style="width: 80px; height: 80px; object-fit: cover;"
-                    @error="(e) => e.target.src = placeholderImage"
-                />
+                <img :src="artworkUrl" :alt="currentTrack?.album || 'Album artwork'" class="rounded-border shadow-md" style="width: 80px; height: 80px; object-fit: cover" @error="(e) => (e.target.src = placeholderImage)" />
             </div>
 
             <!-- Track info -->
@@ -100,10 +95,7 @@ const playbackStateText = computed(() => {
                         <span>{{ formattedDuration }}</span>
                     </div>
                     <div class="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-1.5">
-                        <div
-                            class="bg-primary h-1.5 rounded-full transition-all duration-300"
-                            :style="{ width: `${progressPercent}%` }"
-                        ></div>
+                        <div class="bg-primary h-1.5 rounded-full transition-all duration-300" :style="{ width: `${progressPercent}%` }"></div>
                     </div>
                 </div>
             </div>

@@ -3,8 +3,10 @@
 package version
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -68,7 +70,10 @@ func CheckForUpdate() (*UpdateInfo, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", GitHubRepo)
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -80,7 +85,11 @@ func CheckForUpdate() (*UpdateInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to check for updates: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode == http.StatusNotFound {
 		// No releases yet
@@ -160,7 +169,7 @@ func parseVersion(v string) [3]int {
 
 	segments := strings.Split(v, ".")
 	for i := 0; i < len(segments) && i < 3; i++ {
-		fmt.Sscanf(segments[i], "%d", &parts[i])
+		_, _ = fmt.Sscanf(segments[i], "%d", &parts[i])
 	}
 
 	return parts

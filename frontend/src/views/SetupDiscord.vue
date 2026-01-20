@@ -1,22 +1,11 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { 
-    ConnectDiscord, 
-    DisconnectDiscord,
-    IsDiscordConnected,
-    GetDefaultDiscordClientID,
-    GetDiscordClientID,
-    SaveDiscordClientID,
-    ValidateDiscordClientID,
-    TestDiscordPresence
-} from '../../wailsjs/go/main/App';
+import { ConnectDiscord, DisconnectDiscord, IsDiscordConnected, GetDefaultDiscordClientID, GetDiscordClientID, SaveDiscordClientID, ValidateDiscordClientID, TestDiscordPresence } from '../../wailsjs/go/main/App';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
 import ProgressSpinner from 'primevue/progressspinner';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
-
-const setupStore = useSetupStore();
 
 // Connection state
 const connectionState = ref('initial'); // 'initial', 'connecting', 'connected', 'error'
@@ -128,7 +117,7 @@ const connectToDiscord = async () => {
 
     try {
         await ConnectDiscord(activeClientId.value);
-        
+
         // Verify connection
         const isConnected = await IsDiscordConnected();
         if (isConnected) {
@@ -140,7 +129,7 @@ const connectToDiscord = async () => {
     } catch (error) {
         console.error('Discord connection failed:', error);
         connectionState.value = 'error';
-        
+
         // Parse error message for user-friendly display
         let errorMessage = 'Failed to connect to Discord';
         if (error && typeof error === 'string') {
@@ -230,9 +219,7 @@ watch(showCustomClientId, () => {
     <div class="max-w-4xl mx-auto">
         <div class="py-8">
             <h2 class="text-3xl font-bold mb-4">Connect to Discord</h2>
-            <p class="text-lg mb-6">
-                PlexCord will display your Plex music activity on Discord using Rich Presence.
-            </p>
+            <p class="text-lg mb-6">PlexCord will display your Plex music activity on Discord using Rich Presence.</p>
 
             <!-- Discord Client Detection Notice -->
             <Message v-if="connectionState === 'initial'" severity="info" :closable="false" class="mb-6">
@@ -248,17 +235,8 @@ watch(showCustomClientId, () => {
                 <div v-if="connectionState === 'initial'" class="connection-initial">
                     <div class="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-gray-600 rounded-lg">
                         <h3 class="text-xl font-semibold">Discord Rich Presence</h3>
-                        <p class="text-center text-muted-color">
-                            Connect to Discord to show your Plex music activity on your profile.
-                        </p>
-                        <Button
-                            label="Connect to Discord"
-                            icon="pi pi-link"
-                            @click="connectToDiscord"
-                            size="large"
-                            class="mt-2"
-                            :disabled="!isClientIdValid"
-                        />
+                        <p class="text-center text-muted-color">Connect to Discord to show your Plex music activity on your profile.</p>
+                        <Button label="Connect to Discord" icon="pi pi-link" @click="connectToDiscord" size="large" class="mt-2" :disabled="!isClientIdValid" />
                     </div>
                 </div>
 
@@ -276,42 +254,20 @@ watch(showCustomClientId, () => {
                     <div class="flex flex-col items-center gap-4 p-8 bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-lg">
                         <i class="pi pi-check-circle text-6xl text-green-500"></i>
                         <h3 class="text-xl font-semibold text-green-600 dark:text-green-400">Connected to Discord!</h3>
-                        <p class="text-center text-muted-color">
-                            PlexCord is now connected and will update your Discord status when you play music.
-                        </p>
-                        
+                        <p class="text-center text-muted-color">PlexCord is now connected and will update your Discord status when you play music.</p>
+
                         <!-- Test Success Message -->
-                        <Message v-if="testSuccess" severity="success" :closable="true" class="w-full">
-                            Test presence sent successfully! Check your Discord profile.
-                        </Message>
-                        
+                        <Message v-if="testSuccess" severity="success" :closable="true" class="w-full"> Test presence sent successfully! Check your Discord profile. </Message>
+
                         <!-- Test Error Message -->
                         <Message v-if="testError" severity="error" :closable="true" class="w-full" @close="testError = ''">
                             {{ testError }}
                         </Message>
-                        
+
                         <div class="flex gap-3 flex-wrap justify-center">
-                            <Button
-                                label="Send Test Presence"
-                                icon="pi pi-send"
-                                @click="testPresence"
-                                :loading="isTesting"
-                                severity="info"
-                            />
-                            <Button
-                                label="Test Again"
-                                icon="pi pi-refresh"
-                                @click="retryConnection"
-                                outlined
-                                severity="secondary"
-                            />
-                            <Button
-                                label="Disconnect"
-                                icon="pi pi-times"
-                                @click="disconnect"
-                                outlined
-                                severity="danger"
-                            />
+                            <Button label="Send Test Presence" icon="pi pi-send" @click="testPresence" :loading="isTesting" severity="info" />
+                            <Button label="Test Again" icon="pi pi-refresh" @click="retryConnection" outlined severity="secondary" />
+                            <Button label="Disconnect" icon="pi pi-times" @click="disconnect" outlined severity="danger" />
                         </div>
                     </div>
                 </div>
@@ -328,19 +284,8 @@ watch(showCustomClientId, () => {
                         </div>
                     </Message>
                     <div class="flex flex-col gap-3">
-                        <Button
-                            label="Retry Connection"
-                            icon="pi pi-refresh"
-                            @click="retryConnection"
-                            :loading="isConnecting"
-                        />
-                        <Button
-                            label="Back to Setup"
-                            icon="pi pi-arrow-left"
-                            @click="disconnect"
-                            outlined
-                            severity="secondary"
-                        />
+                        <Button label="Retry Connection" icon="pi pi-refresh" @click="retryConnection" :loading="isConnecting" />
+                        <Button label="Back to Setup" icon="pi pi-arrow-left" @click="disconnect" outlined severity="secondary" />
                     </div>
                 </div>
             </div>
@@ -349,46 +294,23 @@ watch(showCustomClientId, () => {
             <div class="border-t border-surface-200 dark:border-surface-700 pt-8">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-semibold">Advanced Configuration</h3>
-                    <Button
-                        :icon="showCustomClientId ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
-                        @click="toggleCustomClientId"
-                        text
-                        size="small"
-                        :label="showCustomClientId ? 'Hide' : 'Show'"
-                    />
+                    <Button :icon="showCustomClientId ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" @click="toggleCustomClientId" text size="small" :label="showCustomClientId ? 'Hide' : 'Show'" />
                 </div>
 
                 <div v-if="showCustomClientId" class="custom-client-id-section p-4 bg-surface-50 dark:bg-surface-900 rounded-lg">
                     <div class="mb-4">
                         <label class="block mb-2 font-medium">Custom Discord Application Client ID</label>
-                        <p class="text-sm text-muted-color mb-3">
-                            Use your own Discord application for custom branding or testing. Leave empty to use the default PlexCord application.
-                        </p>
+                        <p class="text-sm text-muted-color mb-3">Use your own Discord application for custom branding or testing. Leave empty to use the default PlexCord application.</p>
                         <div class="flex flex-col gap-2">
-                            <InputText
-                                v-model="customClientId"
-                                placeholder="Enter Discord Application Client ID (17+ digits)"
-                                @blur="handleClientIdChange"
-                                @input="handleClientIdChange"
-                                :class="{ 'p-invalid': !isClientIdValid }"
-                                class="w-full"
-                            />
+                            <InputText v-model="customClientId" placeholder="Enter Discord Application Client ID (17+ digits)" @blur="handleClientIdChange" @input="handleClientIdChange" :class="{ 'p-invalid': !isClientIdValid }" class="w-full" />
                             <small v-if="clientIdError" class="text-red-500">{{ clientIdError }}</small>
-                            <small v-else class="text-muted-color">
-                                Default: {{ defaultClientId }}
-                            </small>
+                            <small v-else class="text-muted-color"> Default: {{ defaultClientId }} </small>
                         </div>
                     </div>
 
                     <!-- Instructions Toggle -->
                     <div class="instructions-toggle">
-                        <Button
-                            label="How to create a Discord application"
-                            icon="pi pi-question-circle"
-                            @click="showInstructions = !showInstructions"
-                            text
-                            size="small"
-                        />
+                        <Button label="How to create a Discord application" icon="pi pi-question-circle" @click="showInstructions = !showInstructions" text size="small" />
                     </div>
 
                     <!-- Instructions Panel -->
@@ -402,9 +324,7 @@ watch(showCustomClientId, () => {
                             <li>(Optional) Upload custom images in the Rich Presence Art Assets section</li>
                         </ol>
                         <Message severity="warn" :closable="false" class="mt-4">
-                            <p class="text-sm">
-                                Custom applications require additional setup. Most users should use the default PlexCord application.
-                            </p>
+                            <p class="text-sm">Custom applications require additional setup. Most users should use the default PlexCord application.</p>
                         </Message>
                     </div>
                 </div>

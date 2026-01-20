@@ -12,24 +12,24 @@ const props = defineProps({
     /** Error information from backend */
     errorInfo: {
         type: Object,
-        required: true,
+        required: true
     },
     /** Current retry state from backend */
     retryState: {
         type: Object,
-        default: null,
+        default: null
     },
     /** Source of the error: 'plex' or 'discord' */
     source: {
         type: String,
         required: true,
-        validator: (value) => ['plex', 'discord'].includes(value),
+        validator: (value) => ['plex', 'discord'].includes(value)
     },
     /** Whether a retry is currently in progress */
     isRetrying: {
         type: Boolean,
-        default: false,
-    },
+        default: false
+    }
 });
 
 const emit = defineEmits(['dismiss', 'retry']);
@@ -91,13 +91,7 @@ const handleRetry = () => {
 </script>
 
 <template>
-    <Message
-        :closable="false"
-        severity="error"
-        role="alert"
-        class="transition-[opacity,transform] duration-150 ease-out"
-        :class="{ 'opacity-0 scale-95': isDismissing }"
-    >
+    <Message :closable="false" severity="error" role="alert" class="transition-[opacity,transform] duration-150 ease-out" :class="{ 'opacity-0 scale-95': isDismissing }">
         <template #messageicon>
             <i :class="[sourceIcon, sourceColor, 'text-lg mr-2']"></i>
         </template>
@@ -112,62 +106,32 @@ const handleRetry = () => {
                 </div>
 
                 <!-- Description -->
-                <div
-                    v-if="errorInfo.description"
-                    class="text-sm text-surface-700 dark:text-surface-300 mt-1"
-                >
+                <div v-if="errorInfo.description" class="text-sm text-surface-700 dark:text-surface-300 mt-1">
                     {{ errorInfo.description }}
                 </div>
 
                 <!-- Suggestion -->
-                <div
-                    v-if="errorInfo.suggestion"
-                    class="text-sm text-surface-600 dark:text-surface-400 mt-1 italic"
-                >
+                <div v-if="errorInfo.suggestion" class="text-sm text-surface-600 dark:text-surface-400 mt-1 italic">
                     {{ errorInfo.suggestion }}
                 </div>
 
                 <!-- Error code for troubleshooting -->
-                <div class="text-xs text-surface-600 dark:text-surface-400 mt-2 font-mono">
-                    Code: {{ errorInfo.code || 'UNKNOWN' }}
-                </div>
+                <div class="text-xs text-surface-600 dark:text-surface-400 mt-2 font-mono">Code: {{ errorInfo.code || 'UNKNOWN' }}</div>
 
                 <!-- Retry countdown -->
-                <div
-                    v-if="showCountdown"
-                    class="text-sm text-surface-600 dark:text-surface-400 mt-2 flex items-center gap-2"
-                >
+                <div v-if="showCountdown" class="text-sm text-surface-600 dark:text-surface-400 mt-2 flex items-center gap-2">
                     <i class="pi pi-spin pi-spinner text-xs"></i>
-                    <span>
-                        Retry #{{ attemptNumber }} in {{ countdownSeconds }}s...
-                    </span>
+                    <span> Retry #{{ attemptNumber }} in {{ countdownSeconds }}s... </span>
                 </div>
             </div>
 
             <!-- Action buttons -->
             <div class="flex items-center gap-2 shrink-0">
                 <!-- Retry button (if retryable) -->
-                <Button
-                    v-if="errorInfo.retryable"
-                    label="Retry"
-                    icon="pi pi-refresh"
-                    severity="secondary"
-                    size="small"
-                    :loading="isRetrying"
-                    @click="handleRetry"
-                />
+                <Button v-if="errorInfo.retryable" label="Retry" icon="pi pi-refresh" severity="secondary" size="small" :loading="isRetrying" @click="handleRetry" />
 
                 <!-- Dismiss button -->
-                <Button
-                    icon="pi pi-times"
-                    severity="secondary"
-                    text
-                    rounded
-                    size="small"
-                    @click="handleDismiss"
-                    v-tooltip.left="'Dismiss'"
-                    aria-label="Dismiss error"
-                />
+                <Button icon="pi pi-times" severity="secondary" text rounded size="small" @click="handleDismiss" v-tooltip.left="'Dismiss'" aria-label="Dismiss error" />
             </div>
         </div>
     </Message>

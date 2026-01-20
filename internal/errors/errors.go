@@ -135,11 +135,7 @@ func ContainsSensitiveData(message string) bool {
 
 	// Check for long base64-like strings (likely encoded tokens)
 	base64Pattern := regexp.MustCompile(`[A-Za-z0-9+/]{30,}={0,2}`)
-	if base64Pattern.MatchString(message) {
-		return true
-	}
-
-	return false
+	return base64Pattern.MatchString(message)
 }
 
 // isGenericMention checks if a sensitive keyword is used in a generic context
@@ -215,15 +211,11 @@ func SanitizeForLogging(message string) string {
 
 	// Pattern 2: Long hex strings (likely tokens) - mask the middle
 	hexPattern := regexp.MustCompile(`\b[0-9a-fA-F]{20,}\b`)
-	result = hexPattern.ReplaceAllStringFunc(result, func(match string) string {
-		return maskMiddle(match)
-	})
+	result = hexPattern.ReplaceAllStringFunc(result, maskMiddle)
 
 	// Pattern 3: Long base64-like strings - mask the middle
 	base64Pattern := regexp.MustCompile(`\b[A-Za-z0-9+/]{30,}={0,2}\b`)
-	result = base64Pattern.ReplaceAllStringFunc(result, func(match string) string {
-		return maskMiddle(match)
-	})
+	result = base64Pattern.ReplaceAllStringFunc(result, maskMiddle)
 
 	return result
 }

@@ -78,11 +78,12 @@ func (a *App) startup(ctx context.Context) {
 	// Check if Plex token is available in keychain
 	// The token will be used in later stories for Plex connection
 	token, err := keychain.GetToken()
-	if err != nil {
+	switch {
+	case err != nil:
 		log.Printf("Warning: failed to retrieve Plex token: %v", err)
-	} else if token != "" {
+	case token != "":
 		log.Printf("Plex token retrieved successfully from secure storage")
-	} else {
+	default:
 		log.Printf("No Plex token found - user needs to complete setup")
 	}
 
@@ -103,7 +104,7 @@ func (a *App) startup(ctx context.Context) {
 			// Auto-connect to Plex and start session polling
 			if a.config.ServerURL != "" && token != "" {
 				log.Printf("Auto-connecting to Plex on startup...")
-				_, err := a.ValidatePlexConnection(a.config.ServerURL)
+				err := a.ValidatePlexConnection(a.config.ServerURL)
 				if err != nil {
 					log.Printf("Warning: Failed to validate Plex connection on startup: %v", err)
 					// Start retry mechanism for automatic reconnection
@@ -141,7 +142,9 @@ func (a *App) shutdown(ctx context.Context) {
 
 	// Disconnect Discord
 	if a.discord != nil {
-		a.discord.Disconnect()
+		if err := a.discord.Disconnect(); err != nil {
+			log.Printf("Warning: Failed to disconnect Discord: %v", err)
+		}
 	}
 
 	log.Printf("Application shutdown complete")
@@ -384,33 +387,32 @@ func (a *App) DiscoverPlexServers() ([]plex.Server, error) {
 // - The stored token has valid authentication
 // - The server has accessible libraries
 //
-// Returns validation details (server name, version, library count) or an error with appropriate code.
+// Returns validation details or an error with appropriate code.
 // Validation completes within 5 seconds maximum with automatic timeout.
-func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, error) {
+func (a *App) ValidatePlexConnection(serverURL string) error {
 	log.Printf("Validating Plex connection to: %s", serverURL)
 
 	// Retrieve token from keychain
 	token, err := keychain.GetToken()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve token: %v", err)
-		return nil, errors.Wrap(err, errors.CONFIG_READ_FAILED, "failed to retrieve token")
+		return errors.Wrap(err, errors.CONFIG_READ_FAILED, "failed to retrieve token")
 	}
 
 	if token == "" {
 		log.Printf("ERROR: No Plex token found")
-		return nil, errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
+		return errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
 	}
 
 	// Create Plex client and validate connection
 	client := plex.NewClient(token, serverURL)
-	result, err := client.ValidateConnection()
+	_, err = client.ValidateConnection()
 	if err != nil {
 		log.Printf("ERROR: Connection validation failed: %v", err)
-		return nil, err
+		return err
 	}
 
-	log.Printf("Connection validated successfully - Server: %s, Libraries: %d",
-		result.ServerName, result.LibraryCount)
+	log.Printf("Connection validated successfully")
 
 	// Update connection history
 	a.updatePlexConnectionTime()
@@ -418,7 +420,7 @@ func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, 
 	// Stop any pending retries
 	a.stopPlexRetry()
 
-	return result, nil
+	return nil
 }
 
 // GetPlexUsers retrieves the list of Plex user accounts from the server.
@@ -739,10 +741,6 @@ func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
 	)
 	if err != nil {
 		log.Printf("Warning: Failed to update Discord presence: %v", err)
-		// If connection was lost during update, mark as disconnected
-		if errors.Is(err, errors.DISCORD_NOT_RUNNING) || errors.Is(err, errors.DISCORD_CONN_FAILED) {
-			// Connection lost - will try to reconnect on next update
-		}
 	}
 }
 
@@ -1094,7 +1092,7 @@ func (a *App) TestDiscordPresence() error {
 // - Resets in-memory config to defaults
 // After calling this method, the setup wizard will be shown on next app launch.
 // The application does NOT exit - the user can continue or restart.
-func (a *App) ResetApplication() error {
+func (a *App) ResetApplication() {
 	log.Printf("Resetting application to initial state...")
 
 	// 1. Stop session polling
@@ -1103,7 +1101,9 @@ func (a *App) ResetApplication() error {
 	// 2. Disconnect from Discord (clears presence)
 	a.discordMu.Lock()
 	if a.discord.IsConnected() {
-		a.discord.Disconnect()
+		if err := a.discord.Disconnect(); err != nil {
+			log.Printf("Warning: Failed to disconnect Discord: %v", err)
+		}
 	}
 	a.discordMu.Unlock()
 
@@ -1134,7 +1134,6 @@ func (a *App) ResetApplication() error {
 	log.Printf("In-memory configuration reset to defaults")
 
 	log.Printf("Application reset complete - setup wizard will show on next launch")
-	return nil
 }
 
 // ============================================================================
@@ -1206,7 +1205,7 @@ func (a *App) setupRetryCallbacks() {
 	a.plexRetry.SetCallbacks(
 		func() error {
 			// Try to reconnect to Plex
-			_, err := a.ValidatePlexConnection(a.config.ServerURL)
+			err := a.ValidatePlexConnection(a.config.ServerURL)
 			if err != nil {
 				return err
 			}
@@ -1262,12 +1261,6 @@ func (a *App) startPlexRetry(err error) {
 		return // Auth errors require user action
 	}
 	a.plexRetry.Start(err, code)
-}
-
-// startDiscordRetry begins automatic retry for Discord connection failures.
-func (a *App) startDiscordRetry(err error) {
-	code := errors.GetCode(err)
-	a.discordRetry.Start(err, code)
 }
 
 // stopPlexRetry stops automatic Plex retry on success.

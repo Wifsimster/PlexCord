@@ -3,6 +3,7 @@ package errors
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -213,7 +214,7 @@ func TestAllErrorCodes(t *testing.T) {
 		}
 
 		// Verify code is uppercase with underscores
-		if code != code {
+		if code != strings.ToUpper(code) {
 			t.Errorf("Error code %s should be uppercase", code)
 		}
 	}

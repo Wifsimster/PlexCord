@@ -8,7 +8,7 @@
   --    <URL href="https://www.google.com">Click Me!</URL>
   -->
 <script setup>
-import {BrowserOpenURL} from "../../wailsjs/runtime";
+import { BrowserOpenURL } from '../../wailsjs/runtime';
 
 function openUrl(event) {
     event.preventDefault();
@@ -17,12 +17,12 @@ function openUrl(event) {
 }
 </script>
 
-<template>
-    <a v-bind="$attrs" @click="openUrl($event)"><slot/></a>
-</template>
-
 <script>
 export default {
-    inheritAttrs: false,
+    inheritAttrs: false
 };
 </script>
+
+<template>
+    <a v-bind="$attrs" @click="openUrl($event)"><slot /></a>
+</template>

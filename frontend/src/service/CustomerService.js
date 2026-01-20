@@ -9018,5 +9018,5 @@ export const CustomerService = {
 
     getCustomersXLarge() {
         return Promise.resolve(this.getData());
-    },
+    }
 };

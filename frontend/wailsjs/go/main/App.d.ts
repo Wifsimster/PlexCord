@@ -108,4 +108,4 @@ export function UpdateDiscordPresence(arg1:string,arg2:string,arg3:string,arg4:s
 
 export function ValidateDiscordClientID(arg1:string):Promise<void>;
 
-export function ValidatePlexConnection(arg1:string):Promise<plex.ValidationResult>;
+export function ValidatePlexConnection(arg1:string):Promise<void>;

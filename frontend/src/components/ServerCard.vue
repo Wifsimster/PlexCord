@@ -16,8 +16,8 @@ const props = defineProps({
 
 const emit = defineEmits(['server-selected']);
 
-const badgeType = computed(() => props.server.isLocal ? 'success' : 'info');
-const badgeLabel = computed(() => props.server.isLocal ? 'Local' : 'Remote');
+const badgeType = computed(() => (props.server.isLocal ? 'success' : 'info'));
+const badgeLabel = computed(() => (props.server.isLocal ? 'Local' : 'Remote'));
 
 const selectServer = () => {
     emit('server-selected', props.server);
@@ -25,13 +25,7 @@ const selectServer = () => {
 </script>
 
 <template>
-    <Card
-        :class="[
-            'group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg',
-            { 'ring-2 ring-primary-500 border-primary-500': isSelected }
-        ]"
-        @click="selectServer"
-    >
+    <Card :class="['group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg', { 'ring-2 ring-primary-500 border-primary-500': isSelected }]" @click="selectServer">
         <template #title>
             <div class="flex items-center justify-between gap-3">
                 <h4 class="font-semibold text-lg">{{ server.name }}</h4>
@@ -40,9 +34,7 @@ const selectServer = () => {
         </template>
         <template #content>
             <div class="mt-3">
-                <p class="font-mono text-sm text-surface-600 dark:text-surface-400">
-                    {{ server.address }}:{{ server.port }}
-                </p>
+                <p class="font-mono text-sm text-surface-600 dark:text-surface-400">{{ server.address }}:{{ server.port }}</p>
             </div>
         </template>
     </Card>

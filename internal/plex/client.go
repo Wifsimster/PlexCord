@@ -77,7 +77,11 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 	if err != nil {
 		return nil, mapHTTPError(err, ctx)
 	}
-	defer identityResp.Body.Close()
+	defer func() {
+		if err := identityResp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
 
 	if identityResp.StatusCode != http.StatusOK {
 		return nil, mapHTTPStatusCode(identityResp.StatusCode)
@@ -108,14 +112,19 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 	if err != nil {
 		return nil, mapHTTPError(err, ctx)
 	}
-	defer libraryResp.Body.Close()
+	defer func() {
+		if err := libraryResp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
 
 	log.Printf("Library validation response status: %d %s", libraryResp.StatusCode, libraryResp.Status)
 
 	if libraryResp.StatusCode != http.StatusOK {
 		// Read the response body for debugging
-		bodyBytes, _ := io.ReadAll(libraryResp.Body)
-		log.Printf("Library validation failed with status %d, body: %s", libraryResp.StatusCode, string(bodyBytes))
+		if bodyBytes, err := io.ReadAll(libraryResp.Body); err == nil {
+			log.Printf("Library validation failed with status %d, body: %s", libraryResp.StatusCode, string(bodyBytes))
+		}
 		return nil, mapHTTPStatusCode(libraryResp.StatusCode)
 	}
 
@@ -163,7 +172,11 @@ func (c *Client) GetUsers() ([]PlexUser, error) {
 	if err != nil {
 		return nil, mapHTTPError(err, ctx)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, mapHTTPStatusCode(resp.StatusCode)
@@ -219,7 +232,11 @@ func (c *Client) GetSessions(userID string) ([]Session, error) {
 	if err != nil {
 		return nil, mapHTTPError(err, ctx)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, mapHTTPStatusCode(resp.StatusCode)
@@ -281,7 +298,11 @@ func (c *Client) GetMusicSessions(userID string) ([]MusicSession, error) {
 	if err != nil {
 		return nil, mapHTTPError(err, ctx)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, mapHTTPStatusCode(resp.StatusCode)

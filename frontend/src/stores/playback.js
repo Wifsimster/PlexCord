@@ -18,7 +18,7 @@ export const usePlaybackStore = defineStore('playback', {
         isStopped: true,
 
         // Event listeners initialized
-        initialized: false,
+        initialized: false
     }),
 
     getters: {
@@ -72,7 +72,7 @@ export const usePlaybackStore = defineStore('playback', {
             if (state.isPlaying) return 'playing';
             if (state.isPaused) return 'paused';
             return 'stopped';
-        },
+        }
     },
 
     actions: {
@@ -144,7 +144,7 @@ export const usePlaybackStore = defineStore('playback', {
                 duration: session.duration,
                 viewOffset: session.viewOffset,
                 state: session.state,
-                playerName: session.playerName,
+                playerName: session.playerName
             };
 
             // Update playback state flags
@@ -161,8 +161,8 @@ export const usePlaybackStore = defineStore('playback', {
             this.isPlaying = false;
             this.isPaused = false;
             this.isStopped = true;
-        },
-    },
+        }
+    }
 });
 
 /**

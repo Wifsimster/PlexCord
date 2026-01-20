@@ -3,8 +3,6 @@ package keychain
 import (
 	"os"
 	"testing"
-
-	"github.com/zalando/go-keyring"
 )
 
 // TestSetAndGetToken tests the basic SetToken and GetToken flow
@@ -182,20 +180,6 @@ func TestLongToken(t *testing.T) {
 
 	// Clean up after test
 	_ = DeleteToken()
-}
-
-// TestIsKeychainUnavailable tests the keychain availability check
-func TestIsKeychainUnavailable(t *testing.T) {
-	// Test with nil error
-	if isKeychainUnavailable(nil) {
-		t.Error("nil error should not be considered keychain unavailable")
-	}
-
-	// Test with normal keyring error
-	normalErr := keyring.ErrNotFound
-	if isKeychainUnavailable(normalErr) {
-		t.Error("ErrNotFound should not be considered keychain unavailable")
-	}
 }
 
 // BenchmarkSetToken benchmarks token storage performance

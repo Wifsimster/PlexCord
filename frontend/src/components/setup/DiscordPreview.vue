@@ -22,7 +22,8 @@ const formattedPosition = computed(() => playbackStore.formattedPosition);
 const formattedDuration = computed(() => playbackStore.formattedDuration);
 
 // Placeholder image for missing artwork (Discord-style music icon)
-const placeholderImage = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIGZpbGw9IiM1ODY1RjIiLz48dGV4dCB4PSIzMiIgeT0iNDAiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiPuKZqjwvdGV4dD48L3N2Zz4=';
+const placeholderImage =
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIGZpbGw9IiM1ODY1RjIiLz48dGV4dCB4PSIzMiIgeT0iNDAiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiPuKZqjwvdGV4dD48L3N2Zz4=';
 
 const artworkUrl = computed(() => {
     if (currentTrack.value?.thumbUrl) {
@@ -46,11 +47,7 @@ const artworkUrl = computed(() => {
             <div v-if="hasActiveSession" class="presence-content">
                 <!-- Album artwork -->
                 <div class="presence-artwork">
-                    <img
-                        :src="artworkUrl"
-                        :alt="currentTrack?.album || 'Album artwork'"
-                        @error="(e) => e.target.src = placeholderImage"
-                    />
+                    <img :src="artworkUrl" :alt="currentTrack?.album || 'Album artwork'" @error="(e) => (e.target.src = placeholderImage)" />
                 </div>
 
                 <!-- Track info -->
@@ -89,14 +86,8 @@ const artworkUrl = computed(() => {
     margin: 0 auto;
 }
 
-.preview-label {
-    display: flex;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
 .discord-presence-card {
-    background: #2f3136; /* Discord dark background */
+    background: #2f3136;
     border-radius: 8px;
     overflow: hidden;
     color: #dcddde;
@@ -117,7 +108,7 @@ const artworkUrl = computed(() => {
 }
 
 .presence-header i {
-    color: #3ba55c; /* Discord green */
+    color: #3ba55c;
 }
 
 .presence-content {
@@ -178,7 +169,7 @@ const artworkUrl = computed(() => {
 }
 
 .paused-indicator {
-    color: #faa61a; /* Discord yellow */
+    color: #faa61a;
 }
 
 .presence-empty {
@@ -205,6 +196,4 @@ const artworkUrl = computed(() => {
     color: #72767d;
     margin-top: 0.25rem;
 }
-
-/* Dark mode already matches Discord theme */
 </style>

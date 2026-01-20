@@ -2,7 +2,7 @@
 import { useLayout } from '@/layout/composables/layout';
 import { onBeforeMount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import {BrowserOpenURL} from "../../wailsjs/runtime";
+import { BrowserOpenURL } from '../../wailsjs/runtime';
 
 const route = useRoute();
 
@@ -59,7 +59,7 @@ function itemClick(event, item) {
     if (item.url) {
         event.preventDefault();
         // Opens the given URL in the system browser.
-        BrowserOpenURL(item.url)
+        BrowserOpenURL(item.url);
     }
 
     if (item.command) {

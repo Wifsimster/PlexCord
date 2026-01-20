@@ -14,12 +14,12 @@ const (
 
 // Server represents a discovered Plex Media Server
 type Server struct {
-	ID      string `json:"id"`       // Unique resource identifier
-	Name    string `json:"name"`     // Server display name
-	Address string `json:"address"`  // IP address
-	Port    string `json:"port"`     // Port (typically 32400)
-	IsLocal bool   `json:"isLocal"`  // True if on local network
-	Version string `json:"version"`  // Server version (optional)
+	ID      string `json:"id"`      // Unique resource identifier
+	Name    string `json:"name"`    // Server display name
+	Address string `json:"address"` // IP address
+	Port    string `json:"port"`    // Port (typically 32400)
+	IsLocal bool   `json:"isLocal"` // True if on local network
+	Version string `json:"version"` // Server version (optional)
 }
 
 // URL returns the full server URL
@@ -111,7 +111,7 @@ type Session struct {
 
 // MusicSession represents a music playback session with track metadata
 type MusicSession struct {
-	Session                  // Embedded session info
+	Session           // Embedded session info
 	Track      string `json:"track"`      // Track title
 	Artist     string `json:"artist"`     // Artist name
 	Album      string `json:"album"`      // Album name

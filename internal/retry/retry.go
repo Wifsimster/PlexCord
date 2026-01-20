@@ -19,13 +19,13 @@ var BackoffSchedule = []time.Duration{
 
 // RetryState represents the current state of retry attempts.
 type RetryState struct {
-	AttemptNumber    int           `json:"attemptNumber"`
-	NextRetryIn      time.Duration `json:"nextRetryIn"`
-	NextRetryAt      time.Time     `json:"nextRetryAt"`
-	LastError        string        `json:"lastError,omitempty"`
-	LastErrorCode    string        `json:"lastErrorCode,omitempty"`
-	IsRetrying       bool          `json:"isRetrying"`
-	MaxIntervalReached bool        `json:"maxIntervalReached"`
+	AttemptNumber      int           `json:"attemptNumber"`
+	NextRetryIn        time.Duration `json:"nextRetryIn"`
+	NextRetryAt        time.Time     `json:"nextRetryAt"`
+	LastError          string        `json:"lastError,omitempty"`
+	LastErrorCode      string        `json:"lastErrorCode,omitempty"`
+	IsRetrying         bool          `json:"isRetrying"`
+	MaxIntervalReached bool          `json:"maxIntervalReached"`
 }
 
 // RetryCallback is called when a retry should be attempted.
@@ -37,17 +37,17 @@ type StateChangeCallback func(state RetryState)
 
 // Manager handles automatic retry with exponential backoff.
 type Manager struct {
-	mu              sync.Mutex
-	name            string
-	attemptNumber   int
-	lastError       error
-	lastErrorCode   string
-	timer           *time.Timer
-	ctx             context.Context
-	cancel          context.CancelFunc
-	running         bool
-	retryCallback   RetryCallback
-	stateCallback   StateChangeCallback
+	mu            sync.Mutex
+	name          string
+	attemptNumber int
+	lastError     error
+	lastErrorCode string
+	timer         *time.Timer
+	ctx           context.Context
+	cancel        context.CancelFunc
+	running       bool
+	retryCallback RetryCallback
+	stateCallback StateChangeCallback
 }
 
 // NewManager creates a new retry manager.
@@ -155,8 +155,8 @@ func (m *Manager) GetState() RetryState {
 	defer m.mu.Unlock()
 
 	state := RetryState{
-		AttemptNumber:    m.attemptNumber,
-		IsRetrying:       m.running,
+		AttemptNumber:      m.attemptNumber,
+		IsRetrying:         m.running,
 		MaxIntervalReached: m.attemptNumber >= len(BackoffSchedule)-1,
 	}
 
@@ -198,12 +198,12 @@ func (m *Manager) scheduleNextRetry() {
 	// Emit state change
 	if m.stateCallback != nil {
 		m.stateCallback(RetryState{
-			AttemptNumber:    m.attemptNumber + 1,
-			NextRetryIn:      interval,
-			NextRetryAt:      time.Now().Add(interval),
-			LastError:        m.lastError.Error(),
-			LastErrorCode:    m.lastErrorCode,
-			IsRetrying:       true,
+			AttemptNumber:      m.attemptNumber + 1,
+			NextRetryIn:        interval,
+			NextRetryAt:        time.Now().Add(interval),
+			LastError:          m.lastError.Error(),
+			LastErrorCode:      m.lastErrorCode,
+			IsRetrying:         true,
 			MaxIntervalReached: m.attemptNumber >= len(BackoffSchedule)-1,
 		})
 	}

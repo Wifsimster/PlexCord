@@ -1,16 +1,6 @@
 import { defineStore } from 'pinia';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
-import {
-    GetPlexConnectionStatus,
-    IsDiscordConnected,
-    GetConnectionHistory,
-    GetPlexRetryState,
-    GetDiscordRetryState,
-    RetryPlexConnection,
-    RetryDiscordConnection,
-    ConnectDiscord,
-    GetErrorInfo,
-} from '../../wailsjs/go/main/App';
+import { GetPlexConnectionStatus, IsDiscordConnected, GetConnectionHistory, GetPlexRetryState, GetDiscordRetryState, RetryPlexConnection, RetryDiscordConnection, ConnectDiscord, GetErrorInfo } from '../../wailsjs/go/main/App';
 
 /**
  * Connection Store
@@ -27,7 +17,7 @@ export const useConnectionStore = defineStore('connection', {
             userId: '',
             userName: '',
             lastConnected: null,
-            retryState: null,
+            retryState: null
         },
 
         // Discord connection status
@@ -35,7 +25,7 @@ export const useConnectionStore = defineStore('connection', {
             connected: false,
             lastConnected: null,
             retryState: null,
-            error: null,
+            error: null
         },
 
         // Event listeners initialized
@@ -44,12 +34,12 @@ export const useConnectionStore = defineStore('connection', {
         // Loading states
         loading: {
             plex: false,
-            discord: false,
+            discord: false
         },
 
         // Active errors for ErrorBanner display
         // Array of { source: 'plex'|'discord', errorInfo: ErrorInfo, dismissed: boolean }
-        errors: [],
+        errors: []
     }),
 
     getters: {
@@ -110,7 +100,7 @@ export const useConnectionStore = defineStore('connection', {
         /**
          * Check if there are any active errors
          */
-        hasActiveErrors: (state) => state.errors.some((e) => !e.dismissed),
+        hasActiveErrors: (state) => state.errors.some((e) => !e.dismissed)
     },
 
     actions: {
@@ -185,7 +175,7 @@ export const useConnectionStore = defineStore('connection', {
             });
 
             // Discord connection events
-            EventsOn('DiscordConnected', (data) => {
+            EventsOn('DiscordConnected', () => {
                 this.discord.connected = true;
                 this.discord.error = null;
                 this.discord.lastConnected = new Date().toISOString();
@@ -315,7 +305,7 @@ export const useConnectionStore = defineStore('connection', {
                     source,
                     errorInfo,
                     dismissed: false,
-                    timestamp: new Date().toISOString(),
+                    timestamp: new Date().toISOString()
                 });
             } catch (err) {
                 // Fallback if GetErrorInfo fails
@@ -326,10 +316,10 @@ export const useConnectionStore = defineStore('connection', {
                         title: 'Connection Error',
                         description: `Failed to connect to ${source === 'plex' ? 'Plex' : 'Discord'}`,
                         suggestion: 'Please check your connection and try again.',
-                        retryable: true,
+                        retryable: true
                     },
                     dismissed: false,
-                    timestamp: new Date().toISOString(),
+                    timestamp: new Date().toISOString()
                 });
             }
         },
@@ -358,8 +348,8 @@ export const useConnectionStore = defineStore('connection', {
          */
         clearAllErrors() {
             this.errors = [];
-        },
-    },
+        }
+    }
 });
 
 /**

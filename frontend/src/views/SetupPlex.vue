@@ -65,17 +65,17 @@ const canValidate = computed(() => {
 const startPINAuth = async () => {
     authError.value = '';
     authStep.value = 'loading';
-    
+
     try {
         const result = await StartPlexPINAuth();
         pinCode.value = result.pinCode;
         pinID.value = result.pinID;
         authURL.value = result.authURL;
         authStep.value = 'waiting';
-        
+
         // Start polling for authorization
         checkInterval.value = setInterval(checkPINStatus, 2000);
-        
+
         // Open browser automatically
         BrowserOpenURL(authURL.value);
     } catch (error) {
@@ -89,12 +89,12 @@ const startPINAuth = async () => {
 const checkPINStatus = async () => {
     try {
         const result = await CheckPlexPINAuth(pinID.value);
-        
+
         if (result.authorized) {
             // Success! Save the token
             setupStore.setPlexToken(result.authToken);
             authStep.value = 'success';
-            
+
             // Stop polling
             if (checkInterval.value) {
                 clearInterval(checkInterval.value);
@@ -103,7 +103,7 @@ const checkPINStatus = async () => {
         } else if (result.expired) {
             authError.value = 'PIN expired. Please try again.';
             authStep.value = 'error';
-            
+
             // Stop polling
             if (checkInterval.value) {
                 clearInterval(checkInterval.value);
@@ -278,22 +278,28 @@ const retryValidation = () => {
 };
 
 // Watch for server URL changes to clear validation
-watch(() => setupStore.plexServerUrl, (newUrl, oldUrl) => {
-    if (newUrl !== oldUrl && validationAttempted.value) {
-        setupStore.clearValidation();
-        validationAttempted.value = false;
-        validationError.value = '';
+watch(
+    () => setupStore.plexServerUrl,
+    (newUrl, oldUrl) => {
+        if (newUrl !== oldUrl && validationAttempted.value) {
+            setupStore.clearValidation();
+            validationAttempted.value = false;
+            validationError.value = '';
+        }
     }
-});
+);
 
 // Watch for token changes to clear validation
-watch(() => setupStore.plexToken, (newToken, oldToken) => {
-    if (newToken !== oldToken && validationAttempted.value) {
-        setupStore.clearValidation();
-        validationAttempted.value = false;
-        validationError.value = '';
+watch(
+    () => setupStore.plexToken,
+    (newToken, oldToken) => {
+        if (newToken !== oldToken && validationAttempted.value) {
+            setupStore.clearValidation();
+            validationAttempted.value = false;
+            validationError.value = '';
+        }
     }
-});
+);
 
 // Restore validation state on mount
 onMounted(() => {
@@ -307,9 +313,7 @@ onMounted(() => {
     <div class="max-w-4xl mx-auto">
         <div class="py-8">
             <h2 class="text-3xl font-bold mb-4">Connect to Your Plex Account</h2>
-            <p class="text-lg mb-6">
-                Authenticate with Plex using a secure PIN code - no password required!
-            </p>
+            <p class="text-lg mb-6">Authenticate with Plex using a secure PIN code - no password required!</p>
 
             <!-- PIN Authentication Section -->
             <div class="min-h-50 mb-6">
@@ -318,16 +322,8 @@ onMounted(() => {
                     <div class="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-gray-600 rounded-lg">
                         <i class="pi pi-lock text-6xl text-primary"></i>
                         <h3 class="text-xl font-semibold">Secure Authentication</h3>
-                        <p class="text-center text-surface-600 dark:text-surface-400">
-                            Click below to generate a PIN code, then authorize PlexCord in your browser.
-                        </p>
-                        <Button
-                            label="Connect with Plex"
-                            icon="pi pi-sign-in"
-                            @click="startPINAuth"
-                            size="large"
-                            class="mt-2"
-                        />
+                        <p class="text-center text-surface-600 dark:text-surface-400">Click below to generate a PIN code, then authorize PlexCord in your browser.</p>
+                        <Button label="Connect with Plex" icon="pi pi-sign-in" @click="startPINAuth" size="large" class="mt-2" />
                     </div>
                 </div>
 
@@ -349,7 +345,7 @@ onMounted(() => {
                                 <p class="text-surface-600 dark:text-surface-400">A browser window has been opened. Please authorize PlexCord.</p>
                             </div>
                         </div>
-                        
+
                         <div class="pin-display">
                             <div class="text-sm text-surface-600 dark:text-surface-400 mb-2">Your PIN Code:</div>
                             <div class="text-6xl font-bold tracking-widest text-primary-500">{{ pinCode }}</div>
@@ -357,19 +353,8 @@ onMounted(() => {
                         </div>
 
                         <div class="flex gap-3 mt-4">
-                            <Button
-                                label="Open Browser Again"
-                                icon="pi pi-external-link"
-                                @click="BrowserOpenURL(authURL)"
-                                outlined
-                            />
-                            <Button
-                                label="Cancel"
-                                icon="pi pi-times"
-                                @click="cancelPINAuth"
-                                severity="secondary"
-                                outlined
-                            />
+                            <Button label="Open Browser Again" icon="pi pi-external-link" @click="BrowserOpenURL(authURL)" outlined />
+                            <Button label="Cancel" icon="pi pi-times" @click="cancelPINAuth" severity="secondary" outlined />
                         </div>
                     </div>
                 </div>
@@ -396,12 +381,7 @@ onMounted(() => {
                                 <div class="font-semibold">Authentication failed</div>
                             </div>
                             <div class="text-sm">{{ authError }}</div>
-                            <Button
-                                label="Try Again"
-                                icon="pi pi-refresh"
-                                @click="startPINAuth"
-                                size="small"
-                            />
+                            <Button label="Try Again" icon="pi pi-refresh" @click="startPINAuth" size="small" />
                         </div>
                     </Message>
                 </div>
@@ -465,14 +445,7 @@ onMounted(() => {
 
                     <!-- Action Buttons -->
                     <div class="manual-entry-actions mt-4">
-                        <Button
-                            label="Use Discovery Instead"
-                            icon="pi pi-search"
-                            @click="useDiscoveryInstead"
-                            severity="secondary"
-                            outlined
-                            class="w-full"
-                        />
+                        <Button label="Use Discovery Instead" icon="pi pi-search" @click="useDiscoveryInstead" severity="secondary" outlined class="w-full" />
                     </div>
                 </div>
 
@@ -480,113 +453,51 @@ onMounted(() => {
                 <div v-if="!showManualEntry">
                     <!-- Discover Button with Tooltip -->
                     <div class="discovery-button-wrapper">
-                        <Button
-                            v-if="!hasDiscovered && !isDiscovering"
-                            label="Discover Servers"
-                            icon="pi pi-search"
-                            @click="discoverServers"
-                            :disabled="!setupStore.isPlexStepValid"
-                            class="w-full"
-                        />
-                        <i 
-                            v-if="!hasDiscovered && !isDiscovering"
-                            class="pi pi-question-circle ml-2 text-surface-600 dark:text-surface-400 cursor-help"
-                            v-tooltip.right="discoveryTooltip"
-                            style="font-size: 1.2rem; vertical-align: middle;"
-                        ></i>
+                        <Button v-if="!hasDiscovered && !isDiscovering" label="Discover Servers" icon="pi pi-search" @click="discoverServers" :disabled="!setupStore.isPlexStepValid" class="w-full" />
+                        <i v-if="!hasDiscovered && !isDiscovering" class="pi pi-question-circle ml-2 text-surface-600 dark:text-surface-400 cursor-help" v-tooltip.right="discoveryTooltip" style="font-size: 1.2rem; vertical-align: middle"></i>
                     </div>
 
                     <!-- Always show "Enter Manually" option with Tooltip -->
                     <div class="manual-entry-button-wrapper mt-3">
-                        <Button
-                            v-if="!hasDiscovered && !isDiscovering"
-                            label="Enter Manually"
-                            icon="pi pi-pencil"
-                            @click="enterManually"
-                            severity="info"
-                            outlined
-                            class="w-full"
-                        />
-                        <i 
-                            v-if="!hasDiscovered && !isDiscovering"
-                            class="pi pi-question-circle ml-2 text-surface-600 dark:text-surface-400 cursor-help"
-                            v-tooltip.right="manualEntryTooltip"
-                            style="font-size: 1.2rem; vertical-align: middle;"
-                        ></i>
+                        <Button v-if="!hasDiscovered && !isDiscovering" label="Enter Manually" icon="pi pi-pencil" @click="enterManually" severity="info" outlined class="w-full" />
+                        <i v-if="!hasDiscovered && !isDiscovering" class="pi pi-question-circle ml-2 text-surface-600 dark:text-surface-400 cursor-help" v-tooltip.right="manualEntryTooltip" style="font-size: 1.2rem; vertical-align: middle"></i>
                     </div>
 
-                <!-- Loading State -->
-                <div v-if="isDiscovering" class="discovery-loading">
-                    <ProgressSpinner
-                        style="width: 50px; height: 50px"
-                        strokeWidth="4"
-                        fill="transparent"
-                        animationDuration="1s"
-                    />
-                    <p class="text-surface-600 dark:text-surface-400 mt-3">
-                        Searching for Plex servers on your network...
-                    </p>
-                </div>
-
-                <!-- Discovery Error -->
-                <div v-if="discoveryError" class="discovery-error mt-4">
-                    <i class="pi pi-exclamation-triangle mr-2"></i>
-                    <span>{{ discoveryError }}</span>
-                </div>
-
-                <!-- Discovered Servers -->
-                <div v-if="hasDiscovered && setupStore.discoveredServers.length > 0" class="discovered-servers mt-6">
-                    <p class="text-sm text-surface-600 dark:text-surface-400 mb-4">
-                        Found {{ setupStore.discoveredServers.length }} server(s). Select one to continue:
-                    </p>
-                    <div class="server-list space-y-3">
-                        <ServerCard
-                            v-for="server in setupStore.discoveredServers"
-                            :key="server.id"
-                            :server="server"
-                            :is-selected="setupStore.selectedServer?.id === server.id"
-                            @server-selected="handleServerSelected"
-                        />
+                    <!-- Loading State -->
+                    <div v-if="isDiscovering" class="discovery-loading">
+                        <ProgressSpinner style="width: 50px; height: 50px" strokeWidth="4" fill="transparent" animationDuration="1s" />
+                        <p class="text-surface-600 dark:text-surface-400 mt-3">Searching for Plex servers on your network...</p>
                     </div>
-                    <div class="discovery-actions mt-6">
-                        <Button
-                            label="Search Again"
-                            icon="pi pi-refresh"
-                            @click="discoverServers"
-                            severity="secondary"
-                            outlined
-                        />
-                    </div>
-                </div>
 
-                <!-- No Servers Found -->
-                <div v-if="hasDiscovered && setupStore.discoveredServers.length === 0" class="no-servers-found mt-4">
-                    <div class="no-servers-message">
-                        <i class="pi pi-info-circle text-3xl mb-3"></i>
-                        <h4 class="font-semibold mb-2">No Servers Found</h4>
-                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-4">
-                            We couldn't find any Plex servers on your local network.
-                            Make sure your Plex Media Server is running and connected to the same network.
-                        </p>
-                        <div class="no-servers-actions">
-                            <Button
-                                label="Search Again"
-                                icon="pi pi-refresh"
-                                @click="discoverServers"
-                                severity="secondary"
-                                outlined
-                                class="mr-2"
-                            />
-                            <Button
-                                label="Enter Manually"
-                                icon="pi pi-pencil"
-                                @click="enterManually"
-                                severity="info"
-                                outlined
-                            />
+                    <!-- Discovery Error -->
+                    <div v-if="discoveryError" class="discovery-error mt-4">
+                        <i class="pi pi-exclamation-triangle mr-2"></i>
+                        <span>{{ discoveryError }}</span>
+                    </div>
+
+                    <!-- Discovered Servers -->
+                    <div v-if="hasDiscovered && setupStore.discoveredServers.length > 0" class="discovered-servers mt-6">
+                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-4">Found {{ setupStore.discoveredServers.length }} server(s). Select one to continue:</p>
+                        <div class="server-list space-y-3">
+                            <ServerCard v-for="server in setupStore.discoveredServers" :key="server.id" :server="server" :is-selected="setupStore.selectedServer?.id === server.id" @server-selected="handleServerSelected" />
+                        </div>
+                        <div class="discovery-actions mt-6">
+                            <Button label="Search Again" icon="pi pi-refresh" @click="discoverServers" severity="secondary" outlined />
                         </div>
                     </div>
-                </div>
+
+                    <!-- No Servers Found -->
+                    <div v-if="hasDiscovered && setupStore.discoveredServers.length === 0" class="no-servers-found mt-4">
+                        <div class="no-servers-message">
+                            <i class="pi pi-info-circle text-3xl mb-3"></i>
+                            <h4 class="font-semibold mb-2">No Servers Found</h4>
+                            <p class="text-sm text-surface-600 dark:text-surface-400 mb-4">We couldn't find any Plex servers on your local network. Make sure your Plex Media Server is running and connected to the same network.</p>
+                            <div class="no-servers-actions">
+                                <Button label="Search Again" icon="pi pi-refresh" @click="discoverServers" severity="secondary" outlined class="mr-2" />
+                                <Button label="Enter Manually" icon="pi pi-pencil" @click="enterManually" severity="info" outlined />
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Helper Text -->
                     <small v-if="!setupStore.isPlexStepValid && !hasDiscovered" class="helper-text text-surface-600 dark:text-surface-400 mt-3">
@@ -600,20 +511,12 @@ onMounted(() => {
             <div v-if="hasServerUrl" class="bg-surface-50 dark:bg-surface-900 p-6 rounded-lg border border-surface-200 dark:border-surface-700 mt-8">
                 <div class="mb-6">
                     <h3 class="text-xl font-semibold mb-2">Verify Connection</h3>
-                    <p class="text-sm text-surface-600 dark:text-surface-400">
-                        Test the connection to your Plex server before continuing
-                    </p>
+                    <p class="text-sm text-surface-600 dark:text-surface-400">Test the connection to your Plex server before continuing</p>
                 </div>
 
                 <!-- Validation Button (shown when not validated and not validating) -->
                 <div v-if="!setupStore.isConnectionValidated && !isValidating && !validationError" class="validation-trigger">
-                    <Button
-                        label="Validate Connection"
-                        icon="pi pi-check-circle"
-                        @click="validateConnection"
-                        :disabled="!canValidate"
-                        class="w-full"
-                    />
+                    <Button label="Validate Connection" icon="pi pi-check-circle" @click="validateConnection" :disabled="!canValidate" class="w-full" />
                     <small class="helper-text text-surface-600 dark:text-surface-400 mt-3">
                         <i class="pi pi-info-circle mr-1"></i>
                         This will verify your token and server are working correctly
@@ -622,15 +525,8 @@ onMounted(() => {
 
                 <!-- Validation Loading State -->
                 <div v-if="isValidating" class="validation-loading">
-                    <ProgressSpinner
-                        style="width: 50px; height: 50px"
-                        strokeWidth="4"
-                        fill="transparent"
-                        animationDuration="1s"
-                    />
-                    <p class="text-surface-600 dark:text-surface-400 mt-3">
-                        Validating connection...
-                    </p>
+                    <ProgressSpinner style="width: 50px; height: 50px" strokeWidth="4" fill="transparent" animationDuration="1s" />
+                    <p class="text-surface-600 dark:text-surface-400 mt-3">Validating connection...</p>
                 </div>
 
                 <!-- Validation Success -->
@@ -640,9 +536,7 @@ onMounted(() => {
                             <i class="pi pi-check-circle text-2xl"></i>
                         </template>
                         <div class="success-content">
-                            <h4 class="font-semibold text-lg mb-4">
-                                Connected to Plex Media Server
-                            </h4>
+                            <h4 class="font-semibold text-lg mb-4">Connected to Plex Media Server</h4>
                             <div class="server-details flex flex-col gap-3">
                                 <span class="detail-item flex items-center gap-3 text-sm">
                                     <i class="pi pi-server text-base"></i>
@@ -656,14 +550,7 @@ onMounted(() => {
                         </div>
                     </Message>
                     <div class="validation-actions mt-6">
-                        <Button
-                            label="Re-validate"
-                            icon="pi pi-refresh"
-                            @click="retryValidation"
-                            severity="secondary"
-                            outlined
-                            size="small"
-                        />
+                        <Button label="Re-validate" icon="pi pi-refresh" @click="retryValidation" severity="secondary" outlined size="small" />
                     </div>
                 </div>
 
@@ -679,17 +566,14 @@ onMounted(() => {
                         </div>
                     </Message>
                     <div class="validation-actions mt-4">
-                        <Button
-                            label="Retry"
-                            icon="pi pi-refresh"
-                            @click="retryValidation"
-                            severity="danger"
-                            class="mr-2"
-                        />
+                        <Button label="Retry" icon="pi pi-refresh" @click="retryValidation" severity="danger" class="mr-2" />
                         <Button
                             label="Modify Settings"
                             icon="pi pi-pencil"
-                            @click="showManualEntry = true; setupStore.toggleManualEntry(true);"
+                            @click="
+                                showManualEntry = true;
+                                setupStore.toggleManualEntry(true);
+                            "
                             severity="secondary"
                             outlined
                         />
