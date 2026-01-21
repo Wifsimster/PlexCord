@@ -10,19 +10,19 @@ import (
 
 // Config holds application configuration
 type Config struct {
-	ServerURL            string `json:"serverUrl"`
-	PollingInterval      int    `json:"pollingInterval"` // seconds
-	MinimizeToTray       bool   `json:"minimizeToTray"`
-	AutoStart            bool   `json:"autoStart"`
-	DiscordClientID      string `json:"discordClientId"`
-	SelectedPlexUserID   string `json:"selectedPlexUserId"`   // ID of the Plex user to monitor
-	SelectedPlexUserName string `json:"selectedPlexUserName"` // Display name for UI purposes
-	SetupCompleted       bool   `json:"setupCompleted"`       // True when setup wizard is done
-	SetupSkipped         bool   `json:"setupSkipped"`         // True when user skipped setup
-
 	// Connection history (Story 6.8)
 	PlexLastConnected    *time.Time `json:"plexLastConnected,omitempty"`    // Last successful Plex connection
 	DiscordLastConnected *time.Time `json:"discordLastConnected,omitempty"` // Last successful Discord connection
+
+	ServerURL            string `json:"serverUrl"`
+	DiscordClientID      string `json:"discordClientId"`
+	SelectedPlexUserID   string `json:"selectedPlexUserId"`   // ID of the Plex user to monitor
+	SelectedPlexUserName string `json:"selectedPlexUserName"` // Display name for UI purposes
+	PollingInterval      int    `json:"pollingInterval"`      // seconds
+	MinimizeToTray       bool   `json:"minimizeToTray"`
+	AutoStart            bool   `json:"autoStart"`
+	SetupCompleted       bool   `json:"setupCompleted"` // True when setup wizard is done
+	SetupSkipped         bool   `json:"setupSkipped"`   // True when user skipped setup
 }
 
 // DefaultConfig returns a configuration with default values.
@@ -52,7 +52,7 @@ func Load() (*Config, error) {
 	}
 
 	// Read config file
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) //nolint:gosec // configPath is derived from user config dir, not user input
 	if err != nil {
 		return nil, errors.New(errors.CONFIG_READ_FAILED, "failed to read config file: "+err.Error())
 	}

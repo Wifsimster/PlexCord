@@ -59,7 +59,7 @@ func getTokenFallback() (string, error) {
 	}
 
 	// Read encrypted token
-	encoded, err := os.ReadFile(credPath)
+	encoded, err := os.ReadFile(credPath) //nolint:gosec // credPath is derived from user config dir, not user input
 	if err != nil {
 		return "", errors.Wrap(err, errors.DECRYPTION_FAILED, "failed to read encrypted token")
 	}

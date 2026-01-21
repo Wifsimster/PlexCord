@@ -21,6 +21,9 @@ const (
 
 // PresenceData represents the information to display in Discord Rich Presence
 type PresenceData struct {
+	// Timestamps for elapsed time display
+	StartTime *time.Time `json:"startTime,omitempty"`
+
 	// Track information
 	Track  string `json:"track"`
 	Artist string `json:"artist"`
@@ -33,16 +36,13 @@ type PresenceData struct {
 	State    string `json:"state"` // "playing", "paused"
 	Duration int64  `json:"duration"`
 	Position int64  `json:"position"`
-
-	// Timestamps for elapsed time display
-	StartTime *time.Time `json:"startTime,omitempty"`
 }
 
 // ConnectionEvent represents a Discord connection state change event
 type ConnectionEvent struct {
-	Connected bool   `json:"connected"`
-	ClientID  string `json:"clientId,omitempty"`
 	Error     *Error `json:"error,omitempty"`
+	ClientID  string `json:"clientId,omitempty"`
+	Connected bool   `json:"connected"`
 }
 
 // Error represents a Discord error for frontend consumption
@@ -53,11 +53,11 @@ type Error struct {
 
 // PresenceState represents the current presence state for frontend display
 type PresenceState struct {
-	Active   bool   `json:"active"`
 	Track    string `json:"track,omitempty"`
 	Artist   string `json:"artist,omitempty"`
 	Album    string `json:"album,omitempty"`
 	State    string `json:"state,omitempty"` // "playing", "paused"
 	Duration int64  `json:"duration,omitempty"`
 	Position int64  `json:"position,omitempty"`
+	Active   bool   `json:"active"`
 }

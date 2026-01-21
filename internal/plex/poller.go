@@ -11,21 +11,22 @@ import (
 // It uses time.Ticker for accurate interval-based polling (not busy-waiting)
 // to meet CPU efficiency requirements (NFR3: <1% average CPU).
 type Poller struct {
-	client   *Client
+	lastErrorTime time.Time // Track when last error occurred
+	client        *Client
+	stopCh        chan struct{}
+	sessionC      chan *MusicSession // nil indicates no session / stopped playback
+
+	// Error handling (Story 6.5)
+	onError     func(err error) // Called when poll errors occur
+	onRecovered func()          // Called when connection recovers after error
+
 	userID   string
 	interval time.Duration
 
 	// Synchronization
-	mu       sync.RWMutex
-	running  bool
-	stopCh   chan struct{}
-	sessionC chan *MusicSession // nil indicates no session / stopped playback
-
-	// Error handling (Story 6.5)
-	onError       func(err error) // Called when poll errors occur
-	onRecovered   func()          // Called when connection recovers after error
-	lastErrorTime time.Time       // Track when last error occurred
-	inErrorState  bool            // Whether currently in error state
+	mu           sync.RWMutex
+	running      bool
+	inErrorState bool // Whether currently in error state
 }
 
 // NewPoller creates a new session poller for the specified user.

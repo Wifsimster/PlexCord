@@ -18,8 +18,8 @@ type Server struct {
 	Name    string `json:"name"`    // Server display name
 	Address string `json:"address"` // IP address
 	Port    string `json:"port"`    // Port (typically 32400)
-	IsLocal bool   `json:"isLocal"` // True if on local network
 	Version string `json:"version"` // Server version (optional)
+	IsLocal bool   `json:"isLocal"` // True if on local network
 }
 
 // URL returns the full server URL
@@ -29,11 +29,11 @@ func (s *Server) URL() string {
 
 // ValidationResult represents the outcome of validating a Plex connection
 type ValidationResult struct {
-	Success           bool   `json:"success"`           // Whether validation passed
 	ServerName        string `json:"serverName"`        // Plex server friendly name
 	ServerVersion     string `json:"serverVersion"`     // Plex Media Server version
-	LibraryCount      int    `json:"libraryCount"`      // Number of media libraries
 	MachineIdentifier string `json:"machineIdentifier"` // Unique server ID
+	LibraryCount      int    `json:"libraryCount"`      // Number of media libraries
+	Success           bool   `json:"success"`           // Whether validation passed
 }
 
 // PlexUser represents a Plex account that can be monitored for playback
@@ -46,8 +46,8 @@ type PlexUser struct {
 // AccountsResponse represents the XML response from /accounts endpoint
 type AccountsResponse struct {
 	XMLName  xml.Name       `xml:"MediaContainer"`
-	Size     int            `xml:"size,attr"`
 	Accounts []AccountEntry `xml:"Account"`
+	Size     int            `xml:"size,attr"`
 }
 
 // AccountEntry represents a single account in the accounts response
@@ -60,13 +60,17 @@ type AccountEntry struct {
 // SessionsResponse represents the XML response from /status/sessions endpoint
 type SessionsResponse struct {
 	XMLName  xml.Name       `xml:"MediaContainer"`
-	Size     int            `xml:"size,attr"`
 	Sessions []SessionEntry `xml:"Track"`
+	Size     int            `xml:"size,attr"`
 }
 
 // SessionEntry represents a single session entry from the sessions response
 // This captures both music (Track) and other media types
 type SessionEntry struct {
+	// Nested elements
+	User   SessionUser   `xml:"User"`
+	Player SessionPlayer `xml:"Player"`
+
 	// Core session identifiers
 	SessionKey string `xml:"sessionKey,attr"`
 	Key        string `xml:"key,attr"`
@@ -79,10 +83,6 @@ type SessionEntry struct {
 	Thumb            string `xml:"thumb,attr"`            // Album art URL
 	Duration         int64  `xml:"duration,attr"`         // Duration in milliseconds
 	ViewOffset       int64  `xml:"viewOffset,attr"`       // Current position in milliseconds
-
-	// Nested elements
-	User   SessionUser   `xml:"User"`
-	Player SessionPlayer `xml:"Player"`
 }
 
 // SessionUser represents the user associated with a session

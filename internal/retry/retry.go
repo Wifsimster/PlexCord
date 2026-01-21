@@ -19,11 +19,11 @@ var BackoffSchedule = []time.Duration{
 
 // RetryState represents the current state of retry attempts.
 type RetryState struct {
-	AttemptNumber      int           `json:"attemptNumber"`
-	NextRetryIn        time.Duration `json:"nextRetryIn"`
 	NextRetryAt        time.Time     `json:"nextRetryAt"`
 	LastError          string        `json:"lastError,omitempty"`
 	LastErrorCode      string        `json:"lastErrorCode,omitempty"`
+	NextRetryIn        time.Duration `json:"nextRetryIn"`
+	AttemptNumber      int           `json:"attemptNumber"`
 	IsRetrying         bool          `json:"isRetrying"`
 	MaxIntervalReached bool          `json:"maxIntervalReached"`
 }
@@ -37,17 +37,17 @@ type StateChangeCallback func(state RetryState)
 
 // Manager handles automatic retry with exponential backoff.
 type Manager struct {
-	mu            sync.Mutex
-	name          string
-	attemptNumber int
 	lastError     error
-	lastErrorCode string
 	timer         *time.Timer
 	ctx           context.Context
 	cancel        context.CancelFunc
-	running       bool
 	retryCallback RetryCallback
 	stateCallback StateChangeCallback
+	name          string
+	lastErrorCode string
+	mu            sync.Mutex
+	attemptNumber int
+	running       bool
 }
 
 // NewManager creates a new retry manager.

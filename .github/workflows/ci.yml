@@ -36,6 +36,14 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Create build directory and icon placeholder
+        run: |
+          mkdir -p build
+          # Create a minimal 1x1 PNG as placeholder if not exists
+          if [ ! -f build/appicon.png ]; then
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > build/appicon.png
+          fi
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:

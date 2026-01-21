@@ -21,20 +21,17 @@ import (
 
 // App struct
 type App struct {
-	ctx    context.Context
-	config *config.Config
-
-	// Session polling
-	poller         *plex.Poller
-	pollerMu       sync.Mutex
+	ctx            context.Context
+	config         *config.Config
 	pollerCtx      context.Context
 	pollerStop     context.CancelFunc
 	currentSession *plex.MusicSession // Track current playback for page refresh restoration
-	sessionMu      sync.RWMutex       // Protect currentSession access
+
+	// Session polling
+	poller *plex.Poller
 
 	// Discord integration
-	discord   *discord.PresenceManager
-	discordMu sync.Mutex
+	discord *discord.PresenceManager
 
 	// Platform integration
 	autostart *platform.AutoStartManager
@@ -44,7 +41,12 @@ type App struct {
 	discordRetry *retry.Manager
 
 	// PIN authentication (maintain same client ID for PIN lifecycle)
-	plexAuth   *plex.Authenticator
+	plexAuth *plex.Authenticator
+
+	// Mutexes grouped together for alignment
+	pollerMu   sync.Mutex
+	sessionMu  sync.RWMutex // Protect currentSession access
+	discordMu  sync.Mutex
 	plexAuthMu sync.Mutex
 }
 
@@ -412,6 +414,8 @@ func (a *App) DiscoverPlexServers() ([]plex.Server, error) {
 //
 // Returns validation details or an error with appropriate code.
 // Validation completes within 5 seconds maximum with automatic timeout.
+//
+//nolint:unparam // ValidationResult is part of the public API even if not always used by callers
 func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, error) {
 	log.Printf("Validating Plex connection to: %s", serverURL)
 
@@ -844,12 +848,12 @@ func (a *App) IsPollingActive() bool {
 
 // PlexConnectionStatus represents the current Plex connection status.
 type PlexConnectionStatus struct {
-	Connected    bool   `json:"connected"`
-	Polling      bool   `json:"polling"`
-	InErrorState bool   `json:"inErrorState"`
 	ServerURL    string `json:"serverUrl"`
 	UserID       string `json:"userId"`
 	UserName     string `json:"userName"`
+	Connected    bool   `json:"connected"`
+	Polling      bool   `json:"polling"`
+	InErrorState bool   `json:"inErrorState"`
 }
 
 // GetPlexConnectionStatus returns the current Plex connection status (Story 6.5).
@@ -1357,10 +1361,10 @@ func (a *App) OpenReleaseURL(url string) error {
 
 // ResourceStats contains runtime statistics for monitoring long-running stability.
 type ResourceStats struct {
+	Timestamp      string  `json:"timestamp"`
 	MemoryAllocMB  float64 `json:"memoryAllocMB"`
 	MemoryTotalMB  float64 `json:"memoryTotalMB"`
 	GoroutineCount int     `json:"goroutineCount"`
-	Timestamp      string  `json:"timestamp"`
 }
 
 // GetResourceStats returns current resource usage statistics.

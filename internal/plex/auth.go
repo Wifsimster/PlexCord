@@ -24,19 +24,19 @@ const (
 
 // PINResponse represents the response from creating a PIN
 type PINResponse struct {
-	ID               int    `json:"id"`
-	Code             string `json:"code"` // The 4-digit PIN
-	Product          string `json:"product"`
-	Trusted          bool   `json:"trusted"`
-	ClientIdentifier string `json:"clientIdentifier"`
-	Location         struct {
+	Location struct {
 		Code string `json:"code"`
 		City string `json:"city"`
 	} `json:"location"`
-	ExpiresIn int       `json:"expiresIn"` // Seconds until expiration
-	CreatedAt time.Time `json:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	AuthToken string    `json:"authToken"` // Present after user authorizes
+	CreatedAt        time.Time `json:"createdAt"`
+	ExpiresAt        time.Time `json:"expiresAt"`
+	Code             string    `json:"code"` // The 4-digit PIN
+	Product          string    `json:"product"`
+	ClientIdentifier string    `json:"clientIdentifier"`
+	AuthToken        string    `json:"authToken"` // Present after user authorizes
+	ID               int       `json:"id"`
+	ExpiresIn        int       `json:"expiresIn"` // Seconds until expiration
+	Trusted          bool      `json:"trusted"`
 }
 
 // Authenticatorstores PIN authentication state

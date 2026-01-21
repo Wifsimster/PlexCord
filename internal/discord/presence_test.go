@@ -117,8 +117,8 @@ func TestValidateClientID(t *testing.T) {
 	tests := []struct {
 		name     string
 		clientID string
-		wantErr  bool
 		wantCode string
+		wantErr  bool
 	}{
 		{
 			name:     "valid client ID",
@@ -186,9 +186,9 @@ func TestBuildActivity(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name    string
 		data    *PresenceData
 		checkFn func(t *testing.T, activity interface{})
+		name    string
 	}{
 		{
 			name: "basic playing activity",

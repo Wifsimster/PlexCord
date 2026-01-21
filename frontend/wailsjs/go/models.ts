@@ -60,12 +60,12 @@ export namespace main {
 		}
 	}
 	export class PlexConnectionStatus {
-	    connected: boolean;
-	    polling: boolean;
-	    inErrorState: boolean;
 	    serverUrl: string;
 	    userId: string;
 	    userName: string;
+	    connected: boolean;
+	    polling: boolean;
+	    inErrorState: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PlexConnectionStatus(source);
@@ -73,19 +73,19 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.connected = source["connected"];
-	        this.polling = source["polling"];
-	        this.inErrorState = source["inErrorState"];
 	        this.serverUrl = source["serverUrl"];
 	        this.userId = source["userId"];
 	        this.userName = source["userName"];
+	        this.connected = source["connected"];
+	        this.polling = source["polling"];
+	        this.inErrorState = source["inErrorState"];
 	    }
 	}
 	export class ResourceStats {
+	    timestamp: string;
 	    memoryAllocMB: number;
 	    memoryTotalMB: number;
 	    goroutineCount: number;
-	    timestamp: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ResourceStats(source);
@@ -93,10 +93,10 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
 	        this.memoryAllocMB = source["memoryAllocMB"];
 	        this.memoryTotalMB = source["memoryTotalMB"];
 	        this.goroutineCount = source["goroutineCount"];
-	        this.timestamp = source["timestamp"];
 	    }
 	}
 
@@ -161,8 +161,8 @@ export namespace plex {
 	    name: string;
 	    address: string;
 	    port: string;
-	    isLocal: boolean;
 	    version: string;
+	    isLocal: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Server(source);
@@ -174,16 +174,16 @@ export namespace plex {
 	        this.name = source["name"];
 	        this.address = source["address"];
 	        this.port = source["port"];
-	        this.isLocal = source["isLocal"];
 	        this.version = source["version"];
+	        this.isLocal = source["isLocal"];
 	    }
 	}
 	export class ValidationResult {
-	    success: boolean;
 	    serverName: string;
 	    serverVersion: string;
-	    libraryCount: number;
 	    machineIdentifier: string;
+	    libraryCount: number;
+	    success: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ValidationResult(source);
@@ -191,11 +191,11 @@ export namespace plex {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.success = source["success"];
 	        this.serverName = source["serverName"];
 	        this.serverVersion = source["serverVersion"];
-	        this.libraryCount = source["libraryCount"];
 	        this.machineIdentifier = source["machineIdentifier"];
+	        this.libraryCount = source["libraryCount"];
+	        this.success = source["success"];
 	    }
 	}
 
@@ -204,12 +204,12 @@ export namespace plex {
 export namespace retry {
 	
 	export class RetryState {
-	    attemptNumber: number;
-	    nextRetryIn: number;
 	    // Go type: time
 	    nextRetryAt: any;
 	    lastError?: string;
 	    lastErrorCode?: string;
+	    nextRetryIn: number;
+	    attemptNumber: number;
 	    isRetrying: boolean;
 	    maxIntervalReached: boolean;
 	
@@ -219,11 +219,11 @@ export namespace retry {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.attemptNumber = source["attemptNumber"];
-	        this.nextRetryIn = source["nextRetryIn"];
 	        this.nextRetryAt = this.convertValues(source["nextRetryAt"], null);
 	        this.lastError = source["lastError"];
 	        this.lastErrorCode = source["lastErrorCode"];
+	        this.nextRetryIn = source["nextRetryIn"];
+	        this.attemptNumber = source["attemptNumber"];
 	        this.isRetrying = source["isRetrying"];
 	        this.maxIntervalReached = source["maxIntervalReached"];
 	    }
@@ -268,12 +268,12 @@ export namespace version {
 	    }
 	}
 	export class UpdateInfo {
-	    available: boolean;
 	    currentVersion: string;
 	    latestVersion: string;
 	    releaseUrl: string;
 	    releaseNotes: string;
 	    publishedAt: string;
+	    available: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateInfo(source);
@@ -281,12 +281,12 @@ export namespace version {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.available = source["available"];
 	        this.currentVersion = source["currentVersion"];
 	        this.latestVersion = source["latestVersion"];
 	        this.releaseUrl = source["releaseUrl"];
 	        this.releaseNotes = source["releaseNotes"];
 	        this.publishedAt = source["publishedAt"];
+	        this.available = source["available"];
 	    }
 	}
 

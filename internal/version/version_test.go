@@ -92,13 +92,13 @@ func TestParseVersion(t *testing.T) {
 func TestTruncateReleaseNotes(t *testing.T) {
 	tests := []struct {
 		input    string
-		maxLen   int
 		expected string
+		maxLen   int
 	}{
-		{"Short note", 100, "Short note"},
-		{"This is a longer note", 10, "This is a ..."},
-		{"Exact", 5, "Exact"},
-		{"", 10, ""},
+		{"Short note", "Short note", 100},
+		{"This is a longer note", "This is a ...", 10},
+		{"Exact", "Exact", 5},
+		{"", "", 10},
 	}
 
 	for _, tt := range tests {

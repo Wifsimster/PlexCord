@@ -14,10 +14,10 @@ import (
 // PresenceManager handles Discord Rich Presence updates.
 // It manages the connection lifecycle and presence state.
 type PresenceManager struct {
-	mu        sync.RWMutex
-	clientID  string
-	connected bool
 	presence  *PresenceData
+	clientID  string
+	mu        sync.RWMutex
+	connected bool
 }
 
 // NewPresenceManager creates a new presence manager.

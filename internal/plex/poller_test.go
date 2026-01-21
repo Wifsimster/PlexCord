@@ -458,19 +458,19 @@ func TestSessionChangedLogic(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name     string
 		prev     *MusicSession
 		curr     *MusicSession
+		name     string
 		expected bool
 	}{
-		{"Both nil", nil, nil, false},
-		{"Prev nil, curr not nil", nil, session1, true},
-		{"Prev not nil, curr nil", session1, nil, true},
-		{"Same session", session1, session1Same, false},
-		{"Different state", session1, session1Paused, true},
-		{"Different session", session1, session2, true},
-		{"Different artist (metadata change)", session1, session1DiffArtist, true},
-		{"Different album (metadata change)", session1, session1DiffAlbum, true},
+		{nil, nil, "Both nil", false},
+		{nil, session1, "Prev nil, curr not nil", true},
+		{session1, nil, "Prev not nil, curr nil", true},
+		{session1, session1Same, "Same session", false},
+		{session1, session1Paused, "Different state", true},
+		{session1, session2, "Different session", true},
+		{session1, session1DiffArtist, "Different artist (metadata change)", true},
+		{session1, session1DiffAlbum, "Different album (metadata change)", true},
 	}
 
 	for _, tc := range testCases {

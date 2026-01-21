@@ -43,23 +43,23 @@ func GetInfo() Info {
 
 // GitHubRelease represents a release from GitHub's API.
 type GitHubRelease struct {
+	PublishedAt time.Time `json:"published_at"`
 	TagName     string    `json:"tag_name"`
 	Name        string    `json:"name"`
 	Body        string    `json:"body"`
+	HTMLURL     string    `json:"html_url"`
 	Draft       bool      `json:"draft"`
 	Prerelease  bool      `json:"prerelease"`
-	PublishedAt time.Time `json:"published_at"`
-	HTMLURL     string    `json:"html_url"`
 }
 
 // UpdateInfo contains information about an available update.
 type UpdateInfo struct {
-	Available      bool   `json:"available"`
 	CurrentVersion string `json:"currentVersion"`
 	LatestVersion  string `json:"latestVersion"`
 	ReleaseURL     string `json:"releaseUrl"`
 	ReleaseNotes   string `json:"releaseNotes"`
 	PublishedAt    string `json:"publishedAt"`
+	Available      bool   `json:"available"`
 }
 
 // GitHubRepo is the repository to check for updates.

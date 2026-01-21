@@ -16,9 +16,9 @@ import (
 
 // Client handles Plex Media Server communication
 type Client struct {
+	httpClient *http.Client
 	serverURL  string
 	token      string
-	httpClient *http.Client
 }
 
 // NewClient creates a new Plex client with the given token and server URL
@@ -35,11 +35,11 @@ func NewClient(token, serverURL string) *Client {
 // IdentityResponse represents the XML response from /identity endpoint
 type IdentityResponse struct {
 	XMLName           xml.Name `xml:"MediaContainer"`
-	Size              int      `xml:"size,attr"`
 	MachineIdentifier string   `xml:"machineIdentifier,attr"`
 	Version           string   `xml:"version,attr"`
 	Claimed           string   `xml:"claimed,attr"`
 	FriendlyName      string   `xml:"friendlyName,attr"` // May be empty on some servers
+	Size              int      `xml:"size,attr"`
 }
 
 // LibraryResponse represents the XML response from /library/sections endpoint
@@ -253,7 +253,7 @@ func (c *Client) GetSessions(userID string) ([]Session, error) {
 	}
 
 	// Filter and convert sessions for the specified user
-	var sessions []Session
+	sessions := make([]Session, 0, len(sessionsResp.Sessions))
 	for _, entry := range sessionsResp.Sessions {
 		// Filter by user ID if specified
 		if userID != "" && entry.User.ID != userID {
@@ -319,7 +319,7 @@ func (c *Client) GetMusicSessions(userID string) ([]MusicSession, error) {
 	}
 
 	// Filter for music sessions (type="track") belonging to specified user
-	var musicSessions []MusicSession
+	musicSessions := make([]MusicSession, 0, len(sessionsResp.Sessions))
 	for _, entry := range sessionsResp.Sessions {
 		// Filter by user ID if specified
 		if userID != "" && entry.User.ID != userID {

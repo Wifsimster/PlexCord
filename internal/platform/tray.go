@@ -34,10 +34,10 @@ type TrayCallbacks struct {
 // NOTE: This is a placeholder implementation for Wails v2.
 // Full tray functionality requires Wails v3 or platform-specific code.
 type TrayManager struct {
-	mu        sync.Mutex
 	callbacks TrayCallbacks
 	status    TrayStatus
 	tooltip   string
+	mu        sync.Mutex
 	running   bool
 }
 

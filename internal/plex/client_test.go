@@ -359,16 +359,16 @@ func TestValidationResultJSONSerialization(t *testing.T) {
 // TestMapHTTPStatusCode tests the status code to error code mapping
 func TestMapHTTPStatusCode(t *testing.T) {
 	testCases := []struct {
-		statusCode   int
 		expectedCode string
+		statusCode   int
 	}{
-		{401, errors.PLEX_AUTH_FAILED},
-		{403, errors.PLEX_AUTH_FAILED},
-		{404, errors.PLEX_UNREACHABLE},
-		{500, errors.PLEX_UNREACHABLE},
-		{502, errors.PLEX_UNREACHABLE},
-		{503, errors.PLEX_UNREACHABLE},
-		{418, errors.PLEX_CONN_FAILED}, // Other status codes
+		{errors.PLEX_AUTH_FAILED, 401},
+		{errors.PLEX_AUTH_FAILED, 403},
+		{errors.PLEX_UNREACHABLE, 404},
+		{errors.PLEX_UNREACHABLE, 500},
+		{errors.PLEX_UNREACHABLE, 502},
+		{errors.PLEX_UNREACHABLE, 503},
+		{errors.PLEX_CONN_FAILED, 418}, // Other status codes
 	}
 
 	for _, tc := range testCases {
