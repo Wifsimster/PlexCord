@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "clean-dist": "rm -rf dist && mkdir dist && touch dist/index.html",
-        "lint": "eslint --fix . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore",
+        "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .eslintignore",
         "dev": "vite",
         "dev-build": "vite build -m development --minify false --logLevel info",
         "dev-build-watch": "vite build --watch --emptyOutDir false -m development --minify false --logLevel info",

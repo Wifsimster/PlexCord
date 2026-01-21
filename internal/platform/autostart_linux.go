@@ -46,7 +46,7 @@ func (m *AutoStartManager) Enable() error {
 	}
 
 	// Ensure autostart directory exists
-	if err := os.MkdirAll(filepath.Dir(desktopPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(desktopPath), 0750); err != nil {
 		log.Printf("ERROR: Failed to create autostart directory: %v", err)
 		return err
 	}
@@ -63,7 +63,7 @@ Categories=AudioVideo;Audio;
 X-GNOME-Autostart-enabled=true
 `, m.executable)
 
-	if err := os.WriteFile(desktopPath, []byte(desktopContent), 0644); err != nil {
+	if err := os.WriteFile(desktopPath, []byte(desktopContent), 0600); err != nil {
 		log.Printf("ERROR: Failed to write .desktop file: %v", err)
 		return err
 	}
