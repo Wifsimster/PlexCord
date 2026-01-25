@@ -57,7 +57,6 @@ You are about to restore all hidden AgentVibes slash commands.
 - agent-health-coach.md
 - agent-motivator.md
 - agent-negotiator.md
-- bmad.md
 - get.md
 - language.md
 - learn.md

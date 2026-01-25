@@ -27,11 +27,11 @@
 # ---
 #
 # @fileoverview Translation Manager - Auto-translate TTS to user's preferred language
-# @context Integrates with BMAD communication_language and provides manual override
-# @architecture Manages translation settings, detects BMAD config, translates text via translator.py
-# @dependencies translator.py, language-manager.sh, .bmad/core/config.yaml (optional)
+# @context Provides manual translation override for TTS
+# @architecture Manages translation settings, translates text via translator.py
+# @dependencies translator.py, language-manager.sh
 # @entrypoints Called by /agent-vibes:translate commands and play-tts.sh
-# @patterns Config cascade - manual override > BMAD config > default (no translation)
+# @patterns Config cascade - manual override > default (no translation)
 # @related translator.py, play-tts.sh, language-manager.sh, learn-manager.sh
 
 # Only set strict mode when executed directly, not when sourced
@@ -62,79 +62,32 @@ NC='\033[0m'
 # Supported languages (matching language-manager.sh)
 SUPPORTED_LANGUAGES="spanish french german italian portuguese chinese japanese korean russian polish dutch turkish arabic hindi swedish danish norwegian finnish czech romanian ukrainian greek bulgarian croatian slovak"
 
-# @function get_bmad_language
-# @intent Read communication_language from BMAD config
-# @why BMAD users can set their preferred language in .bmad/core/config.yaml
-# @returns Language name (lowercase) or empty if not set
-get_bmad_language() {
-    local bmad_config=""
-
-    # Search for BMAD config in project or parents
-    local search_dir="$PWD"
-    while [[ "$search_dir" != "/" ]]; do
-        if [[ -f "$search_dir/.bmad/core/config.yaml" ]]; then
-            bmad_config="$search_dir/.bmad/core/config.yaml"
-            break
-        fi
-        search_dir=$(dirname "$search_dir")
-    done
-
-    if [[ -z "$bmad_config" ]] || [[ ! -f "$bmad_config" ]]; then
-        echo ""
-        return
-    fi
-
-    # Security: Verify file ownership (should be owned by current user)
-    local owner
-    owner=$(stat -c '%u' "$bmad_config" 2>/dev/null || stat -f '%u' "$bmad_config" 2>/dev/null || echo "")
-    if [[ -n "$owner" ]] && [[ "$owner" != "$(id -u)" ]]; then
-        echo "Warning: BMAD config not owned by current user, skipping" >&2
-        echo ""
-        return
-    fi
-
-    # Extract communication_language from YAML (simple grep approach)
-    local lang
-    lang=$(grep -E "^communication_language:" "$bmad_config" 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' "'"'" | tr '[:upper:]' '[:lower:]')
-
-    echo "$lang"
-}
-
 # @function get_translate_to
 # @intent Get the target language for translation
-# @why Implements priority: manual override > BMAD config > no translation
+# @why Implements priority: manual override > default (no translation)
 # @returns Language name or empty if no translation
 get_translate_to() {
-    # Priority 1: Manual override
+    # Check manual override
     if [[ -f "$TRANSLATE_FILE" ]]; then
         local manual
         manual=$(cat "$TRANSLATE_FILE")
-        if [[ "$manual" != "off" ]] && [[ "$manual" != "auto" ]]; then
+        if [[ "$manual" != "off" ]]; then
             echo "$manual"
             return
         elif [[ "$manual" == "off" ]]; then
             echo ""
             return
         fi
-        # If "auto", fall through to BMAD detection
     elif [[ -f "$GLOBAL_TRANSLATE_FILE" ]]; then
         local manual
         manual=$(cat "$GLOBAL_TRANSLATE_FILE")
-        if [[ "$manual" != "off" ]] && [[ "$manual" != "auto" ]]; then
+        if [[ "$manual" != "off" ]]; then
             echo "$manual"
             return
         elif [[ "$manual" == "off" ]]; then
             echo ""
             return
         fi
-    fi
-
-    # Priority 2: BMAD config
-    local bmad_lang
-    bmad_lang=$(get_bmad_language)
-    if [[ -n "$bmad_lang" ]] && [[ "$bmad_lang" != "english" ]]; then
-        echo "$bmad_lang"
-        return
     fi
 
     # Default: No translation
@@ -180,13 +133,13 @@ translate_text() {
 
 # @function set_translate
 # @intent Set manual translation override
-# @why Allows users to override BMAD config or force specific language
+# @why Allows users to force specific language
 # @param $1 language name, "auto", or "off"
 set_translate() {
     local lang="$1"
 
     if [[ -z "$lang" ]]; then
-        echo -e "${YELLOW}Usage: translate-manager.sh set <language|auto|off>${NC}"
+        echo -e "${YELLOW}Usage: translate-manager.sh set <language|off>${NC}"
         exit 1
     fi
 
@@ -198,21 +151,6 @@ set_translate() {
         echo "off" > "$TRANSLATE_FILE"
         echo -e "${GREEN}✓${NC} Translation: ${YELLOW}DISABLED${NC}"
         echo "  TTS will speak in English only"
-        return
-    fi
-
-    if [[ "$lang" == "auto" ]]; then
-        echo "auto" > "$TRANSLATE_FILE"
-        echo -e "${GREEN}✓${NC} Translation: ${BLUE}AUTO${NC}"
-        echo "  Will detect from BMAD config if available"
-
-        local bmad_lang
-        bmad_lang=$(get_bmad_language)
-        if [[ -n "$bmad_lang" ]]; then
-            echo -e "  ${BLUE}ℹ${NC}  BMAD config detected: $bmad_lang"
-        else
-            echo -e "  ${YELLOW}⚠${NC}  No BMAD config found, will speak English"
-        fi
         return
     fi
 
@@ -260,25 +198,20 @@ show_status() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    # Check manual setting
-    local manual_setting=""
+    # Check setting
+    local setting=""
     if [[ -f "$TRANSLATE_FILE" ]]; then
-        manual_setting=$(cat "$TRANSLATE_FILE")
+        setting=$(cat "$TRANSLATE_FILE")
     elif [[ -f "$GLOBAL_TRANSLATE_FILE" ]]; then
-        manual_setting=$(cat "$GLOBAL_TRANSLATE_FILE")
+        setting=$(cat "$GLOBAL_TRANSLATE_FILE")
     fi
-
-    # Check BMAD config
-    local bmad_lang
-    bmad_lang=$(get_bmad_language)
 
     # Get effective translation
     local effective
     effective=$(get_translate_to)
 
-    echo -e "  ${BLUE}Manual Setting:${NC}   ${manual_setting:-"(not set)"}"
-    echo -e "  ${BLUE}BMAD Language:${NC}    ${bmad_lang:-"(not detected)"}"
-    echo -e "  ${BLUE}Effective:${NC}        $(if [[ -n "$effective" ]]; then echo -e "${GREEN}$effective${NC}"; else echo -e "${YELLOW}No translation${NC}"; fi)"
+    echo -e "  ${BLUE}Setting:${NC}    ${setting:-"(not set)"}"
+    echo -e "  ${BLUE}Effective:${NC}  $(if [[ -n "$effective" ]]; then echo -e "${GREEN}$effective${NC}"; else echo -e "${YELLOW}No translation${NC}"; fi)"
     echo ""
 
     if [[ -n "$effective" ]]; then
@@ -291,8 +224,7 @@ show_status() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo -e "  ${BLUE}Commands:${NC}"
-    echo -e "    /agent-vibes:translate set <lang>  Set manual translation"
-    echo -e "    /agent-vibes:translate auto        Use BMAD config"
+    echo -e "    /agent-vibes:translate set <lang>  Set translation language"
     echo -e "    /agent-vibes:translate off         Disable translation"
     echo ""
 }
@@ -300,9 +232,6 @@ show_status() {
 # Main command handler - only run if script is executed directly, not sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 case "${1:-}" in
-    get-bmad-language)
-        get_bmad_language
-        ;;
     get-translate-to)
         get_translate_to
         ;;
@@ -324,9 +253,6 @@ case "${1:-}" in
         ;;
     set)
         set_translate "${2:-}"
-        ;;
-    auto)
-        set_translate "auto"
         ;;
     off)
         set_translate "off"

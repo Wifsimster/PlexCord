@@ -36,60 +36,8 @@ MIGRATED=false
 
 # Create target directories
 echo -e "${BLUE}📁 Creating .agentvibes/ directory structure...${NC}"
-mkdir -p .agentvibes/bmad
 mkdir -p .agentvibes/config
 echo -e "${GREEN}✓ Directories created${NC}"
-echo ""
-
-# Migrate BMAD files from .claude/plugins/
-echo -e "${BLUE}🔍 Checking for BMAD files in .claude/plugins/...${NC}"
-
-if [[ -f ".claude/plugins/bmad-voices-enabled.flag" ]]; then
-    echo -e "${YELLOW}  Found: bmad-voices-enabled.flag${NC}"
-    mv .claude/plugins/bmad-voices-enabled.flag .agentvibes/bmad/
-    echo -e "${GREEN}  ✓ Moved to .agentvibes/bmad/${NC}"
-    MIGRATED=true
-fi
-
-if [[ -f ".claude/plugins/bmad-party-mode-disabled.flag" ]]; then
-    echo -e "${YELLOW}  Found: bmad-party-mode-disabled.flag${NC}"
-    mv .claude/plugins/bmad-party-mode-disabled.flag .agentvibes/bmad/
-    echo -e "${GREEN}  ✓ Moved to .agentvibes/bmad/${NC}"
-    MIGRATED=true
-fi
-
-if [[ -f ".claude/plugins/.bmad-previous-settings" ]]; then
-    echo -e "${YELLOW}  Found: .bmad-previous-settings${NC}"
-    mv .claude/plugins/.bmad-previous-settings .agentvibes/bmad/
-    echo -e "${GREEN}  ✓ Moved to .agentvibes/bmad/${NC}"
-    MIGRATED=true
-fi
-
-echo ""
-
-# Migrate BMAD files from .claude/config/
-echo -e "${BLUE}🔍 Checking for BMAD files in .claude/config/...${NC}"
-
-if [[ -f ".claude/config/bmad-voices.md" ]]; then
-    echo -e "${YELLOW}  Found: bmad-voices.md${NC}"
-    mv .claude/config/bmad-voices.md .agentvibes/bmad/
-    echo -e "${GREEN}  ✓ Moved to .agentvibes/bmad/${NC}"
-    MIGRATED=true
-fi
-
-if [[ -f ".claude/config/bmad-voices-enabled.flag" ]]; then
-    echo -e "${YELLOW}  Found: bmad-voices-enabled.flag${NC}"
-    # Check if already exists in new location
-    if [[ -f ".agentvibes/bmad/bmad-voices-enabled.flag" ]]; then
-        echo -e "${BLUE}  (Already exists in .agentvibes/bmad/ - removing duplicate)${NC}"
-        rm .claude/config/bmad-voices-enabled.flag
-    else
-        mv .claude/config/bmad-voices-enabled.flag .agentvibes/bmad/
-        echo -e "${GREEN}  ✓ Moved to .agentvibes/bmad/${NC}"
-    fi
-    MIGRATED=true
-fi
-
 echo ""
 
 # Migrate AgentVibes config files
@@ -142,7 +90,6 @@ if [[ "$MIGRATED" == "true" ]]; then
     echo -e "${GREEN}✅ Migration complete!${NC}"
     echo ""
     echo "Your AgentVibes configuration has been moved to:"
-    echo "  .agentvibes/bmad/    - BMAD voice mappings and state"
     echo "  .agentvibes/config/  - AgentVibes settings"
     echo ""
     echo "Old locations are no longer used:"
