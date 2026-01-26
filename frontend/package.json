@@ -28,7 +28,7 @@
         "@primevue/auto-import-resolver": "^4.5.4",
         "@rushstack/eslint-patch": "^1.15.0",
         "@tailwindcss/vite": "^4.1.18",
-        "@vitejs/plugin-vue": "^5.0.5",
+        "@vitejs/plugin-vue": "^6.0.3",
         "@vue/eslint-config-prettier": "^9.0.0",
         "eslint": "^8.57.0",
         "eslint-plugin-vue": "^10.7.0",
