@@ -1,3 +1,28 @@
+export namespace config {
+
+	export class ServerConfig {
+	    name: string;
+	    url: string;
+	    userId: string;
+	    userName: string;
+	    active: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new ServerConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.url = source["url"];
+	        this.userId = source["userId"];
+	        this.userName = source["userName"];
+	        this.active = source["active"];
+	    }
+	}
+
+}
+
 export namespace errors {
 	
 	export class ErrorInfo {

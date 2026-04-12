@@ -628,6 +628,114 @@ func (a *App) SaveServerURL(serverURL string) error {
 	return nil
 }
 
+// ============================================================================
+// Multi-Server Management Methods
+// ============================================================================
+
+// GetServers returns the list of configured Plex servers.
+func (a *App) GetServers() []config.ServerConfig {
+	if a.config.Servers == nil {
+		return []config.ServerConfig{}
+	}
+	return a.config.Servers
+}
+
+// AddServer adds a new Plex server to the configuration.
+func (a *App) AddServer(name, serverURL, userID, userName string) error {
+	log.Printf("Adding server: name=%s, url=%s, userID=%s, userName=%s", name, serverURL, userID, userName)
+
+	if name == "" {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server name cannot be empty")
+	}
+	if serverURL == "" {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL cannot be empty")
+	}
+
+	// Validate URL scheme
+	parsed, err := url.Parse(serverURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL must use http or https scheme")
+	}
+
+	// Check for duplicate URL
+	for _, s := range a.config.Servers {
+		if s.URL == serverURL {
+			return errors.New(errors.CONFIG_WRITE_FAILED, "a server with this URL already exists")
+		}
+	}
+
+	a.config.Servers = append(a.config.Servers, config.ServerConfig{
+		Name:     name,
+		URL:      serverURL,
+		UserID:   userID,
+		UserName: userName,
+		Active:   true,
+	})
+
+	if err := config.Save(a.config); err != nil {
+		log.Printf("ERROR: Failed to save server addition: %v", err)
+		return err
+	}
+
+	log.Printf("Server added successfully: %s (%s)", name, serverURL)
+	return nil
+}
+
+// RemoveServer removes a Plex server from the configuration by URL.
+func (a *App) RemoveServer(serverURL string) error {
+	log.Printf("Removing server with URL: %s", serverURL)
+
+	found := false
+	servers := make([]config.ServerConfig, 0, len(a.config.Servers))
+	for _, s := range a.config.Servers {
+		if s.URL == serverURL {
+			found = true
+			continue
+		}
+		servers = append(servers, s)
+	}
+
+	if !found {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server not found")
+	}
+
+	a.config.Servers = servers
+
+	if err := config.Save(a.config); err != nil {
+		log.Printf("ERROR: Failed to save server removal: %v", err)
+		return err
+	}
+
+	log.Printf("Server removed successfully: %s", serverURL)
+	return nil
+}
+
+// SetServerActive enables or disables a Plex server by URL.
+func (a *App) SetServerActive(serverURL string, active bool) error {
+	log.Printf("Setting server active: url=%s, active=%v", serverURL, active)
+
+	found := false
+	for i := range a.config.Servers {
+		if a.config.Servers[i].URL == serverURL {
+			a.config.Servers[i].Active = active
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server not found")
+	}
+
+	if err := config.Save(a.config); err != nil {
+		log.Printf("ERROR: Failed to save server active state: %v", err)
+		return err
+	}
+
+	log.Printf("Server active state updated: %s -> %v", serverURL, active)
+	return nil
+}
+
 // StartSessionPolling begins polling the Plex server for music sessions.
 // This method creates a background poller that periodically checks for active
 // music playback and emits Wails events when the session state changes:

@@ -8,6 +8,15 @@ import (
 	"plexcord/internal/errors"
 )
 
+// ServerConfig represents a single Plex server configuration for multi-server support.
+type ServerConfig struct {
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	UserID   string `json:"userId"`
+	UserName string `json:"userName"`
+	Active   bool   `json:"active"`
+}
+
 // Config holds application configuration
 type Config struct {
 	// Connection history (Story 6.8)
@@ -31,6 +40,9 @@ type Config struct {
 	// Custom presence format strings
 	PresenceDetailsFormat string `json:"presenceDetailsFormat"` // Format for Details line, e.g. "{track}"
 	PresenceStateFormat   string `json:"presenceStateFormat"`   // Format for State line, e.g. "by {artist} • {album}"
+
+	// Multi-server support
+	Servers []ServerConfig `json:"servers,omitempty"`
 }
 
 // DefaultConfig returns a configuration with default values.
@@ -70,6 +82,9 @@ func Load() (*Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, errors.New(errors.CONFIG_READ_FAILED, "invalid JSON in config file: "+err.Error())
 	}
+
+	// Migrate legacy single-server config to multi-server format
+	cfg.MigrateToMultiServer()
 
 	return &cfg, nil
 }
@@ -131,6 +146,40 @@ func IsSetupComplete() bool {
 
 	// Check if setup was explicitly completed or skipped
 	return cfg.SetupCompleted || cfg.SetupSkipped
+}
+
+// MigrateToMultiServer migrates a legacy single-server configuration to the
+// multi-server Servers slice. If Servers is already populated, no migration is
+// performed. The legacy ServerURL, SelectedPlexUserID, and SelectedPlexUserName
+// fields are preserved for backward compatibility.
+func (c *Config) MigrateToMultiServer() {
+	if len(c.Servers) > 0 {
+		return // Already migrated
+	}
+	if c.ServerURL == "" {
+		return // Nothing to migrate
+	}
+
+	c.Servers = []ServerConfig{
+		{
+			Name:     "Default Server",
+			URL:      c.ServerURL,
+			UserID:   c.SelectedPlexUserID,
+			UserName: c.SelectedPlexUserName,
+			Active:   true,
+		},
+	}
+}
+
+// GetActiveServers returns only the servers that are marked as active.
+func (c *Config) GetActiveServers() []ServerConfig {
+	active := make([]ServerConfig, 0, len(c.Servers))
+	for _, s := range c.Servers {
+		if s.Active {
+			active = append(active, s)
+		}
+	}
+	return active
 }
 
 // Delete removes the configuration file from disk.

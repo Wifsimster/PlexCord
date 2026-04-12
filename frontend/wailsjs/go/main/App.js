@@ -34,6 +34,10 @@ export function DiscoverPlexServers() {
   return window['go']['main']['App']['DiscoverPlexServers']();
 }
 
+export function AddServer(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['AddServer'](arg1, arg2, arg3, arg4);
+}
+
 export function GetAutoStart() {
   return window['go']['main']['App']['GetAutoStart']();
 }
@@ -94,6 +98,10 @@ export function GetPlexUsers(arg1) {
   return window['go']['main']['App']['GetPlexUsers'](arg1);
 }
 
+export function GetServers() {
+  return window['go']['main']['App']['GetServers']();
+}
+
 export function GetPollingInterval() {
   return window['go']['main']['App']['GetPollingInterval']();
 }
@@ -146,6 +154,10 @@ export function QuitApp() {
   return window['go']['main']['App']['QuitApp']();
 }
 
+export function RemoveServer(arg1) {
+  return window['go']['main']['App']['RemoveServer'](arg1);
+}
+
 export function ResetApplication() {
   return window['go']['main']['App']['ResetApplication']();
 }
@@ -176,6 +188,10 @@ export function SaveServerURL(arg1) {
 
 export function SetAutoStart(arg1) {
   return window['go']['main']['App']['SetAutoStart'](arg1);
+}
+
+export function SetServerActive(arg1, arg2) {
+  return window['go']['main']['App']['SetServerActive'](arg1, arg2);
 }
 
 export function SetHideWhenPaused(arg1, arg2) {
