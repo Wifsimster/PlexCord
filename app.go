@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"net/url"
 	goruntime "runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,6 +164,10 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 
 // shutdown is called at application termination
 func (a *App) shutdown(ctx context.Context) {
+	// Stop retry managers first to prevent post-shutdown reconnection attempts
+	a.plexRetry.Stop()
+	a.discordRetry.Stop()
+
 	// Stop session polling if running
 	a.StopSessionPolling()
 
@@ -588,6 +594,12 @@ func (a *App) SaveServerURL(serverURL string) error {
 
 	if serverURL == "" {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL cannot be empty")
+	}
+
+	// Validate URL scheme to prevent SSRF/token exfiltration
+	parsed, err := url.Parse(serverURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL must use http or https scheme")
 	}
 
 	// Update config with server URL
@@ -1346,12 +1358,20 @@ func (a *App) OpenReleasesPage() error {
 
 // OpenReleaseURL opens a specific release URL in the default browser.
 // Used when an update notification provides a direct link to the new release.
-func (a *App) OpenReleaseURL(url string) error {
-	if url == "" {
+func (a *App) OpenReleaseURL(releaseURL string) error {
+	if releaseURL == "" {
 		return a.OpenReleasesPage()
 	}
-	log.Printf("Opening release URL: %s", url)
-	runtime.BrowserOpenURL(a.ctx, url)
+	// Validate URL scheme and host to prevent opening arbitrary/malicious URLs
+	parsed, err := url.Parse(releaseURL)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+		return errors.New(errors.CONFIG_READ_FAILED, "invalid release URL")
+	}
+	if !strings.HasSuffix(parsed.Host, "github.com") {
+		return errors.New(errors.CONFIG_READ_FAILED, "release URL must be from github.com")
+	}
+	log.Printf("Opening release URL: %s", releaseURL)
+	runtime.BrowserOpenURL(a.ctx, releaseURL)
 	return nil
 }
 

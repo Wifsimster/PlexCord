@@ -45,6 +45,7 @@ type Manager struct {
 	stateCallback StateChangeCallback
 	name          string
 	lastErrorCode string
+	nextRetryAt   time.Time
 	mu            sync.Mutex
 	attemptNumber int
 	running       bool
@@ -172,9 +173,8 @@ func (m *Manager) GetState() RetryState {
 	}
 
 	if m.running && m.timer != nil {
-		interval := m.getInterval(m.attemptNumber)
-		state.NextRetryIn = interval
-		state.NextRetryAt = time.Now().Add(interval)
+		state.NextRetryIn = time.Until(m.nextRetryAt)
+		state.NextRetryAt = m.nextRetryAt
 	}
 
 	return state
@@ -198,16 +198,21 @@ func (m *Manager) getInterval(attempt int) time.Duration {
 // scheduleNextRetry schedules the next retry attempt (must be called with lock held).
 func (m *Manager) scheduleNextRetry() {
 	interval := m.getInterval(m.attemptNumber)
+	m.nextRetryAt = time.Now().Add(interval)
 
 	log.Printf("[%s] Retry scheduled in %v (attempt %d)", m.name, interval, m.attemptNumber+1)
 
 	// Emit state change
 	if m.stateCallback != nil {
+		lastErr := ""
+		if m.lastError != nil {
+			lastErr = m.lastError.Error()
+		}
 		m.stateCallback(RetryState{
 			AttemptNumber:      m.attemptNumber + 1,
 			NextRetryIn:        interval,
-			NextRetryAt:        time.Now().Add(interval),
-			LastError:          m.lastError.Error(),
+			NextRetryAt:        m.nextRetryAt,
+			LastError:          lastErr,
 			LastErrorCode:      m.lastErrorCode,
 			IsRetrying:         true,
 			MaxIntervalReached: m.attemptNumber >= len(BackoffSchedule)-1,

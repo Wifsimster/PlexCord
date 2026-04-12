@@ -1,5 +1,4 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue';
 import { usePlexConnectionStore } from '@/stores/plexConnection';
 import { useDiscordConnectionStore } from '@/stores/discordConnection';
 import PlexStatusCard from '@/components/PlexStatusCard.vue';
@@ -9,16 +8,8 @@ import Button from 'primevue/button';
 const plexStore = usePlexConnectionStore();
 const discordStore = useDiscordConnectionStore();
 
-// Initialize stores
-onMounted(async () => {
-    await Promise.all([plexStore.initialize(), discordStore.initialize()]);
-});
-
-// Cleanup on unmount
-onUnmounted(() => {
-    plexStore.cleanup();
-    discordStore.cleanup();
-});
+// Note: Lifecycle management (initialize/cleanup) is handled by the parent
+// Dashboard via useConnectionStatus composable. This component only refreshes.
 
 // Refresh both connections
 const refresh = async () => {
