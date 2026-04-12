@@ -5,6 +5,9 @@ import {plex} from '../models';
 import {main} from '../models';
 import {retry} from '../models';
 import {errors} from '../models';
+import {config} from '../models';
+
+export function AddServer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function CheckForUpdate():Promise<version.UpdateInfo>;
 
@@ -52,6 +55,8 @@ export function GetPlexToken():Promise<string>;
 
 export function GetPlexUsers(arg1:string):Promise<Array<plex.PlexUser>>;
 
+export function GetServers():Promise<Array<config.ServerConfig>>;
+
 export function GetPollingInterval():Promise<number>;
 
 export function GetResourceStats():Promise<main.ResourceStats>;
@@ -78,6 +83,8 @@ export function OpenReleasesPage():Promise<void>;
 
 export function QuitApp():Promise<void>;
 
+export function RemoveServer(arg1:string):Promise<void>;
+
 export function ResetApplication():Promise<void>;
 
 export function RetryDiscordConnection():Promise<void>;
@@ -93,6 +100,8 @@ export function SavePlexUserSelection(arg1:string,arg2:string):Promise<void>;
 export function SaveServerURL(arg1:string):Promise<void>;
 
 export function SetAutoStart(arg1:boolean):Promise<void>;
+
+export function SetServerActive(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetHideWhenPaused(arg1:boolean,arg2:number):Promise<void>;
 

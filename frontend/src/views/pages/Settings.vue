@@ -27,7 +27,11 @@ import {
     GetHideWhenPaused,
     SetHideWhenPaused,
     GetPresenceFormat,
-    SetPresenceFormat
+    SetPresenceFormat,
+    GetServers,
+    AddServer,
+    RemoveServer,
+    SetServerActive
 } from '../../../wailsjs/go/main/App';
 
 const router = useRouter();
@@ -65,6 +69,12 @@ const loading = ref({
     reset: false
 });
 
+// Servers
+const servers = ref([]);
+const showAddServerDialog = ref(false);
+const newServerName = ref('');
+const newServerURL = ref('');
+
 // Reset confirmation dialog
 const showResetDialog = ref(false);
 
@@ -87,6 +97,9 @@ onMounted(async () => {
         const formatSettings = await GetPresenceFormat();
         presenceDetailsFormat.value = formatSettings.detailsFormat;
         presenceStateFormat.value = formatSettings.stateFormat;
+
+        // Load servers
+        servers.value = await GetServers();
     } catch (error) {
         console.error('Failed to load settings:', error);
         toast.add({
@@ -275,6 +288,85 @@ const resetPresenceFormat = () => {
     savePresenceFormat();
 };
 
+// Server management handlers
+const loadServers = async () => {
+    try {
+        servers.value = await GetServers();
+    } catch (error) {
+        console.error('Failed to load servers:', error);
+    }
+};
+
+const toggleServerActive = async (server) => {
+    try {
+        await SetServerActive(server.url, !server.active);
+        await loadServers();
+    } catch (error) {
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to update server status',
+            life: 3000
+        });
+    }
+};
+
+const removeServer = async (server) => {
+    try {
+        await RemoveServer(server.url);
+        await loadServers();
+        toast.add({
+            severity: 'success',
+            summary: 'Removed',
+            detail: `Server "${server.name}" removed`,
+            life: 2000
+        });
+    } catch (error) {
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to remove server',
+            life: 3000
+        });
+    }
+};
+
+const openAddServerDialog = () => {
+    newServerName.value = '';
+    newServerURL.value = '';
+    showAddServerDialog.value = true;
+};
+
+const addServer = async () => {
+    if (!newServerName.value || !newServerURL.value) {
+        toast.add({
+            severity: 'warn',
+            summary: 'Validation',
+            detail: 'Server name and URL are required',
+            life: 3000
+        });
+        return;
+    }
+    try {
+        await AddServer(newServerName.value, newServerURL.value, '', '');
+        showAddServerDialog.value = false;
+        await loadServers();
+        toast.add({
+            severity: 'success',
+            summary: 'Added',
+            detail: `Server "${newServerName.value}" added`,
+            life: 2000
+        });
+    } catch (error) {
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: error.message || 'Failed to add server',
+            life: 3000
+        });
+    }
+};
+
 // Update check
 const checkForUpdates = async () => {
     checkingUpdate.value = true;
@@ -399,6 +491,50 @@ const goToDashboard = () => {
                 </div>
             </div>
         </div>
+
+        <!-- Servers -->
+        <div class="card mb-4">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold">Servers</h2>
+                <Button label="Add Server" icon="pi pi-plus" size="small" @click="openAddServerDialog" />
+            </div>
+
+            <div v-if="servers.length === 0" class="py-3 text-muted-color text-sm">
+                No servers configured. Add a server to get started.
+            </div>
+
+            <div v-for="(server, index) in servers" :key="server.url"
+                 :class="['flex items-center justify-between py-3', { 'border-b border-surface-200 dark:border-surface-700': index < servers.length - 1 }]">
+                <div class="flex-1 min-w-0 mr-4">
+                    <div class="font-medium truncate">{{ server.name }}</div>
+                    <div class="text-sm text-muted-color truncate">{{ server.url }}</div>
+                    <div v-if="server.userName" class="text-xs text-muted-color">User: {{ server.userName }}</div>
+                </div>
+                <div class="flex items-center gap-3 shrink-0">
+                    <ToggleSwitch :modelValue="server.active" @update:modelValue="() => toggleServerActive(server)" aria-label="Toggle server active" />
+                    <Button icon="pi pi-trash" severity="danger" text rounded size="small" @click="removeServer(server)" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Server Dialog -->
+        <Dialog v-model:visible="showAddServerDialog" modal header="Add Server" :style="{ width: '400px' }">
+            <div class="flex flex-col gap-4">
+                <div>
+                    <label class="block font-medium mb-1">Server Name</label>
+                    <InputText v-model="newServerName" placeholder="My Plex Server" class="w-full" @keyup.enter="addServer" />
+                </div>
+                <div>
+                    <label class="block font-medium mb-1">Server URL</label>
+                    <InputText v-model="newServerURL" placeholder="http://192.168.1.100:32400" class="w-full" @keyup.enter="addServer" />
+                </div>
+            </div>
+
+            <template #footer>
+                <Button label="Cancel" severity="secondary" @click="showAddServerDialog = false" />
+                <Button label="Add Server" @click="addServer" />
+            </template>
+        </Dialog>
 
         <!-- Behavior Settings -->
         <div class="card mb-4">
