@@ -12,6 +12,7 @@ import (
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
 	"plexcord/internal/errors"
+	"plexcord/internal/history"
 	"plexcord/internal/keychain"
 	"plexcord/internal/platform"
 	"plexcord/internal/plex"
@@ -45,11 +46,19 @@ type App struct {
 	// PIN authentication (maintain same client ID for PIN lifecycle)
 	plexAuth *plex.Authenticator
 
+	// Listening history
+	history *history.Store
+
+	// Presence pause state
+	presencePaused bool          // Manual one-click pause toggle
+	pauseTimer     *time.Timer   // Timer for delayed hide-when-paused
+
 	// Mutexes grouped together for alignment
-	pollerMu   sync.Mutex
-	sessionMu  sync.RWMutex // Protect currentSession access
-	discordMu  sync.Mutex
-	plexAuthMu sync.Mutex
+	pollerMu      sync.Mutex
+	sessionMu     sync.RWMutex // Protect currentSession access
+	discordMu     sync.Mutex
+	plexAuthMu    sync.Mutex
+	pauseMu       sync.Mutex   // Protect presencePaused and pauseTimer
 }
 
 // NewApp creates a new App application struct
@@ -75,6 +84,10 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.config = cfg
 	log.Printf("Configuration loaded successfully")
+
+	// Initialize listening history store
+	configDir := config.GetConfigDir()
+	a.history = history.NewStore(configDir, 200)
 
 	// Setup retry callbacks for automatic reconnection
 	a.setupRetryCallbacks()
@@ -727,6 +740,41 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 			a.currentSession = session
 			a.sessionMu.Unlock()
 
+			// Record to listening history (deduplication handled by Store)
+			if a.history != nil {
+				a.history.Add(history.Entry{
+					Track:     session.Track,
+					Artist:    session.Artist,
+					Album:     session.Album,
+					Duration:  session.Duration,
+					StartedAt: time.Now(),
+					ThumbURL:  session.ThumbURL,
+				})
+			}
+
+			// Check if manually paused - skip all presence updates
+			a.pauseMu.Lock()
+			manuallyPaused := a.presencePaused
+			a.pauseMu.Unlock()
+
+			if manuallyPaused {
+				// Skip presence updates while manually paused
+				runtime.EventsEmit(a.ctx, "PlaybackUpdated", session)
+				lastSession = session
+				continue
+			}
+
+			// Handle hide-when-paused for paused sessions
+			if session.State == "paused" && a.config.HideWhenPaused {
+				a.scheduleHideOnPause()
+				runtime.EventsEmit(a.ctx, "PlaybackUpdated", session)
+				lastSession = session
+				continue
+			}
+
+			// Cancel any pending pause timer since we're playing
+			a.cancelPauseTimer()
+
 			// Update Discord Rich Presence if connected
 			a.updateDiscordFromSession(session)
 
@@ -740,6 +788,9 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 			a.sessionMu.Lock()
 			a.currentSession = nil
 			a.sessionMu.Unlock()
+
+			// Cancel any pending pause timer
+			a.cancelPauseTimer()
 
 			// Clear Discord Rich Presence
 			a.clearDiscordOnStop()
@@ -769,7 +820,7 @@ func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
 		log.Printf("Discord: Reconnected - restoring presence")
 	}
 
-	// Update presence with session data
+	// Update presence with session data, including artwork URL and format strings
 	err := a.discord.UpdatePresenceFromPlayback(
 		session.Track,
 		session.Artist,
@@ -777,6 +828,10 @@ func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
 		session.State,
 		session.Duration,
 		session.ViewOffset,
+		session.ThumbURL,
+		session.PlayerName,
+		a.config.PresenceDetailsFormat,
+		a.config.PresenceStateFormat,
 	)
 	if err != nil {
 		log.Printf("Warning: Failed to update Discord presence: %v", err)
@@ -1070,7 +1125,7 @@ func (a *App) UpdateDiscordPresence(track, artist, album, state string, duration
 		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
 	}
 
-	return a.discord.UpdatePresenceFromPlayback(track, artist, album, state, duration, position)
+	return a.discord.UpdatePresenceFromPlayback(track, artist, album, state, duration, position, "", "", a.config.PresenceDetailsFormat, a.config.PresenceStateFormat)
 }
 
 // ClearDiscordPresence removes the Discord Rich Presence.
@@ -1114,6 +1169,133 @@ func (a *App) TestDiscordPresence() error {
 	}
 
 	log.Printf("Test presence sent successfully")
+	return nil
+}
+
+// ============================================================================
+// Presence Pause Toggle & Hide When Paused
+// ============================================================================
+
+// TogglePresencePause toggles the manual presence pause state.
+// When paused, all Discord presence updates are skipped.
+// Returns the new paused state.
+func (a *App) TogglePresencePause() bool {
+	a.pauseMu.Lock()
+	a.presencePaused = !a.presencePaused
+	paused := a.presencePaused
+	a.pauseMu.Unlock()
+
+	if paused {
+		log.Printf("Presence manually paused")
+		// Clear current presence immediately
+		a.clearDiscordOnStop()
+	} else {
+		log.Printf("Presence manually resumed")
+		// Restore presence from current session if available
+		a.sessionMu.RLock()
+		session := a.currentSession
+		a.sessionMu.RUnlock()
+		if session != nil {
+			a.updateDiscordFromSession(session)
+		}
+	}
+
+	return paused
+}
+
+// IsPresencePaused returns whether presence updates are manually paused.
+func (a *App) IsPresencePaused() bool {
+	a.pauseMu.Lock()
+	defer a.pauseMu.Unlock()
+	return a.presencePaused
+}
+
+// GetHideWhenPaused returns the hide-when-paused settings.
+func (a *App) GetHideWhenPaused() map[string]interface{} {
+	return map[string]interface{}{
+		"enabled":      a.config.HideWhenPaused,
+		"delaySeconds": a.config.HideWhenPausedDelay,
+	}
+}
+
+// SetHideWhenPaused updates the hide-when-paused settings.
+func (a *App) SetHideWhenPaused(enabled bool, delaySeconds int) error {
+	if delaySeconds < 0 {
+		delaySeconds = 0
+	}
+	a.config.HideWhenPaused = enabled
+	a.config.HideWhenPausedDelay = delaySeconds
+	if err := config.Save(a.config); err != nil {
+		log.Printf("ERROR: Failed to save hide-when-paused settings: %v", err)
+		return err
+	}
+	log.Printf("Hide when paused set to: enabled=%v, delay=%d seconds", enabled, delaySeconds)
+	return nil
+}
+
+// scheduleHideOnPause schedules clearing Discord presence after the configured delay.
+func (a *App) scheduleHideOnPause() {
+	a.pauseMu.Lock()
+	defer a.pauseMu.Unlock()
+
+	// Cancel existing timer if any
+	if a.pauseTimer != nil {
+		a.pauseTimer.Stop()
+		a.pauseTimer = nil
+	}
+
+	delay := time.Duration(a.config.HideWhenPausedDelay) * time.Second
+	if delay <= 0 {
+		// Immediate clear
+		go a.clearDiscordOnStop()
+		return
+	}
+
+	a.pauseTimer = time.AfterFunc(delay, func() {
+		log.Printf("Hide-when-paused delay elapsed, clearing presence")
+		a.clearDiscordOnStop()
+	})
+}
+
+// cancelPauseTimer cancels any pending hide-when-paused timer.
+func (a *App) cancelPauseTimer() {
+	a.pauseMu.Lock()
+	defer a.pauseMu.Unlock()
+
+	if a.pauseTimer != nil {
+		a.pauseTimer.Stop()
+		a.pauseTimer = nil
+	}
+}
+
+// ============================================================================
+// Custom Presence Format Strings
+// ============================================================================
+
+// PresenceFormatSettings represents the presence format configuration for the frontend.
+type PresenceFormatSettings struct {
+	DetailsFormat string `json:"detailsFormat"`
+	StateFormat   string `json:"stateFormat"`
+}
+
+// GetPresenceFormat returns the current presence format strings.
+func (a *App) GetPresenceFormat() PresenceFormatSettings {
+	return PresenceFormatSettings{
+		DetailsFormat: a.config.PresenceDetailsFormat,
+		StateFormat:   a.config.PresenceStateFormat,
+	}
+}
+
+// SetPresenceFormat updates the presence format strings.
+// Pass empty strings to reset to defaults.
+func (a *App) SetPresenceFormat(details, state string) error {
+	a.config.PresenceDetailsFormat = details
+	a.config.PresenceStateFormat = state
+	if err := config.Save(a.config); err != nil {
+		log.Printf("ERROR: Failed to save presence format: %v", err)
+		return err
+	}
+	log.Printf("Presence format updated: details=%q, state=%q", details, state)
 	return nil
 }
 
@@ -1400,4 +1582,33 @@ func (a *App) GetResourceStats() ResourceStats {
 		GoroutineCount: goruntime.NumGoroutine(),
 		Timestamp:      time.Now().Format(time.RFC3339),
 	}
+}
+
+// ============================================================================
+// Listening History
+// ============================================================================
+
+// GetListeningHistory returns the most recent listening history entries.
+// Pass limit=0 or negative to get all entries (up to max stored).
+func (a *App) GetListeningHistory(limit int) []history.Entry {
+	if a.history == nil {
+		return nil
+	}
+	return a.history.GetRecent(limit)
+}
+
+// GetListeningStats returns aggregate listening statistics.
+func (a *App) GetListeningStats() history.Stats {
+	if a.history == nil {
+		return history.Stats{}
+	}
+	return a.history.GetStats()
+}
+
+// ClearListeningHistory removes all listening history entries.
+func (a *App) ClearListeningHistory() {
+	if a.history == nil {
+		return
+	}
+	a.history.Clear()
 }

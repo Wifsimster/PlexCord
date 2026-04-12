@@ -28,6 +28,8 @@ type PresenceData struct {
 	Track  string `json:"track"`
 	Artist string `json:"artist"`
 	Album  string `json:"album"`
+	Year   string `json:"year"`
+	Player string `json:"player"`
 
 	// Artwork URL (for large image)
 	ArtworkURL string `json:"artworkUrl"`
@@ -36,6 +38,10 @@ type PresenceData struct {
 	State    string `json:"state"` // "playing", "paused"
 	Duration int64  `json:"duration"`
 	Position int64  `json:"position"`
+
+	// Custom format strings for presence display
+	DetailsFormat string `json:"detailsFormat,omitempty"`
+	StateFormat   string `json:"stateFormat,omitempty"`
 }
 
 // ConnectionEvent represents a Discord connection state change event

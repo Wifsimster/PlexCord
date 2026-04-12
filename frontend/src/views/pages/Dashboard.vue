@@ -3,7 +3,9 @@ import { ref, onMounted } from 'vue';
 import DiscordPreview from '@/components/setup/DiscordPreview.vue';
 import ConnectionStatus from '@/components/ConnectionStatus.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
-import { GetVersion } from '../../../wailsjs/go/main/App';
+import NowPlaying from '@/components/NowPlaying.vue';
+import Button from 'primevue/button';
+import { GetVersion, IsPresencePaused, TogglePresencePause } from '../../../wailsjs/go/main/App';
 import { useConnectionStatus } from '@/composables/useConnectionStatus';
 
 const { errors, plex, discord } = useConnectionStatus();
@@ -11,14 +13,26 @@ const { errors, plex, discord } = useConnectionStatus();
 // Version info
 const version = ref('');
 
+// Presence pause state
+const presencePaused = ref(false);
+
 onMounted(async () => {
     try {
         const versionInfo = await GetVersion();
         version.value = versionInfo.version;
+        presencePaused.value = await IsPresencePaused();
     } catch (error) {
         console.error('Failed to get version:', error);
     }
 });
+
+const togglePresencePause = async () => {
+    try {
+        presencePaused.value = await TogglePresencePause();
+    } catch (error) {
+        console.error('Failed to toggle presence pause:', error);
+    }
+};
 
 // Error banner handling
 const handleDismissError = (source) => {
@@ -47,7 +61,17 @@ const handleRetry = (source) => {
                     <h1 class="text-3xl font-bold text-surface-900 dark:text-surface-0 tracking-tight">Dashboard</h1>
                     <p class="text-surface-500 dark:text-surface-400 mt-1">Manage your PlexCord integration</p>
                 </div>
-                <div v-if="version" class="text-sm text-surface-400 dark:text-surface-500 font-mono">v{{ version }}</div>
+                <div class="flex items-center gap-3">
+                    <Button
+                        :icon="presencePaused ? 'pi pi-play' : 'pi pi-pause'"
+                        :severity="presencePaused ? 'warn' : 'secondary'"
+                        :label="presencePaused ? 'Resume Presence' : 'Pause Presence'"
+                        size="small"
+                        outlined
+                        @click="togglePresencePause"
+                    />
+                    <div v-if="version" class="text-sm text-surface-400 dark:text-surface-500 font-mono">v{{ version }}</div>
+                </div>
             </div>
 
             <!-- Error Banners -->
@@ -62,6 +86,13 @@ const handleRetry = (source) => {
                     @dismiss="handleDismissError(error.source)"
                     @retry="handleRetry(error.source)"
                 />
+            </div>
+
+            <!-- Now Playing -->
+            <div class="mb-8">
+                <div class="bg-surface-0 dark:bg-surface-900 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 p-6">
+                    <NowPlaying />
+                </div>
             </div>
 
             <!-- Main Grid -->

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"plexcord/internal/errors"
+	"plexcord/internal/version"
 )
 
 const (
@@ -19,7 +20,6 @@ const (
 	plexAuthURL = "https://app.plex.tv/auth#"
 	clientID    = "plexcord-" // Will be appended with generated UUID
 	productName = "PlexCord"
-	version     = "1.0.0"
 )
 
 // PINResponse represents the response from creating a PIN
@@ -73,7 +73,7 @@ func (a *Authenticator) RequestPIN(ctx context.Context) (*PINResponse, error) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Plex-Product", productName)
-	req.Header.Set("X-Plex-Version", version)
+	req.Header.Set("X-Plex-Version", version.Version)
 	req.Header.Set("X-Plex-Client-Identifier", a.clientID)
 
 	resp, err := a.httpClient.Do(req)

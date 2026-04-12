@@ -10,23 +10,31 @@ import (
 // Poller manages periodic polling of Plex sessions for a specific user.
 // It uses time.Ticker for accurate interval-based polling (not busy-waiting)
 // to meet CPU efficiency requirements (NFR3: <1% average CPU).
+//
+// The poller supports two modes:
+//   - Music-only mode (default): Uses Start() and emits *MusicSession on the channel.
+//   - Multi-media mode: Uses StartMedia() and emits *MediaSession on the media channel.
+//     Enabled by setting MediaTypes before calling StartMedia().
 type Poller struct {
 	lastErrorTime time.Time // Track when last error occurred
 	client        *Client
 	stopCh        chan struct{}
-	sessionC      chan *MusicSession // nil indicates no session / stopped playback
+	sessionC      chan *MusicSession  // nil indicates no session / stopped playback (music mode)
+	mediaC        chan *MediaSession  // nil indicates no session / stopped playback (media mode)
 
 	// Error handling (Story 6.5)
 	onError     func(err error) // Called when poll errors occur
 	onRecovered func()          // Called when connection recovers after error
 
-	userID   string
-	interval time.Duration
+	userID     string
+	interval   time.Duration
+	mediaTypes []string // Media types to poll for (e.g., ["music", "movie", "tv"]). Empty = music only.
 
 	// Synchronization
 	mu           sync.RWMutex
 	running      bool
 	inErrorState bool // Whether currently in error state
+	mediaMode    bool // Whether polling in multi-media mode
 }
 
 // NewPoller creates a new session poller for the specified user.
@@ -46,8 +54,26 @@ func NewPoller(client *Client, userID string, interval time.Duration) *Poller {
 		userID:   userID,
 		interval: interval,
 		stopCh:   make(chan struct{}),
-		sessionC: make(chan *MusicSession, 1), // Buffered to prevent blocking
+		sessionC: make(chan *MusicSession, 1),  // Buffered to prevent blocking
+		mediaC:   make(chan *MediaSession, 1),   // Buffered to prevent blocking
 	}
+}
+
+// SetMediaTypes sets the media types that the poller should monitor.
+// Valid types: "music", "movie", "tv", "photo".
+// An empty or nil slice defaults to music-only polling (backward compatible).
+// Must be called before StartMedia().
+func (p *Poller) SetMediaTypes(types []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.mediaTypes = types
+}
+
+// GetMediaTypes returns the currently configured media types.
+func (p *Poller) GetMediaTypes() []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.mediaTypes
 }
 
 // Start begins polling for music sessions.
@@ -72,6 +98,29 @@ func (p *Poller) Start(ctx context.Context) <-chan *MusicSession {
 	return p.sessionC
 }
 
+// StartMedia begins polling for media sessions of the configured types.
+// Returns a channel that receives MediaSession updates when the session state changes.
+// A nil value on the channel indicates no matching session is active (playback stopped).
+// Use SetMediaTypes() before calling this to configure which media types to poll.
+// The channel is closed when the poller stops - consumers should handle this gracefully.
+func (p *Poller) StartMedia(ctx context.Context) <-chan *MediaSession {
+	p.mu.Lock()
+	if p.running {
+		p.mu.Unlock()
+		return p.mediaC
+	}
+	p.running = true
+	p.mediaMode = true
+	p.stopCh = make(chan struct{})
+	// Create new media channel for this run (previous one was closed on stop)
+	p.mediaC = make(chan *MediaSession, 1)
+	p.mu.Unlock()
+
+	go p.mediaPollLoop(ctx)
+
+	return p.mediaC
+}
+
 // Stop gracefully stops the poller and cleans up resources.
 // It is safe to call Stop multiple times.
 func (p *Poller) Stop() {
@@ -83,6 +132,7 @@ func (p *Poller) Stop() {
 	}
 
 	p.running = false
+	p.mediaMode = false
 	close(p.stopCh)
 }
 
@@ -250,6 +300,178 @@ func (p *Poller) doPoll() (*MusicSession, bool) {
 
 	// Return the first (most recent) music session
 	return &sessions[0], true
+}
+
+// mediaPollLoop is the main polling goroutine for multi-media mode.
+// It uses time.Ticker for efficient interval-based polling.
+func (p *Poller) mediaPollLoop(ctx context.Context) {
+	// Ensure proper cleanup when goroutine exits
+	defer func() {
+		p.mu.Lock()
+		p.running = false
+		p.mediaMode = false
+		close(p.mediaC)
+		p.mu.Unlock()
+	}()
+
+	// Create ticker for interval-based polling
+	p.mu.RLock()
+	interval := p.interval
+	p.mu.RUnlock()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	var lastSession *MediaSession
+
+	// Perform immediate first poll
+	session, ok := p.doMediaPoll()
+	if ok && session != nil {
+		select {
+		case p.mediaC <- session:
+			// Successfully sent initial session
+		default:
+			log.Printf("Media session channel full, skipping initial update")
+		}
+		lastSession = session
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("Media poller stopped: context cancelled")
+			return
+		case <-p.stopCh:
+			log.Printf("Media poller stopped: stop signal received")
+			return
+		case <-ticker.C:
+			// Check if interval changed and reset ticker if needed
+			p.mu.RLock()
+			newInterval := p.interval
+			p.mu.RUnlock()
+
+			if newInterval != interval {
+				ticker.Reset(newInterval)
+				interval = newInterval
+				log.Printf("Poller interval changed to %v", interval)
+			}
+
+			session, ok := p.doMediaPoll()
+
+			// Only emit if poll succeeded and session state changed.
+			if ok && mediaSessionChanged(lastSession, session) {
+				select {
+				case p.mediaC <- session:
+					// Successfully sent
+				default:
+					log.Printf("Media session channel full, skipping update")
+				}
+				lastSession = session
+			}
+		}
+	}
+}
+
+// doMediaPoll performs a single poll for media sessions.
+// Returns the current media session, or nil if no matching media is playing.
+// The second return value indicates whether the result is valid (not an error).
+func (p *Poller) doMediaPoll() (*MediaSession, bool) {
+	p.mu.RLock()
+	mediaTypes := p.mediaTypes
+	p.mu.RUnlock()
+
+	sessions, err := p.client.GetMediaSessions(p.userID, mediaTypes)
+	if err != nil {
+		log.Printf("Media poll error: %v", err)
+
+		// Handle error state transition (Story 6.5)
+		p.mu.Lock()
+		wasInErrorState := p.inErrorState
+		p.inErrorState = true
+		p.lastErrorTime = time.Now()
+		onError := p.onError
+		p.mu.Unlock()
+
+		if !wasInErrorState && onError != nil {
+			onError(err)
+		}
+
+		return nil, false
+	}
+
+	// Connection successful - check if recovering from error state
+	p.mu.Lock()
+	wasInErrorState := p.inErrorState
+	p.inErrorState = false
+	onRecovered := p.onRecovered
+	p.mu.Unlock()
+
+	if wasInErrorState && onRecovered != nil {
+		log.Printf("Plex connection recovered")
+		onRecovered()
+	}
+
+	if len(sessions) == 0 {
+		return nil, true
+	}
+
+	// Return the first (most recent) session
+	return &sessions[0], true
+}
+
+// mediaSessionChanged determines if the media session state has meaningfully changed.
+// Used to avoid emitting duplicate updates in multi-media mode.
+func mediaSessionChanged(prev, curr *MediaSession) bool {
+	// Both nil - no change
+	if prev == nil && curr == nil {
+		return false
+	}
+
+	// One nil, one not - definite change
+	if prev == nil || curr == nil {
+		return true
+	}
+
+	// Compare key session attributes
+	if prev.SessionKey != curr.SessionKey {
+		return true
+	}
+
+	if prev.State != curr.State {
+		return true
+	}
+
+	if prev.Title != curr.Title {
+		return true
+	}
+
+	if prev.MediaType != curr.MediaType {
+		return true
+	}
+
+	// Music-specific changes
+	if prev.Artist != curr.Artist {
+		return true
+	}
+
+	if prev.Album != curr.Album {
+		return true
+	}
+
+	// TV-specific changes
+	if prev.ShowTitle != curr.ShowTitle {
+		return true
+	}
+
+	if prev.Season != curr.Season {
+		return true
+	}
+
+	if prev.Episode != curr.Episode {
+		return true
+	}
+
+	return false
 }
 
 // sessionChanged determines if the session state has meaningfully changed.

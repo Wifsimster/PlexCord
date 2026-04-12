@@ -63,7 +63,7 @@ type UpdateInfo struct {
 }
 
 // GitHubRepo is the repository to check for updates.
-const GitHubRepo = "your-username/PlexCord"
+const GitHubRepo = "Wifsimster/PlexCord"
 
 // CheckForUpdate checks GitHub releases for a newer version.
 func CheckForUpdate() (*UpdateInfo, error) {
