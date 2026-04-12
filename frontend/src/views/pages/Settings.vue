@@ -23,7 +23,11 @@ import {
     CheckForUpdate,
     OpenReleasesPage,
     OpenReleaseURL,
-    ResetApplication
+    ResetApplication,
+    GetHideWhenPaused,
+    SetHideWhenPaused,
+    GetPresenceFormat,
+    SetPresenceFormat
 } from '../../../wailsjs/go/main/App';
 
 const router = useRouter();
@@ -37,6 +41,14 @@ const minimizeToTray = ref(true);
 const discordClientId = ref('');
 const defaultClientId = ref('');
 
+// Hide when paused
+const hideWhenPaused = ref(false);
+const hideWhenPausedDelay = ref(0);
+
+// Custom presence format
+const presenceDetailsFormat = ref('');
+const presenceStateFormat = ref('');
+
 // Version info
 const version = ref(null);
 const updateInfo = ref(null);
@@ -48,6 +60,8 @@ const loading = ref({
     autoStart: false,
     minimizeToTray: false,
     clientId: false,
+    hideWhenPaused: false,
+    presenceFormat: false,
     reset: false
 });
 
@@ -63,6 +77,16 @@ onMounted(async () => {
         discordClientId.value = await GetDiscordClientID();
         defaultClientId.value = await GetDefaultDiscordClientID();
         version.value = await GetVersion();
+
+        // Load hide-when-paused settings
+        const pauseSettings = await GetHideWhenPaused();
+        hideWhenPaused.value = pauseSettings.enabled;
+        hideWhenPausedDelay.value = pauseSettings.delaySeconds;
+
+        // Load presence format settings
+        const formatSettings = await GetPresenceFormat();
+        presenceDetailsFormat.value = formatSettings.detailsFormat;
+        presenceStateFormat.value = formatSettings.stateFormat;
     } catch (error) {
         console.error('Failed to load settings:', error);
         toast.add({
@@ -171,6 +195,86 @@ const resetToDefaultClientId = () => {
     saveDiscordClientId();
 };
 
+// Hide when paused handler
+const updateHideWhenPaused = async (value) => {
+    loading.value.hideWhenPaused = true;
+    try {
+        await SetHideWhenPaused(value, hideWhenPausedDelay.value);
+        hideWhenPaused.value = value;
+    } catch (error) {
+        hideWhenPaused.value = !value;
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to update hide when paused setting',
+            life: 3000
+        });
+    } finally {
+        loading.value.hideWhenPaused = false;
+    }
+};
+
+const updateHideWhenPausedDelay = async () => {
+    loading.value.hideWhenPaused = true;
+    try {
+        await SetHideWhenPaused(hideWhenPaused.value, hideWhenPausedDelay.value);
+        toast.add({
+            severity: 'success',
+            summary: 'Saved',
+            detail: 'Hide when paused delay updated',
+            life: 2000
+        });
+    } catch (error) {
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to update delay',
+            life: 3000
+        });
+    } finally {
+        loading.value.hideWhenPaused = false;
+    }
+};
+
+// Presence format handlers
+const formatPreviewDetails = computed(() => {
+    const fmt = presenceDetailsFormat.value || '{track}';
+    return fmt.replace('{track}', 'Bohemian Rhapsody').replace('{artist}', 'Queen').replace('{album}', 'A Night at the Opera').replace('{year}', '1975').replace('{player}', 'Plexamp');
+});
+
+const formatPreviewState = computed(() => {
+    const fmt = presenceStateFormat.value || 'by {artist} \u2022 {album}';
+    return fmt.replace('{track}', 'Bohemian Rhapsody').replace('{artist}', 'Queen').replace('{album}', 'A Night at the Opera').replace('{year}', '1975').replace('{player}', 'Plexamp');
+});
+
+const savePresenceFormat = async () => {
+    loading.value.presenceFormat = true;
+    try {
+        await SetPresenceFormat(presenceDetailsFormat.value, presenceStateFormat.value);
+        toast.add({
+            severity: 'success',
+            summary: 'Saved',
+            detail: 'Presence format updated',
+            life: 2000
+        });
+    } catch (error) {
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to save presence format',
+            life: 3000
+        });
+    } finally {
+        loading.value.presenceFormat = false;
+    }
+};
+
+const resetPresenceFormat = () => {
+    presenceDetailsFormat.value = '';
+    presenceStateFormat.value = '';
+    savePresenceFormat();
+};
+
 // Update check
 const checkForUpdates = async () => {
     checkingUpdate.value = true;
@@ -273,7 +377,7 @@ const goToDashboard = () => {
                     <div class="text-sm text-muted-color">How often to check for playback changes (1-60 seconds)</div>
                 </div>
                 <div class="flex gap-2">
-                    <InputNumber v-model="pollingInterval" :min="1" :max="60" suffix=" sec" :disabled="loading.polling" class="flex-grow" />
+                    <InputNumber v-model="pollingInterval" :min="1" :max="60" suffix=" sec" :disabled="loading.polling" class="flex-grow" @keyup.enter="updatePollingInterval" />
                     <Button label="Save" :loading="loading.polling" @click="updatePollingInterval" />
                 </div>
             </div>
@@ -290,7 +394,7 @@ const goToDashboard = () => {
                     <Button v-if="!isUsingDefaultClientId" label="Reset to Default" severity="secondary" size="small" @click="resetToDefaultClientId" />
                 </div>
                 <div class="flex gap-2">
-                    <InputText v-model="discordClientId" :placeholder="defaultClientId" class="flex-grow" :disabled="loading.clientId" />
+                    <InputText v-model="discordClientId" :placeholder="defaultClientId" class="flex-grow" :disabled="loading.clientId" @keyup.enter="saveDiscordClientId" />
                     <Button label="Save" :loading="loading.clientId" @click="saveDiscordClientId" />
                 </div>
             </div>
@@ -306,16 +410,72 @@ const goToDashboard = () => {
                     <div class="font-medium">Start on Login</div>
                     <div class="text-sm text-muted-color">Automatically launch PlexCord when you log in</div>
                 </div>
-                <ToggleSwitch :modelValue="autoStart" @update:modelValue="updateAutoStart" :disabled="loading.autoStart" />
+                <ToggleSwitch :modelValue="autoStart" @update:modelValue="updateAutoStart" :disabled="loading.autoStart" aria-label="Start on Login" />
             </div>
 
             <!-- Minimize to Tray -->
-            <div class="flex items-center justify-between py-3">
+            <div class="flex items-center justify-between py-3 border-b border-surface-200 dark:border-surface-700">
                 <div>
                     <div class="font-medium">Minimize to Tray</div>
                     <div class="text-sm text-muted-color">Keep running in system tray when window is closed</div>
                 </div>
-                <ToggleSwitch :modelValue="minimizeToTray" @update:modelValue="updateMinimizeToTray" :disabled="loading.minimizeToTray" />
+                <ToggleSwitch :modelValue="minimizeToTray" @update:modelValue="updateMinimizeToTray" :disabled="loading.minimizeToTray" aria-label="Minimize to Tray" />
+            </div>
+
+            <!-- Hide When Paused -->
+            <div class="py-3">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <div class="font-medium">Hide When Paused</div>
+                        <div class="text-sm text-muted-color">Clear Discord presence when playback is paused</div>
+                    </div>
+                    <ToggleSwitch :modelValue="hideWhenPaused" @update:modelValue="updateHideWhenPaused" :disabled="loading.hideWhenPaused" aria-label="Hide When Paused" />
+                </div>
+                <div v-if="hideWhenPaused" class="flex gap-2 mt-2">
+                    <InputNumber v-model="hideWhenPausedDelay" :min="0" :max="300" suffix=" sec" :disabled="loading.hideWhenPaused" class="flex-grow" placeholder="0 = immediate" @keyup.enter="updateHideWhenPausedDelay" />
+                    <Button label="Save" :loading="loading.hideWhenPaused" @click="updateHideWhenPausedDelay" />
+                </div>
+                <div v-if="hideWhenPaused" class="text-xs text-muted-color mt-1">Delay before clearing (0 = immediate)</div>
+            </div>
+        </div>
+
+        <!-- Appearance Settings -->
+        <div class="card mb-4">
+            <h2 class="text-xl font-semibold mb-4">Appearance</h2>
+
+            <!-- Presence Details Format -->
+            <div class="py-3 border-b border-surface-200 dark:border-surface-700">
+                <div class="mb-2">
+                    <div class="font-medium">Presence Details Format</div>
+                    <div class="text-sm text-muted-color">First line of Discord presence. Tokens: {track}, {artist}, {album}, {year}, {player}</div>
+                </div>
+                <div class="flex gap-2">
+                    <InputText v-model="presenceDetailsFormat" placeholder="{track}" class="flex-grow" :disabled="loading.presenceFormat" @keyup.enter="savePresenceFormat" />
+                </div>
+            </div>
+
+            <!-- Presence State Format -->
+            <div class="py-3 border-b border-surface-200 dark:border-surface-700">
+                <div class="mb-2">
+                    <div class="font-medium">Presence State Format</div>
+                    <div class="text-sm text-muted-color">Second line of Discord presence. Tokens: {track}, {artist}, {album}, {year}, {player}</div>
+                </div>
+                <div class="flex gap-2">
+                    <InputText v-model="presenceStateFormat" placeholder="by {artist} &bull; {album}" class="flex-grow" :disabled="loading.presenceFormat" @keyup.enter="savePresenceFormat" />
+                </div>
+            </div>
+
+            <!-- Preview & Save -->
+            <div class="py-3">
+                <div class="mb-3 p-3 rounded-lg bg-surface-100 dark:bg-surface-800">
+                    <div class="text-xs text-muted-color mb-1">Preview</div>
+                    <div class="font-medium text-surface-900 dark:text-surface-0">{{ formatPreviewDetails }}</div>
+                    <div class="text-sm text-muted-color">{{ formatPreviewState }}</div>
+                </div>
+                <div class="flex gap-2 justify-end">
+                    <Button label="Reset to Defaults" severity="secondary" size="small" @click="resetPresenceFormat" />
+                    <Button label="Save" :loading="loading.presenceFormat" @click="savePresenceFormat" />
+                </div>
             </div>
         </div>
 

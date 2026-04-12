@@ -23,6 +23,14 @@ type Config struct {
 	AutoStart            bool   `json:"autoStart"`
 	SetupCompleted       bool   `json:"setupCompleted"` // True when setup wizard is done
 	SetupSkipped         bool   `json:"setupSkipped"`   // True when user skipped setup
+
+	// Presence behavior
+	HideWhenPaused      bool `json:"hideWhenPaused"`      // Clear presence when playback is paused
+	HideWhenPausedDelay int  `json:"hideWhenPausedDelay"` // Seconds to wait before clearing (0 = immediate)
+
+	// Custom presence format strings
+	PresenceDetailsFormat string `json:"presenceDetailsFormat"` // Format for Details line, e.g. "{track}"
+	PresenceStateFormat   string `json:"presenceStateFormat"`   // Format for State line, e.g. "by {artist} • {album}"
 }
 
 // DefaultConfig returns a configuration with default values.

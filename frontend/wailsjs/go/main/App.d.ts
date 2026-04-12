@@ -36,6 +36,12 @@ export function GetDiscordRetryState():Promise<retry.RetryState>;
 
 export function GetErrorInfo(arg1:string):Promise<errors.ErrorInfo>;
 
+export function GetHideWhenPaused():Promise<Record<string, any>>;
+
+export function GetPresenceFormat():Promise<main.PresenceFormatSettings>;
+
+export function IsPresencePaused():Promise<boolean>;
+
 export function GetMinimizeToTray():Promise<boolean>;
 
 export function GetPlexConnectionStatus():Promise<main.PlexConnectionStatus>;
@@ -87,6 +93,12 @@ export function SavePlexUserSelection(arg1:string,arg2:string):Promise<void>;
 export function SaveServerURL(arg1:string):Promise<void>;
 
 export function SetAutoStart(arg1:boolean):Promise<void>;
+
+export function SetHideWhenPaused(arg1:boolean,arg2:number):Promise<void>;
+
+export function SetPresenceFormat(arg1:string,arg2:string):Promise<void>;
+
+export function TogglePresencePause():Promise<boolean>;
 
 export function SetMinimizeToTray(arg1:boolean):Promise<void>;
 

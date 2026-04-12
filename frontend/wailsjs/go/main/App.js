@@ -62,6 +62,18 @@ export function GetErrorInfo(arg1) {
   return window['go']['main']['App']['GetErrorInfo'](arg1);
 }
 
+export function GetHideWhenPaused() {
+  return window['go']['main']['App']['GetHideWhenPaused']();
+}
+
+export function GetPresenceFormat() {
+  return window['go']['main']['App']['GetPresenceFormat']();
+}
+
+export function IsPresencePaused() {
+  return window['go']['main']['App']['IsPresencePaused']();
+}
+
 export function GetMinimizeToTray() {
   return window['go']['main']['App']['GetMinimizeToTray']();
 }
@@ -164,6 +176,18 @@ export function SaveServerURL(arg1) {
 
 export function SetAutoStart(arg1) {
   return window['go']['main']['App']['SetAutoStart'](arg1);
+}
+
+export function SetHideWhenPaused(arg1, arg2) {
+  return window['go']['main']['App']['SetHideWhenPaused'](arg1, arg2);
+}
+
+export function SetPresenceFormat(arg1, arg2) {
+  return window['go']['main']['App']['SetPresenceFormat'](arg1, arg2);
+}
+
+export function TogglePresencePause() {
+  return window['go']['main']['App']['TogglePresencePause']();
 }
 
 export function SetMinimizeToTray(arg1) {

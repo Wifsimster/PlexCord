@@ -252,9 +252,10 @@ func (c *Client) GetSessions(userID string) ([]Session, error) {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid sessions response format")
 	}
 
-	// Filter and convert sessions for the specified user
-	sessions := make([]Session, 0, len(sessionsResp.Sessions))
-	for _, entry := range sessionsResp.Sessions {
+	// Filter and convert sessions for the specified user (all media types)
+	allEntries := sessionsResp.AllEntries()
+	sessions := make([]Session, 0, len(allEntries))
+	for _, entry := range allEntries {
 		// Filter by user ID if specified
 		if userID != "" && entry.User.ID != userID {
 			continue
@@ -318,9 +319,10 @@ func (c *Client) GetMusicSessions(userID string) ([]MusicSession, error) {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid sessions response format")
 	}
 
-	// Filter for music sessions (type="track") belonging to specified user
-	musicSessions := make([]MusicSession, 0, len(sessionsResp.Sessions))
-	for _, entry := range sessionsResp.Sessions {
+	// Filter for music sessions belonging to specified user.
+	// Only Tracks are music sessions - Videos and Photos are not included.
+	musicSessions := make([]MusicSession, 0, len(sessionsResp.Tracks))
+	for _, entry := range sessionsResp.Tracks {
 		// Filter by user ID if specified
 		if userID != "" && entry.User.ID != userID {
 			continue
@@ -367,6 +369,92 @@ func (c *Client) GetMusicSessions(userID string) ([]MusicSession, error) {
 	}
 
 	return musicSessions, nil
+}
+
+// GetMediaSessions retrieves active media sessions of the specified types for the specified user.
+// mediaTypes controls which media types to include (e.g., ["music"], ["music", "movie", "tv"]).
+// If mediaTypes is nil or empty, all media types are returned.
+// Applies fallback values for missing metadata and builds absolute artwork URLs.
+func (c *Client) GetMediaSessions(userID string, mediaTypes []string) ([]MediaSession, error) {
+	// Use 500ms timeout for polling performance (NFR5)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	sessionsURL := fmt.Sprintf("%s/status/sessions?X-Plex-Token=%s", c.serverURL, url.QueryEscape(c.token))
+	req, err := http.NewRequestWithContext(ctx, "GET", sessionsURL, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to create sessions request")
+	}
+
+	req.Header.Set("User-Agent", "PlexCord/1.0")
+	req.Header.Set("Accept", "application/xml")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, mapHTTPError(err, ctx)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Warning: Failed to close response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, mapHTTPStatusCode(resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to read sessions response")
+	}
+
+	var sessionsResp SessionsResponse
+	if err := xml.Unmarshal(body, &sessionsResp); err != nil {
+		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid sessions response format")
+	}
+
+	// Build a set of allowed media types for fast lookup
+	typeFilter := make(map[string]bool, len(mediaTypes))
+	for _, mt := range mediaTypes {
+		typeFilter[mt] = true
+	}
+	filterEnabled := len(typeFilter) > 0
+
+	// Merge all session entries from all XML element types
+	allEntries := sessionsResp.AllEntries()
+	mediaSessions := make([]MediaSession, 0, len(allEntries))
+	for _, entry := range allEntries {
+		// Filter by user ID if specified
+		if userID != "" && entry.User.ID != userID {
+			continue
+		}
+
+		// Filter by media type if specified
+		entryMediaType := mediaTypeFromPlexType(entry.Type)
+		if filterEnabled && !typeFilter[entryMediaType] {
+			continue
+		}
+
+		// Build absolute artwork URL if thumb path exists
+		thumbURL := ""
+		if entry.Thumb != "" {
+			thumbURL = c.buildArtworkURL(entry.Thumb)
+		}
+
+		session := NewMediaSessionFromEntry(entry, thumbURL)
+
+		// Apply fallback values for missing metadata
+		session.ApplyFallbacks()
+
+		mediaSessions = append(mediaSessions, session)
+	}
+
+	// Return empty slice (not nil) when no sessions - this is not an error
+	if mediaSessions == nil {
+		mediaSessions = []MediaSession{}
+	}
+
+	return mediaSessions, nil
 }
 
 // buildArtworkURL constructs an absolute URL for album artwork.

@@ -175,25 +175,32 @@ func (pm *PresenceManager) GetCurrentPresence() *PresenceData {
 
 // buildActivity creates a rich-go Activity from PresenceData.
 func buildActivity(data *PresenceData) client.Activity {
-	activity := client.Activity{
-		Details: data.Track,
-	}
+	activity := client.Activity{}
 
-	// Build state line: "by Artist • Album" or just state
-	if data.Artist != "" {
-		if data.Album != "" {
-			activity.State = "by " + data.Artist + " • " + data.Album
-		} else {
-			activity.State = "by " + data.Artist
+	// Apply format strings if provided, otherwise use defaults
+	if data.DetailsFormat != "" || data.StateFormat != "" {
+		activity.Details = applyFormatString(data.DetailsFormat, data)
+		activity.State = applyFormatString(data.StateFormat, data)
+	} else {
+		// Default formatting
+		activity.Details = data.Track
+
+		// Build state line: "by Artist • Album" or just state
+		if data.Artist != "" {
+			if data.Album != "" {
+				activity.State = "by " + data.Artist + " • " + data.Album
+			} else {
+				activity.State = "by " + data.Artist
+			}
 		}
-	}
 
-	// Add playback state to state line if no artist
-	if data.Artist == "" && data.State != "" {
-		if data.State == "paused" {
-			activity.State = "Paused"
-		} else {
-			activity.State = "Playing on Plex"
+		// Add playback state to state line if no artist
+		if data.Artist == "" && data.State != "" {
+			if data.State == "paused" {
+				activity.State = "Paused"
+			} else {
+				activity.State = "Playing on Plex"
+			}
 		}
 	}
 
@@ -204,9 +211,17 @@ func buildActivity(data *PresenceData) client.Activity {
 		}
 	}
 
-	// Use Plex logo for large image
-	activity.LargeImage = "plex"
-	activity.LargeText = "Plex Music"
+	// Use album artwork if available, fall back to Plex logo
+	if data.ArtworkURL != "" {
+		activity.LargeImage = data.ArtworkURL
+		activity.LargeText = data.Album
+		if activity.LargeText == "" {
+			activity.LargeText = "Plex Music"
+		}
+	} else {
+		activity.LargeImage = "plex"
+		activity.LargeText = "Plex Music"
+	}
 
 	// Add small image to show playback state
 	if data.State == "paused" {
@@ -218,6 +233,24 @@ func buildActivity(data *PresenceData) client.Activity {
 	}
 
 	return activity
+}
+
+// applyFormatString replaces format tokens in a format string with actual values.
+// Supported tokens: {track}, {artist}, {album}, {year}, {player}
+func applyFormatString(format string, data *PresenceData) string {
+	if format == "" {
+		return ""
+	}
+
+	replacer := strings.NewReplacer(
+		"{track}", data.Track,
+		"{artist}", data.Artist,
+		"{album}", data.Album,
+		"{year}", data.Year,
+		"{player}", data.Player,
+	)
+
+	return replacer.Replace(format)
 }
 
 // ValidateClientID checks if a Discord Client ID is valid for configuration.
@@ -301,17 +334,23 @@ func isConnectionLostError(err error) bool {
 
 // UpdatePresenceFromPlayback is a convenience method to update presence from playback data.
 // It handles the conversion from Plex session data format to Discord presence format.
-func (pm *PresenceManager) UpdatePresenceFromPlayback(track, artist, album, state string, duration, position int64) error {
+// artworkURL is used as the large image if provided; pass empty string to use the default Plex logo.
+// detailsFormat and stateFormat are custom format strings; pass empty strings to use defaults.
+func (pm *PresenceManager) UpdatePresenceFromPlayback(track, artist, album, state string, duration, position int64, artworkURL, player, detailsFormat, stateFormat string) error {
 	startTime := time.Now().Add(-time.Duration(position) * time.Millisecond)
 
 	data := &PresenceData{
-		Track:     track,
-		Artist:    artist,
-		Album:     album,
-		State:     state,
-		Duration:  duration,
-		Position:  position,
-		StartTime: &startTime,
+		Track:         track,
+		Artist:        artist,
+		Album:         album,
+		State:         state,
+		Duration:      duration,
+		Position:      position,
+		StartTime:     &startTime,
+		ArtworkURL:    artworkURL,
+		Player:        player,
+		DetailsFormat: detailsFormat,
+		StateFormat:   stateFormat,
 	}
 
 	return pm.SetPresence(data)

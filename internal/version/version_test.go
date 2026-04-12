@@ -117,7 +117,7 @@ func TestGetReleasesURL(t *testing.T) {
 	if url == "" {
 		t.Error("GetReleasesURL should not return empty string")
 	}
-	if url != "https://github.com/your-username/PlexCord/releases" {
+	if url != "https://github.com/Wifsimster/PlexCord/releases" {
 		t.Errorf("GetReleasesURL = %q, want URL containing releases", url)
 	}
 }
