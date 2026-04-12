@@ -41,6 +41,16 @@ func GetConfigPath() (string, error) {
 	return filepath.Join(configDir, "config.json"), nil
 }
 
+// GetConfigDir returns the platform-specific configuration directory path.
+// Returns an empty string if the directory cannot be determined.
+func GetConfigDir() string {
+	configPath, err := GetConfigPath()
+	if err != nil {
+		return ""
+	}
+	return filepath.Dir(configPath)
+}
+
 // EnsureConfigDir creates the configuration directory if it doesn't exist
 func EnsureConfigDir() error {
 	configPath, err := GetConfigPath()

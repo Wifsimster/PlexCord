@@ -12,6 +12,7 @@ import (
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
 	"plexcord/internal/errors"
+	"plexcord/internal/history"
 	"plexcord/internal/keychain"
 	"plexcord/internal/platform"
 	"plexcord/internal/plex"
@@ -44,6 +45,9 @@ type App struct {
 
 	// PIN authentication (maintain same client ID for PIN lifecycle)
 	plexAuth *plex.Authenticator
+
+	// Listening history
+	history *history.Store
 
 	// Presence pause state
 	presencePaused bool          // Manual one-click pause toggle
@@ -80,6 +84,10 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.config = cfg
 	log.Printf("Configuration loaded successfully")
+
+	// Initialize listening history store
+	configDir := config.GetConfigDir()
+	a.history = history.NewStore(configDir, 200)
 
 	// Setup retry callbacks for automatic reconnection
 	a.setupRetryCallbacks()
@@ -731,6 +739,18 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 			a.sessionMu.Lock()
 			a.currentSession = session
 			a.sessionMu.Unlock()
+
+			// Record to listening history (deduplication handled by Store)
+			if a.history != nil {
+				a.history.Add(history.Entry{
+					Track:     session.Track,
+					Artist:    session.Artist,
+					Album:     session.Album,
+					Duration:  session.Duration,
+					StartedAt: time.Now(),
+					ThumbURL:  session.ThumbURL,
+				})
+			}
 
 			// Check if manually paused - skip all presence updates
 			a.pauseMu.Lock()
@@ -1562,4 +1582,33 @@ func (a *App) GetResourceStats() ResourceStats {
 		GoroutineCount: goruntime.NumGoroutine(),
 		Timestamp:      time.Now().Format(time.RFC3339),
 	}
+}
+
+// ============================================================================
+// Listening History
+// ============================================================================
+
+// GetListeningHistory returns the most recent listening history entries.
+// Pass limit=0 or negative to get all entries (up to max stored).
+func (a *App) GetListeningHistory(limit int) []history.Entry {
+	if a.history == nil {
+		return nil
+	}
+	return a.history.GetRecent(limit)
+}
+
+// GetListeningStats returns aggregate listening statistics.
+func (a *App) GetListeningStats() history.Stats {
+	if a.history == nil {
+		return history.Stats{}
+	}
+	return a.history.GetStats()
+}
+
+// ClearListeningHistory removes all listening history entries.
+func (a *App) ClearListeningHistory() {
+	if a.history == nil {
+		return
+	}
+	a.history.Clear()
 }
