@@ -157,8 +157,8 @@ func (p *Poller) pollLoop(ctx context.Context) {
 	var lastSession *MusicSession
 
 	// Perform immediate first poll (AC8: polling begins immediately)
-	session := p.doPoll()
-	if session != nil {
+	session, ok := p.doPoll()
+	if ok && session != nil {
 		select {
 		case p.sessionC <- session:
 			// Successfully sent initial session
@@ -188,10 +188,11 @@ func (p *Poller) pollLoop(ctx context.Context) {
 				log.Printf("Poller interval changed to %v", interval)
 			}
 
-			session := p.doPoll()
+			session, ok := p.doPoll()
 
-			// Only emit if session state changed
-			if sessionChanged(lastSession, session) {
+			// Only emit if poll succeeded and session state changed.
+			// On error, keep lastSession unchanged to avoid false "stopped" events.
+			if ok && sessionChanged(lastSession, session) {
 				select {
 				case p.sessionC <- session:
 					// Successfully sent
@@ -207,8 +208,9 @@ func (p *Poller) pollLoop(ctx context.Context) {
 
 // doPoll performs a single poll for music sessions.
 // Returns the current music session, or nil if no music is playing.
+// The second return value indicates whether the result is valid (not an error).
 // Also handles error state transitions and callbacks (Story 6.5).
-func (p *Poller) doPoll() *MusicSession {
+func (p *Poller) doPoll() (*MusicSession, bool) {
 	sessions, err := p.client.GetMusicSessions(p.userID)
 	if err != nil {
 		// Log error but continue polling (AC4: failed polls continue polling)
@@ -227,7 +229,7 @@ func (p *Poller) doPoll() *MusicSession {
 			onError(err)
 		}
 
-		return nil
+		return nil, false
 	}
 
 	// Connection successful - check if recovering from error state
@@ -243,11 +245,11 @@ func (p *Poller) doPoll() *MusicSession {
 	}
 
 	if len(sessions) == 0 {
-		return nil
+		return nil, true
 	}
 
 	// Return the first (most recent) music session
-	return &sessions[0]
+	return &sessions[0], true
 }
 
 // sessionChanged determines if the session state has meaningfully changed.

@@ -43,12 +43,13 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
 
         /**
          * Get connection status label
+         * Note: Uses function form to access other getters via `this`
          */
-        statusLabel: (state) => {
-            if (state.connected && state.polling) return 'Connected';
-            if (state.loading) return 'Connecting...';
-            if (state.isRetrying) return 'Retrying...';
-            if (state.inErrorState) return 'Disconnected';
+        statusLabel() {
+            if (this.connected && this.polling) return 'Connected';
+            if (this.loading) return 'Connecting...';
+            if (this.isRetrying) return 'Retrying...';
+            if (this.inErrorState) return 'Disconnected';
             return 'Not Connected';
         }
     },

@@ -249,7 +249,7 @@ export const useSetupStore = defineStore('setup', {
                 currentStep: this.currentStep,
                 completedSteps: this.completedSteps,
                 setupComplete: this.setupComplete,
-                plexToken: this.plexToken,
+                // Never persist the token to localStorage - it's stored securely in the OS keychain
                 plexServerUrl: this.plexServerUrl,
                 plexUserId: this.plexUserId,
                 discoveredServers: this.discoveredServers,

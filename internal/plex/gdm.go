@@ -101,6 +101,11 @@ func parseGDMResponse(data []byte, ip string) (Server, error) {
 		return server, fmt.Errorf("invalid GDM response: missing Name")
 	}
 
+	// Default to standard Plex port if not provided
+	if server.Port == "" {
+		server.Port = "32400"
+	}
+
 	return server, nil
 }
 

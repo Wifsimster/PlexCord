@@ -15,9 +15,9 @@ export function useConnectionStatus() {
     const discordStore = useDiscordConnectionStore();
 
     // Get reactive refs from stores
-    const { connected: plexConnected, loading: plexLoading, error: plexError, lastConnectedRelative: plexLastConnected, isRetrying: plexRetrying, statusLabel: plexStatus } = storeToRefs(plexStore);
+    const { connected: plexConnected, loading: plexLoading, error: plexError, lastConnectedRelative: plexLastConnected, isRetrying: plexRetrying, statusLabel: plexStatus, retryState: plexRetryState } = storeToRefs(plexStore);
 
-    const { connected: discordConnected, loading: discordLoading, error: discordError, lastConnectedRelative: discordLastConnected, isRetrying: discordRetrying, statusLabel: discordStatus } = storeToRefs(discordStore);
+    const { connected: discordConnected, loading: discordLoading, error: discordError, lastConnectedRelative: discordLastConnected, isRetrying: discordRetrying, statusLabel: discordStatus, retryState: discordRetryState } = storeToRefs(discordStore);
 
     // Computed properties combining both stores
     const allConnected = computed(() => plexConnected.value && discordConnected.value);
@@ -70,6 +70,7 @@ export function useConnectionStatus() {
             error: plexError,
             lastConnected: plexLastConnected,
             isRetrying: plexRetrying,
+            retryState: plexRetryState,
             status: plexStatus,
             retry: () => plexStore.retry()
         },
@@ -81,6 +82,7 @@ export function useConnectionStatus() {
             error: discordError,
             lastConnected: discordLastConnected,
             isRetrying: discordRetrying,
+            retryState: discordRetryState,
             status: discordStatus,
             retry: () => discordStore.retry(),
             connect: (clientId) => discordStore.connect(clientId)

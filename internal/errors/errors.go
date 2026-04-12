@@ -6,6 +6,30 @@ import (
 	"strings"
 )
 
+// Pre-compiled regexes for sensitive data detection (avoids recompilation on every call)
+var (
+	hexPattern    = regexp.MustCompile(`[0-9a-fA-F]{20,}`)
+	base64Pattern = regexp.MustCompile(`[A-Za-z0-9+/]{30,}={0,2}`)
+
+	// Sanitization patterns
+	sanitizePatterns = []struct {
+		pattern     *regexp.Regexp
+		replacement string
+	}{
+		{regexp.MustCompile(`(?i)(token[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
+		{regexp.MustCompile(`(?i)(password[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
+		{regexp.MustCompile(`(?i)(secret[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
+		{regexp.MustCompile(`(?i)(key[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
+		{regexp.MustCompile(`(?i)(credential[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
+		{regexp.MustCompile(`(?i)(x-plex-token[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
+		{regexp.MustCompile(`(?i)(api_key[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
+		{regexp.MustCompile(`(?i)(apikey[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
+	}
+
+	sanitizeHexPattern    = regexp.MustCompile(`\b[0-9a-fA-F]{20,}\b`)
+	sanitizeBase64Pattern = regexp.MustCompile(`\b[A-Za-z0-9+/]{30,}={0,2}\b`)
+)
+
 // AppError represents an application error with code and message
 type AppError struct {
 	Code    string `json:"code"`
@@ -128,13 +152,11 @@ func ContainsSensitiveData(message string) bool {
 	}
 
 	// Check for long hex strings (likely tokens)
-	hexPattern := regexp.MustCompile(`[0-9a-fA-F]{20,}`)
 	if hexPattern.MatchString(message) {
 		return true
 	}
 
 	// Check for long base64-like strings (likely encoded tokens)
-	base64Pattern := regexp.MustCompile(`[A-Za-z0-9+/]{30,}={0,2}`)
 	return base64Pattern.MatchString(message)
 }
 
@@ -190,32 +212,15 @@ func SanitizeForLogging(message string) string {
 
 	// Pattern 1: Sensitive keyword with assignment (token=value, password:value, etc.)
 	// Replace the value with masked version
-	sensitivePatterns := []struct {
-		pattern     *regexp.Regexp
-		replacement string
-	}{
-		// Match "token=value" or "token: value" or "token value"
-		{regexp.MustCompile(`(?i)(token[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
-		{regexp.MustCompile(`(?i)(password[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
-		{regexp.MustCompile(`(?i)(secret[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
-		{regexp.MustCompile(`(?i)(key[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
-		{regexp.MustCompile(`(?i)(credential[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
-		{regexp.MustCompile(`(?i)(x-plex-token[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
-		{regexp.MustCompile(`(?i)(api_key[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
-		{regexp.MustCompile(`(?i)(apikey[=:\s]+)([^\s,;]+)`), "${1}***REDACTED***"},
-	}
-
-	for _, sp := range sensitivePatterns {
+	for _, sp := range sanitizePatterns {
 		result = sp.pattern.ReplaceAllString(result, sp.replacement)
 	}
 
 	// Pattern 2: Long hex strings (likely tokens) - mask the middle
-	hexPattern := regexp.MustCompile(`\b[0-9a-fA-F]{20,}\b`)
-	result = hexPattern.ReplaceAllStringFunc(result, maskMiddle)
+	result = sanitizeHexPattern.ReplaceAllStringFunc(result, maskMiddle)
 
 	// Pattern 3: Long base64-like strings - mask the middle
-	base64Pattern := regexp.MustCompile(`\b[A-Za-z0-9+/]{30,}={0,2}\b`)
-	result = base64Pattern.ReplaceAllStringFunc(result, maskMiddle)
+	result = sanitizeBase64Pattern.ReplaceAllStringFunc(result, maskMiddle)
 
 	return result
 }
