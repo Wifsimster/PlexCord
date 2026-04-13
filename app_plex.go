@@ -6,13 +6,10 @@ import (
 	"net/url"
 	"time"
 
-	"plexcord/internal/config"
 	"plexcord/internal/errors"
+	"plexcord/internal/events"
 	"plexcord/internal/history"
-	"plexcord/internal/keychain"
 	"plexcord/internal/plex"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // StartPlexPINAuth initiates PIN-based authentication with Plex.
@@ -114,7 +111,7 @@ func (a *App) SavePlexToken(token string) error {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "token cannot be empty")
 	}
 
-	err := keychain.SetToken(token)
+	err := a.tokens.Set(token)
 	if err != nil {
 		log.Printf("ERROR: Failed to store Plex token: %v", err)
 		return err
@@ -128,7 +125,7 @@ func (a *App) SavePlexToken(token string) error {
 // This method is called during application startup to authenticate with Plex.
 // Returns an error if the token cannot be retrieved or if no token has been set.
 func (a *App) GetPlexToken() (string, error) {
-	token, err := keychain.GetToken()
+	token, err := a.tokens.Get()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve Plex token: %v", err)
 		return "", err
@@ -176,7 +173,7 @@ func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, 
 	log.Printf("Validating Plex connection to: %s", serverURL)
 
 	// Retrieve token from keychain
-	token, err := keychain.GetToken()
+	token, err := a.tokens.Get()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve token: %v", err)
 		return nil, errors.Wrap(err, errors.CONFIG_READ_FAILED, "failed to retrieve token")
@@ -188,7 +185,7 @@ func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, 
 	}
 
 	// Create Plex client and validate connection
-	client := plex.NewClient(token, serverURL)
+	client := a.plexFactory(token, serverURL)
 	result, err := client.ValidateConnection()
 	if err != nil {
 		log.Printf("ERROR: Connection validation failed: %v", err)
@@ -217,7 +214,7 @@ func (a *App) GetPlexUsers(serverURL string) ([]plex.PlexUser, error) {
 	log.Printf("Retrieving Plex users from: %s", serverURL)
 
 	// Retrieve token from keychain
-	token, err := keychain.GetToken()
+	token, err := a.tokens.Get()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve token: %v", err)
 		return nil, errors.Wrap(err, errors.CONFIG_READ_FAILED, "failed to retrieve token")
@@ -229,7 +226,7 @@ func (a *App) GetPlexUsers(serverURL string) ([]plex.PlexUser, error) {
 	}
 
 	// Create Plex client and get users
-	client := plex.NewClient(token, serverURL)
+	client := a.plexFactory(token, serverURL)
 	users, err := client.GetUsers()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve users: %v", err)
@@ -257,7 +254,7 @@ func (a *App) SavePlexUserSelection(userID, userName string) error {
 	a.config.SelectedPlexUserName = userName
 
 	// Save config to disk
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save user selection: %v", err)
 		return err
 	}
@@ -285,7 +282,7 @@ func (a *App) SaveServerURL(serverURL string) error {
 	a.config.ServerURL = serverURL
 
 	// Save config to disk
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save server URL: %v", err)
 		return err
 	}
@@ -323,7 +320,7 @@ func (a *App) StartSessionPolling() error {
 	}
 
 	// Retrieve token from keychain
-	token, err := keychain.GetToken()
+	token, err := a.tokens.Get()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve token for polling: %v", err)
 		return errors.Wrap(err, errors.CONFIG_READ_FAILED, "failed to retrieve token")
@@ -355,7 +352,7 @@ func (a *App) StartSessionPolling() error {
 			a.clearDiscordOnStop()
 
 			// Emit event for frontend to show error status
-			runtime.EventsEmit(a.ctx, "PlexConnectionError", map[string]interface{}{
+			a.bus.Emit(events.PlexConnectionError, map[string]interface{}{
 				"error":     err.Error(),
 				"errorCode": errors.GetCode(err),
 			})
@@ -372,7 +369,7 @@ func (a *App) StartSessionPolling() error {
 			a.updatePlexConnectionTime()
 
 			// Emit event for frontend to clear error status
-			runtime.EventsEmit(a.ctx, "PlexConnectionRestored", nil)
+			a.bus.Emit(events.PlexConnectionRestored, nil)
 		},
 	)
 
@@ -425,7 +422,7 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 
 			if manuallyPaused {
 				// Skip presence updates while manually paused
-				runtime.EventsEmit(a.ctx, "PlaybackUpdated", session)
+				a.bus.Emit(events.PlaybackUpdated, session)
 				lastSession = session
 				continue
 			}
@@ -433,7 +430,7 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 			// Handle hide-when-paused for paused sessions
 			if session.State == "paused" && a.config.HideWhenPaused {
 				a.scheduleHideOnPause()
-				runtime.EventsEmit(a.ctx, "PlaybackUpdated", session)
+				a.bus.Emit(events.PlaybackUpdated, session)
 				lastSession = session
 				continue
 			}
@@ -444,7 +441,7 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 			// Update Discord Rich Presence if connected
 			a.updateDiscordFromSession(session)
 
-			runtime.EventsEmit(a.ctx, "PlaybackUpdated", session)
+			a.bus.Emit(events.PlaybackUpdated, session)
 			lastSession = session
 		} else if lastSession != nil {
 			// Music stopped - clear Discord presence and emit frontend event
@@ -461,7 +458,7 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 			// Clear Discord Rich Presence
 			a.clearDiscordOnStop()
 
-			runtime.EventsEmit(a.ctx, "PlaybackStopped", nil)
+			a.bus.Emit(events.PlaybackStopped, nil)
 			lastSession = nil
 		}
 	}
@@ -546,7 +543,7 @@ func (a *App) SetPollingInterval(intervalSeconds int) error {
 
 	// Update config
 	a.config.PollingInterval = intervalSeconds
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save polling interval: %v", err)
 		return err
 	}
@@ -592,7 +589,7 @@ func (a *App) autoConnectPlex() {
 		return
 	}
 
-	token, err := keychain.GetToken()
+	token, err := a.tokens.Get()
 	if err != nil {
 		log.Printf("Warning: Failed to retrieve Plex token on startup: %v", err)
 		a.startPlexRetry(err)
@@ -624,7 +621,7 @@ func (a *App) autoConnectPlex() {
 func (a *App) updatePlexConnectionTime() {
 	now := time.Now()
 	a.config.PlexLastConnected = &now
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("Warning: Failed to save Plex connection time: %v", err)
 	}
 }

@@ -139,8 +139,10 @@ func (pm *PresenceManager) SetPresence(data *PresenceData) error {
 	return nil
 }
 
-// ClearPresence removes the Discord Rich Presence.
-// Returns an error if not connected or if the clear fails.
+// ClearPresence removes the Discord Rich Presence without disconnecting.
+// Sends an empty activity to clear the presence display while keeping the
+// Discord IPC connection alive so subsequent presence updates work immediately.
+// Returns nil if not connected (idempotent).
 func (pm *PresenceManager) ClearPresence() error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -149,19 +151,17 @@ func (pm *PresenceManager) ClearPresence() error {
 		return nil // Not connected, nothing to clear
 	}
 
-	// rich-go doesn't have a clear function, so we logout and re-login
-	// This effectively clears the presence
-	client.Logout()
-	pm.presence = nil
-
-	// Reconnect
-	err := client.Login(pm.clientID)
-	if err != nil {
-		pm.connected = false
-		log.Printf("Discord: Failed to reconnect after clearing presence: %v", err)
+	// Send an empty activity to clear the presence display.
+	// This avoids the logout/login cycle that would briefly disconnect us
+	// and risk leaving the manager in an inconsistent state.
+	if err := client.SetActivity(client.Activity{}); err != nil {
+		// If the upstream rejects the empty activity, log but don't disconnect.
+		// The previous presence data will still be showing until the next update.
+		log.Printf("Discord: Failed to clear presence (non-fatal): %v", err)
 		return mapDiscordError(err)
 	}
 
+	pm.presence = nil
 	log.Printf("Discord: Presence cleared")
 	return nil
 }

@@ -5,7 +5,6 @@ import (
 
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
-	"plexcord/internal/keychain"
 )
 
 // CheckSetupComplete checks if the setup wizard has been completed
@@ -28,7 +27,7 @@ func (a *App) CompleteSetup() error {
 	a.config.SetupCompleted = true
 
 	// Save config to disk
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save setup completion: %v", err)
 		return err
 	}
@@ -77,7 +76,7 @@ func (a *App) SkipSetup() error {
 	a.config.SetupCompleted = false
 
 	// Save config to disk
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save setup skip: %v", err)
 		return err
 	}
@@ -112,7 +111,7 @@ func (a *App) ResetApplication() {
 	a.discordMu.Unlock()
 
 	// 3. Remove Plex token from secure storage
-	if err := keychain.DeleteToken(); err != nil {
+	if err := a.tokens.Delete(); err != nil {
 		log.Printf("Warning: Failed to delete Plex token: %v", err)
 		// Continue with reset - token deletion failure is not critical
 	} else {

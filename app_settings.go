@@ -3,8 +3,6 @@ package main
 import (
 	"log"
 
-	"plexcord/internal/config"
-
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -47,7 +45,7 @@ func (a *App) GetMinimizeToTray() bool {
 // SetMinimizeToTray updates the minimize to tray setting.
 func (a *App) SetMinimizeToTray(enabled bool) error {
 	a.config.MinimizeToTray = enabled
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save minimize to tray setting: %v", err)
 		return err
 	}
@@ -74,7 +72,7 @@ func (a *App) SetAutoStart(enabled bool) error {
 
 	// Update config to match
 	a.config.AutoStart = enabled
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save auto-start setting: %v", err)
 		// Note: OS registration succeeded but config save failed
 		// The actual auto-start behavior will work, but config may be out of sync

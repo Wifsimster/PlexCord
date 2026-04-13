@@ -2,9 +2,8 @@ package main
 
 import (
 	"plexcord/internal/errors"
+	"plexcord/internal/events"
 	"plexcord/internal/retry"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // setupRetryCallbacks configures the retry managers with callbacks.
@@ -23,7 +22,7 @@ func (a *App) setupRetryCallbacks() {
 		},
 		func(state retry.RetryState) {
 			// Emit retry state change event
-			runtime.EventsEmit(a.ctx, "PlexRetryState", state)
+			a.bus.Emit(events.PlexRetryState, state)
 		},
 	)
 
@@ -35,7 +34,7 @@ func (a *App) setupRetryCallbacks() {
 		},
 		func(state retry.RetryState) {
 			// Emit retry state change event
-			runtime.EventsEmit(a.ctx, "DiscordRetryState", state)
+			a.bus.Emit(events.DiscordRetryState, state)
 		},
 	)
 }
