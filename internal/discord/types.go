@@ -19,17 +19,36 @@ const (
 	StatusConnected ConnectionStatus = "connected"
 )
 
-// PresenceData represents the information to display in Discord Rich Presence
+// Media type constants used to select a PresenceBuilder.
+const (
+	MediaTypeMusic = "music"
+	MediaTypeMovie = "movie"
+	MediaTypeTV    = "tv"
+	MediaTypePhoto = "photo"
+)
+
+// PresenceData represents the information to display in Discord Rich Presence.
+// Different builders use different fields depending on MediaType; unused
+// fields for a given media type are simply ignored.
 type PresenceData struct {
 	// Timestamps for elapsed time display
 	StartTime *time.Time `json:"startTime,omitempty"`
 
-	// Track information
+	// MediaType selects which PresenceBuilder will format this data.
+	// Empty string defaults to MediaTypeMusic for backward compatibility.
+	MediaType string `json:"mediaType,omitempty"`
+
+	// Track information (primary fields for music)
 	Track  string `json:"track"`
 	Artist string `json:"artist"`
 	Album  string `json:"album"`
 	Year   string `json:"year"`
 	Player string `json:"player"`
+
+	// Video/TV fields (ignored for music)
+	ShowTitle string `json:"showTitle,omitempty"`
+	Season    int    `json:"season,omitempty"`
+	Episode   int    `json:"episode,omitempty"`
 
 	// Artwork URL (for large image)
 	ArtworkURL string `json:"artworkUrl"`

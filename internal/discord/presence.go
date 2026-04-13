@@ -173,84 +173,12 @@ func (pm *PresenceManager) GetCurrentPresence() *PresenceData {
 	return pm.presence
 }
 
-// buildActivity creates a rich-go Activity from PresenceData.
+// buildActivity creates a rich-go Activity from PresenceData by dispatching
+// to the appropriate PresenceBuilder for the data's MediaType. The actual
+// formatting logic lives in builder.go — this function is kept as a thin
+// alias to preserve the old call sites in presence.go.
 func buildActivity(data *PresenceData) client.Activity {
-	activity := client.Activity{}
-
-	// Apply format strings if provided, otherwise use defaults
-	if data.DetailsFormat != "" || data.StateFormat != "" {
-		activity.Details = applyFormatString(data.DetailsFormat, data)
-		activity.State = applyFormatString(data.StateFormat, data)
-	} else {
-		// Default formatting
-		activity.Details = data.Track
-
-		// Build state line: "by Artist • Album" or just state
-		if data.Artist != "" {
-			if data.Album != "" {
-				activity.State = "by " + data.Artist + " • " + data.Album
-			} else {
-				activity.State = "by " + data.Artist
-			}
-		}
-
-		// Add playback state to state line if no artist
-		if data.Artist == "" && data.State != "" {
-			if data.State == "paused" {
-				activity.State = "Paused"
-			} else {
-				activity.State = "Playing on Plex"
-			}
-		}
-	}
-
-	// Set timestamps for elapsed time display (only when playing)
-	if data.StartTime != nil && data.State == "playing" {
-		activity.Timestamps = &client.Timestamps{
-			Start: data.StartTime,
-		}
-	}
-
-	// Use album artwork if available, fall back to Plex logo
-	if data.ArtworkURL != "" {
-		activity.LargeImage = data.ArtworkURL
-		activity.LargeText = data.Album
-		if activity.LargeText == "" {
-			activity.LargeText = "Plex Music"
-		}
-	} else {
-		activity.LargeImage = "plex"
-		activity.LargeText = "Plex Music"
-	}
-
-	// Add small image to show playback state
-	if data.State == "paused" {
-		activity.SmallImage = "pause"
-		activity.SmallText = "Paused"
-	} else {
-		activity.SmallImage = "play"
-		activity.SmallText = "Playing"
-	}
-
-	return activity
-}
-
-// applyFormatString replaces format tokens in a format string with actual values.
-// Supported tokens: {track}, {artist}, {album}, {year}, {player}
-func applyFormatString(format string, data *PresenceData) string {
-	if format == "" {
-		return ""
-	}
-
-	replacer := strings.NewReplacer(
-		"{track}", data.Track,
-		"{artist}", data.Artist,
-		"{album}", data.Album,
-		"{year}", data.Year,
-		"{player}", data.Player,
-	)
-
-	return replacer.Replace(format)
+	return buildActivityForMediaType(data)
 }
 
 // ValidateClientID checks if a Discord Client ID is valid for configuration.

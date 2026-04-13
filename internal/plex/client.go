@@ -280,181 +280,49 @@ func (c *Client) GetSessions(userID string) ([]Session, error) {
 }
 
 // GetMusicSessions retrieves active music sessions for the specified user.
-// Convenience method that calls GetSessions and filters for music (type="track").
-// Applies fallback values for missing metadata and builds absolute artwork URLs.
+// This is a thin wrapper that delegates fetching to the transport layer
+// and filtering/mapping to pure functions in mapper.go. See Client.fetchSessions.
 func (c *Client) GetMusicSessions(userID string) ([]MusicSession, error) {
-	// Use 500ms timeout for polling performance (NFR5)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-
-	sessionsURL := fmt.Sprintf("%s/status/sessions?X-Plex-Token=%s", c.serverURL, url.QueryEscape(c.token))
-	req, err := http.NewRequestWithContext(ctx, "GET", sessionsURL, nil)
+	sessionsResp, err := c.fetchSessions()
 	if err != nil {
-		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to create sessions request")
+		return nil, err
 	}
-
-	req.Header.Set("User-Agent", "PlexCord/1.0")
-	req.Header.Set("Accept", "application/xml")
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, mapHTTPError(err, ctx)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			log.Printf("Warning: Failed to close response body: %v", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, mapHTTPStatusCode(resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to read sessions response")
-	}
-
-	var sessionsResp SessionsResponse
-	if err := xml.Unmarshal(body, &sessionsResp); err != nil {
-		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid sessions response format")
-	}
-
-	// Filter for music sessions belonging to specified user.
-	// Only Tracks are music sessions - Videos and Photos are not included.
-	musicSessions := make([]MusicSession, 0, len(sessionsResp.Tracks))
-	for _, entry := range sessionsResp.Tracks {
-		// Filter by user ID if specified
-		if userID != "" && entry.User.ID != userID {
-			continue
-		}
-
-		// Only include music sessions (type="track")
-		if entry.Type != "track" {
-			continue
-		}
-
-		// Build absolute artwork URL if thumb path exists (AC4)
-		thumbURL := ""
-		if entry.Thumb != "" {
-			thumbURL = c.buildArtworkURL(entry.Thumb)
-		}
-
-		session := MusicSession{
-			Session: Session{
-				SessionKey: entry.SessionKey,
-				UserID:     entry.User.ID,
-				UserName:   entry.User.Title,
-				Type:       entry.Type,
-				State:      entry.Player.State,
-				PlayerName: entry.Player.Title,
-			},
-			Track:      entry.Title,
-			Artist:     entry.GrandparentTitle,
-			Album:      entry.ParentTitle,
-			Thumb:      entry.Thumb,
-			ThumbURL:   thumbURL,
-			Duration:   entry.Duration,
-			ViewOffset: entry.ViewOffset,
-		}
-
-		// Apply fallback values for missing metadata (AC1, AC2, AC3, AC7)
-		session.ApplyFallbacks()
-
-		musicSessions = append(musicSessions, session)
-	}
-
-	// Return empty slice (not nil) when no sessions - this is not an error
-	if musicSessions == nil {
-		musicSessions = []MusicSession{}
-	}
-
-	return musicSessions, nil
+	return filterMusicSessions(sessionsResp, userID, c.buildArtworkURL), nil
 }
 
 // GetMediaSessions retrieves active media sessions of the specified types for the specified user.
-// mediaTypes controls which media types to include (e.g., ["music"], ["music", "movie", "tv"]).
+// Thin wrapper over the transport fetch + filter pipeline.
 // If mediaTypes is nil or empty, all media types are returned.
-// Applies fallback values for missing metadata and builds absolute artwork URLs.
 func (c *Client) GetMediaSessions(userID string, mediaTypes []string) ([]MediaSession, error) {
+	sessionsResp, err := c.fetchSessions()
+	if err != nil {
+		return nil, err
+	}
+	return filterMediaSessions(sessionsResp, userID, mediaTypes, c.buildArtworkURL), nil
+}
+
+// fetchSessions performs the HTTP GET to /status/sessions and parses the XML.
+// Centralized so all three GetXxxSessions methods share one transport path.
+func (c *Client) fetchSessions() (*SessionsResponse, error) {
 	// Use 500ms timeout for polling performance (NFR5)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	sessionsURL := fmt.Sprintf("%s/status/sessions?X-Plex-Token=%s", c.serverURL, url.QueryEscape(c.token))
-	req, err := http.NewRequestWithContext(ctx, "GET", sessionsURL, nil)
+	body, err := c.transport().get(ctx, "/status/sessions")
 	if err != nil {
-		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to create sessions request")
+		return nil, err
 	}
+	return parseSessionsResponse(body)
+}
 
-	req.Header.Set("User-Agent", "PlexCord/1.0")
-	req.Header.Set("Accept", "application/xml")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, mapHTTPError(err, ctx)
+// transport returns a transport bound to this client's URL and token.
+// Lazy construction keeps the existing Client struct unchanged.
+func (c *Client) transport() *transport {
+	return &transport{
+		httpClient: c.httpClient,
+		serverURL:  c.serverURL,
+		token:      c.token,
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			log.Printf("Warning: Failed to close response body: %v", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, mapHTTPStatusCode(resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to read sessions response")
-	}
-
-	var sessionsResp SessionsResponse
-	if err := xml.Unmarshal(body, &sessionsResp); err != nil {
-		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid sessions response format")
-	}
-
-	// Build a set of allowed media types for fast lookup
-	typeFilter := make(map[string]bool, len(mediaTypes))
-	for _, mt := range mediaTypes {
-		typeFilter[mt] = true
-	}
-	filterEnabled := len(typeFilter) > 0
-
-	// Merge all session entries from all XML element types
-	allEntries := sessionsResp.AllEntries()
-	mediaSessions := make([]MediaSession, 0, len(allEntries))
-	for _, entry := range allEntries {
-		// Filter by user ID if specified
-		if userID != "" && entry.User.ID != userID {
-			continue
-		}
-
-		// Filter by media type if specified
-		entryMediaType := mediaTypeFromPlexType(entry.Type)
-		if filterEnabled && !typeFilter[entryMediaType] {
-			continue
-		}
-
-		// Build absolute artwork URL if thumb path exists
-		thumbURL := ""
-		if entry.Thumb != "" {
-			thumbURL = c.buildArtworkURL(entry.Thumb)
-		}
-
-		session := NewMediaSessionFromEntry(entry, thumbURL)
-
-		// Apply fallback values for missing metadata
-		session.ApplyFallbacks()
-
-		mediaSessions = append(mediaSessions, session)
-	}
-
-	// Return empty slice (not nil) when no sessions - this is not an error
-	if mediaSessions == nil {
-		mediaSessions = []MediaSession{}
-	}
-
-	return mediaSessions, nil
 }
 
 // buildArtworkURL constructs an absolute URL for album artwork.
