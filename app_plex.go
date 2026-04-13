@@ -8,7 +8,6 @@ import (
 
 	"plexcord/internal/errors"
 	"plexcord/internal/events"
-	"plexcord/internal/history"
 	"plexcord/internal/plex"
 )
 
@@ -387,83 +386,37 @@ func (a *App) StartSessionPolling() error {
 	return nil
 }
 
-// handleSessionUpdates processes session updates from the poller
-// and emits appropriate Wails events to the frontend.
-// Also updates Discord Rich Presence when connected.
+// handleSessionUpdates constructs the observer pipeline and runs it.
+// The actual event handling is delegated to individual observers for
+// separation of concerns; see app_observers.go.
+//
+// Observer order matters: cache → history → discord → events. The
+// discord observer is gated by the manual-pause flag and the
+// hide-when-paused config, and the event emitter always fires last so
+// the frontend sees the state after all side effects have run.
 func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
-	var lastSession *plex.MusicSession
-
-	for session := range sessionCh {
-		if session != nil {
-			// Music is playing - update Discord presence and emit frontend event
-			log.Printf("Playback detected: %s - %s", session.Track, session.Artist)
-
-			// Store current session for page refresh restoration
-			a.sessionMu.Lock()
-			a.currentSession = session
-			a.sessionMu.Unlock()
-
-			// Record to listening history (deduplication handled by Store)
-			if a.history != nil {
-				a.history.Add(history.Entry{
-					Track:     session.Track,
-					Artist:    session.Artist,
-					Album:     session.Album,
-					Duration:  session.Duration,
-					StartedAt: time.Now(),
-					ThumbURL:  session.ThumbURL,
-				})
-			}
-
-			// Check if manually paused - skip all presence updates
-			a.pauseMu.Lock()
-			manuallyPaused := a.presencePaused
-			a.pauseMu.Unlock()
-
-			if manuallyPaused {
-				// Skip presence updates while manually paused
-				a.bus.Emit(events.PlaybackUpdated, session)
-				lastSession = session
-				continue
-			}
-
-			// Handle hide-when-paused for paused sessions
-			if session.State == "paused" && a.config.HideWhenPaused {
-				a.scheduleHideOnPause()
-				a.bus.Emit(events.PlaybackUpdated, session)
-				lastSession = session
-				continue
-			}
-
-			// Cancel any pending pause timer since we're playing
-			a.cancelPauseTimer()
-
-			// Update Discord Rich Presence if connected
-			a.updateDiscordFromSession(session)
-
-			a.bus.Emit(events.PlaybackUpdated, session)
-			lastSession = session
-		} else if lastSession != nil {
-			// Music stopped - clear Discord presence and emit frontend event
-			log.Printf("Playback stopped")
-
-			// Clear current session
-			a.sessionMu.Lock()
-			a.currentSession = nil
-			a.sessionMu.Unlock()
-
-			// Cancel any pending pause timer
-			a.cancelPauseTimer()
-
-			// Clear Discord Rich Presence
-			a.clearDiscordOnStop()
-
-			a.bus.Emit(events.PlaybackStopped, nil)
-			lastSession = nil
-		}
+	observers := []SessionObserver{
+		newSessionCacheObserver(&a.sessionMu, &a.currentSession),
+		newHistoryObserver(a.history),
+		&discordPresenceObserver{
+			update:        a.updateDiscordFromSession,
+			clearOnStop:   a.clearDiscordOnStop,
+			isManualPause: a.isPresencePausedLocked,
+			scheduleHide:  a.scheduleHideOnPause,
+			cancelHide:    a.cancelPauseTimer,
+			hideOnPause:   func() bool { return a.config.HideWhenPaused },
+			log:           log.Printf,
+		},
+		newEventEmitterObserver(a.bus),
 	}
+	runSessionPipeline(sessionCh, observers)
+}
 
-	log.Printf("Session update handler exited")
+// isPresencePausedLocked returns the current manual pause state under lock.
+func (a *App) isPresencePausedLocked() bool {
+	a.pauseMu.Lock()
+	defer a.pauseMu.Unlock()
+	return a.presencePaused
 }
 
 // StopSessionPolling stops the background session polling.
