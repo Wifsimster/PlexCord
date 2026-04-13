@@ -4,12 +4,10 @@ import (
 	"log"
 	"time"
 
-	"plexcord/internal/config"
 	"plexcord/internal/discord"
 	"plexcord/internal/errors"
+	"plexcord/internal/events"
 	"plexcord/internal/plex"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ConnectDiscord establishes a connection to Discord using the provided Client ID.
@@ -31,7 +29,7 @@ func (a *App) ConnectDiscord(clientID string) error {
 	if err != nil {
 		log.Printf("ERROR: Discord connection failed: %v", err)
 		// Emit disconnected event with error
-		runtime.EventsEmit(a.ctx, "DiscordDisconnected", discord.ConnectionEvent{
+		a.bus.Emit(events.DiscordDisconnected, discord.ConnectionEvent{
 			Connected: false,
 			Error: &discord.Error{
 				Code:    errors.GetCode(err),
@@ -44,7 +42,7 @@ func (a *App) ConnectDiscord(clientID string) error {
 	// Save client ID to config if connection successful
 	if clientID != "" && clientID != a.config.DiscordClientID {
 		a.config.DiscordClientID = clientID
-		if err := config.Save(a.config); err != nil {
+		if err := a.saveConfig(); err != nil {
 			log.Printf("Warning: Failed to save Discord client ID to config: %v", err)
 		}
 	}
@@ -56,7 +54,7 @@ func (a *App) ConnectDiscord(clientID string) error {
 	a.stopDiscordRetry()
 
 	// Emit connected event
-	runtime.EventsEmit(a.ctx, "DiscordConnected", discord.ConnectionEvent{
+	a.bus.Emit(events.DiscordConnected, discord.ConnectionEvent{
 		Connected: true,
 		ClientID:  a.discord.GetClientID(),
 	})
@@ -81,7 +79,7 @@ func (a *App) DisconnectDiscord() error {
 	}
 
 	// Emit disconnected event
-	runtime.EventsEmit(a.ctx, "DiscordDisconnected", discord.ConnectionEvent{
+	a.bus.Emit(events.DiscordDisconnected, discord.ConnectionEvent{
 		Connected: false,
 	})
 
@@ -128,7 +126,7 @@ func (a *App) SaveDiscordClientID(clientID string) error {
 	}
 
 	a.config.DiscordClientID = clientID
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save Discord client ID: %v", err)
 		return err
 	}
@@ -275,7 +273,7 @@ func (a *App) clearDiscordOnStop() {
 func (a *App) updateDiscordConnectionTime() {
 	now := time.Now()
 	a.config.DiscordLastConnected = &now
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("Warning: Failed to save Discord connection time: %v", err)
 	}
 }
@@ -333,7 +331,7 @@ func (a *App) SetHideWhenPaused(enabled bool, delaySeconds int) error {
 	}
 	a.config.HideWhenPaused = enabled
 	a.config.HideWhenPausedDelay = delaySeconds
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save hide-when-paused settings: %v", err)
 		return err
 	}
@@ -399,7 +397,7 @@ func (a *App) GetPresenceFormat() PresenceFormatSettings {
 func (a *App) SetPresenceFormat(details, state string) error {
 	a.config.PresenceDetailsFormat = details
 	a.config.PresenceStateFormat = state
-	if err := config.Save(a.config); err != nil {
+	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save presence format: %v", err)
 		return err
 	}

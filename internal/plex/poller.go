@@ -184,76 +184,32 @@ func (p *Poller) IsInErrorState() bool {
 	return p.inErrorState
 }
 
-// pollLoop is the main polling goroutine.
-// It uses time.Ticker for efficient interval-based polling.
+// pollLoop is the main polling goroutine for music-only mode.
+// It delegates the actual loop logic to runPollLoop (see poll_runner.go).
 func (p *Poller) pollLoop(ctx context.Context) {
-	// Ensure proper cleanup when goroutine exits (fixes running state sync)
+	// Ensure proper cleanup when goroutine exits
 	defer func() {
 		p.mu.Lock()
 		p.running = false
-		// Close session channel to unblock any consumers (fixes goroutine leak)
 		close(p.sessionC)
 		p.mu.Unlock()
 	}()
 
-	// Create ticker for interval-based polling
-	p.mu.RLock()
-	interval := p.interval
-	p.mu.RUnlock()
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	var lastSession *MusicSession
-
-	// Perform immediate first poll (AC8: polling begins immediately)
-	session, ok := p.doPoll()
-	if ok && session != nil {
-		select {
-		case p.sessionC <- session:
-			// Successfully sent initial session
-		default:
-			log.Printf("Session channel full, skipping initial update")
-		}
-		lastSession = session
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("Poller stopped: context cancelled")
-			return
-		case <-p.stopCh:
-			log.Printf("Poller stopped: stop signal received")
-			return
-		case <-ticker.C:
-			// Check if interval changed and reset ticker if needed
-			p.mu.RLock()
-			newInterval := p.interval
-			p.mu.RUnlock()
-
-			if newInterval != interval {
-				ticker.Reset(newInterval)
-				interval = newInterval
-				log.Printf("Poller interval changed to %v", interval)
+	runPollLoop[*MusicSession](
+		ctx,
+		p.stopCh,
+		p.GetInterval,
+		p.doPoll,
+		sessionChanged,
+		func(session *MusicSession) {
+			select {
+			case p.sessionC <- session:
+			default:
+				log.Printf("Session channel full, skipping update")
 			}
-
-			session, ok := p.doPoll()
-
-			// Only emit if poll succeeded and session state changed.
-			// On error, keep lastSession unchanged to avoid false "stopped" events.
-			if ok && sessionChanged(lastSession, session) {
-				select {
-				case p.sessionC <- session:
-					// Successfully sent
-				default:
-					// Channel full, skip this update (prevents blocking)
-					log.Printf("Session channel full, skipping update")
-				}
-				lastSession = session
-			}
-		}
-	}
+		},
+		"Music",
+	)
 }
 
 // doPoll performs a single poll for music sessions.
@@ -303,7 +259,7 @@ func (p *Poller) doPoll() (*MusicSession, bool) {
 }
 
 // mediaPollLoop is the main polling goroutine for multi-media mode.
-// It uses time.Ticker for efficient interval-based polling.
+// It delegates the actual loop logic to runPollLoop (see poll_runner.go).
 func (p *Poller) mediaPollLoop(ctx context.Context) {
 	// Ensure proper cleanup when goroutine exits
 	defer func() {
@@ -314,62 +270,21 @@ func (p *Poller) mediaPollLoop(ctx context.Context) {
 		p.mu.Unlock()
 	}()
 
-	// Create ticker for interval-based polling
-	p.mu.RLock()
-	interval := p.interval
-	p.mu.RUnlock()
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	var lastSession *MediaSession
-
-	// Perform immediate first poll
-	session, ok := p.doMediaPoll()
-	if ok && session != nil {
-		select {
-		case p.mediaC <- session:
-			// Successfully sent initial session
-		default:
-			log.Printf("Media session channel full, skipping initial update")
-		}
-		lastSession = session
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("Media poller stopped: context cancelled")
-			return
-		case <-p.stopCh:
-			log.Printf("Media poller stopped: stop signal received")
-			return
-		case <-ticker.C:
-			// Check if interval changed and reset ticker if needed
-			p.mu.RLock()
-			newInterval := p.interval
-			p.mu.RUnlock()
-
-			if newInterval != interval {
-				ticker.Reset(newInterval)
-				interval = newInterval
-				log.Printf("Poller interval changed to %v", interval)
+	runPollLoop[*MediaSession](
+		ctx,
+		p.stopCh,
+		p.GetInterval,
+		p.doMediaPoll,
+		mediaSessionChanged,
+		func(session *MediaSession) {
+			select {
+			case p.mediaC <- session:
+			default:
+				log.Printf("Media session channel full, skipping update")
 			}
-
-			session, ok := p.doMediaPoll()
-
-			// Only emit if poll succeeded and session state changed.
-			if ok && mediaSessionChanged(lastSession, session) {
-				select {
-				case p.mediaC <- session:
-					// Successfully sent
-				default:
-					log.Printf("Media session channel full, skipping update")
-				}
-				lastSession = session
-			}
-		}
-	}
+		},
+		"Media",
+	)
 }
 
 // doMediaPoll performs a single poll for media sessions.

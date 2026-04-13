@@ -8,8 +8,8 @@ import (
 
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
+	"plexcord/internal/events"
 	"plexcord/internal/history"
-	"plexcord/internal/keychain"
 	"plexcord/internal/platform"
 	"plexcord/internal/plex"
 	"plexcord/internal/retry"
@@ -17,8 +17,11 @@ import (
 
 // App struct
 type App struct {
-	ctx            context.Context
+	ctx context.Context
+	// config holds a pointer to the current Config for direct reads; all
+	// writes go through cfgStore which handles atomic mutation + persistence.
 	config         *config.Config
+	cfgStore       *config.Store
 	pollerCtx      context.Context
 	pollerStop     context.CancelFunc
 	currentSession *plex.MusicSession // Track current playback for page refresh restoration
@@ -26,8 +29,16 @@ type App struct {
 	// Session polling
 	poller *plex.Poller
 
-	// Discord integration
-	discord *discord.PresenceManager
+	// Discord integration (production type, accessed via DiscordPresence interface)
+	discord DiscordPresence
+
+	// Plex client factory for constructing clients on demand (per-server).
+	// Using a factory instead of a singleton reflects that the server URL/token
+	// can change at runtime and enables tests to inject fakes.
+	plexFactory PlexAPIFactory
+
+	// Token store abstracts credential persistence (OS keychain in production)
+	tokens TokenStore
 
 	// Platform integration
 	autostart *platform.AutoStartManager
@@ -42,6 +53,9 @@ type App struct {
 	// Listening history
 	history *history.Store
 
+	// Event bus for emitting events to the frontend (abstracts Wails runtime)
+	bus events.Bus
+
 	// Presence pause state
 	presencePaused bool        // Manual one-click pause toggle
 	pauseTimer     *time.Timer // Timer for delayed hide-when-paused
@@ -54,10 +68,30 @@ type App struct {
 	pauseMu    sync.Mutex // Protect presencePaused and pauseTimer
 }
 
-// NewApp creates a new App application struct
+// saveConfig persists the current in-memory config via the ConfigStore.
+// This is the single path for all config writes — callers that need to
+// mutate the config should set fields on a.config then call this method.
+// Future enhancements (debouncing, schema migration, atomic writes) can
+// hook in here without changing call sites.
+func (a *App) saveConfig() error {
+	if a.cfgStore == nil {
+		// Fallback for code paths that run before startup (should not happen
+		// in practice, but keeps tests that bypass startup working).
+		return config.Save(a.config)
+	}
+	// No-op mutator: the caller already updated a.config directly; this
+	// just triggers the store's atomic save path.
+	return a.cfgStore.Update(func(*config.Config) {})
+}
+
+// NewApp creates a new App application struct with production dependencies.
+// For tests, construct an App directly with injected fakes for bus,
+// plexFactory, tokens, and discord.
 func NewApp() *App {
 	return &App{
 		discord:      discord.NewPresenceManager(),
+		plexFactory:  newPlexClientFactory(),
+		tokens:       newKeychainTokenStore(),
 		autostart:    platform.NewAutoStartManager(),
 		plexRetry:    retry.NewManager("Plex"),
 		discordRetry: retry.NewManager("Discord"),
@@ -68,6 +102,7 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	// Perform your setup here
 	a.ctx = ctx
+	a.bus = events.NewWailsBus(ctx)
 
 	// Load configuration
 	cfg, err := config.Load()
@@ -76,6 +111,7 @@ func (a *App) startup(ctx context.Context) {
 		cfg = config.DefaultConfig()
 	}
 	a.config = cfg
+	a.cfgStore = config.NewStore(cfg, config.Save)
 	log.Printf("Configuration loaded successfully")
 
 	// Initialize listening history store
@@ -87,7 +123,7 @@ func (a *App) startup(ctx context.Context) {
 
 	// Check if Plex token is available in keychain
 	// The token will be used in later stories for Plex connection
-	token, err := keychain.GetToken()
+	token, err := a.tokens.Get()
 	switch {
 	case err != nil:
 		log.Printf("Warning: failed to retrieve Plex token: %v", err)

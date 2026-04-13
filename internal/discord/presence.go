@@ -139,8 +139,10 @@ func (pm *PresenceManager) SetPresence(data *PresenceData) error {
 	return nil
 }
 
-// ClearPresence removes the Discord Rich Presence.
-// Returns an error if not connected or if the clear fails.
+// ClearPresence removes the Discord Rich Presence without disconnecting.
+// Sends an empty activity to clear the presence display while keeping the
+// Discord IPC connection alive so subsequent presence updates work immediately.
+// Returns nil if not connected (idempotent).
 func (pm *PresenceManager) ClearPresence() error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -149,19 +151,17 @@ func (pm *PresenceManager) ClearPresence() error {
 		return nil // Not connected, nothing to clear
 	}
 
-	// rich-go doesn't have a clear function, so we logout and re-login
-	// This effectively clears the presence
-	client.Logout()
-	pm.presence = nil
-
-	// Reconnect
-	err := client.Login(pm.clientID)
-	if err != nil {
-		pm.connected = false
-		log.Printf("Discord: Failed to reconnect after clearing presence: %v", err)
+	// Send an empty activity to clear the presence display.
+	// This avoids the logout/login cycle that would briefly disconnect us
+	// and risk leaving the manager in an inconsistent state.
+	if err := client.SetActivity(client.Activity{}); err != nil {
+		// If the upstream rejects the empty activity, log but don't disconnect.
+		// The previous presence data will still be showing until the next update.
+		log.Printf("Discord: Failed to clear presence (non-fatal): %v", err)
 		return mapDiscordError(err)
 	}
 
+	pm.presence = nil
 	log.Printf("Discord: Presence cleared")
 	return nil
 }
@@ -173,84 +173,12 @@ func (pm *PresenceManager) GetCurrentPresence() *PresenceData {
 	return pm.presence
 }
 
-// buildActivity creates a rich-go Activity from PresenceData.
+// buildActivity creates a rich-go Activity from PresenceData by dispatching
+// to the appropriate PresenceBuilder for the data's MediaType. The actual
+// formatting logic lives in builder.go — this function is kept as a thin
+// alias to preserve the old call sites in presence.go.
 func buildActivity(data *PresenceData) client.Activity {
-	activity := client.Activity{}
-
-	// Apply format strings if provided, otherwise use defaults
-	if data.DetailsFormat != "" || data.StateFormat != "" {
-		activity.Details = applyFormatString(data.DetailsFormat, data)
-		activity.State = applyFormatString(data.StateFormat, data)
-	} else {
-		// Default formatting
-		activity.Details = data.Track
-
-		// Build state line: "by Artist • Album" or just state
-		if data.Artist != "" {
-			if data.Album != "" {
-				activity.State = "by " + data.Artist + " • " + data.Album
-			} else {
-				activity.State = "by " + data.Artist
-			}
-		}
-
-		// Add playback state to state line if no artist
-		if data.Artist == "" && data.State != "" {
-			if data.State == "paused" {
-				activity.State = "Paused"
-			} else {
-				activity.State = "Playing on Plex"
-			}
-		}
-	}
-
-	// Set timestamps for elapsed time display (only when playing)
-	if data.StartTime != nil && data.State == "playing" {
-		activity.Timestamps = &client.Timestamps{
-			Start: data.StartTime,
-		}
-	}
-
-	// Use album artwork if available, fall back to Plex logo
-	if data.ArtworkURL != "" {
-		activity.LargeImage = data.ArtworkURL
-		activity.LargeText = data.Album
-		if activity.LargeText == "" {
-			activity.LargeText = "Plex Music"
-		}
-	} else {
-		activity.LargeImage = "plex"
-		activity.LargeText = "Plex Music"
-	}
-
-	// Add small image to show playback state
-	if data.State == "paused" {
-		activity.SmallImage = "pause"
-		activity.SmallText = "Paused"
-	} else {
-		activity.SmallImage = "play"
-		activity.SmallText = "Playing"
-	}
-
-	return activity
-}
-
-// applyFormatString replaces format tokens in a format string with actual values.
-// Supported tokens: {track}, {artist}, {album}, {year}, {player}
-func applyFormatString(format string, data *PresenceData) string {
-	if format == "" {
-		return ""
-	}
-
-	replacer := strings.NewReplacer(
-		"{track}", data.Track,
-		"{artist}", data.Artist,
-		"{album}", data.Album,
-		"{year}", data.Year,
-		"{player}", data.Player,
-	)
-
-	return replacer.Replace(format)
+	return buildActivityForMediaType(data)
 }
 
 // ValidateClientID checks if a Discord Client ID is valid for configuration.
