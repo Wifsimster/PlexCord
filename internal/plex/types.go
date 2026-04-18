@@ -116,9 +116,9 @@ type SessionEntry struct {
 	ViewOffset       int64  `xml:"viewOffset,attr"`       // Current position in milliseconds
 
 	// Video-specific metadata
-	Year         int `xml:"year,attr"`         // Release year (movies, episodes)
-	ParentIndex  int `xml:"parentIndex,attr"`  // Season number (TV episodes)
-	Index        int `xml:"index,attr"`        // Episode number (TV) or track number (music)
+	Year        int `xml:"year,attr"`        // Release year (movies, episodes)
+	ParentIndex int `xml:"parentIndex,attr"` // Season number (TV episodes)
+	Index       int `xml:"index,attr"`       // Episode number (TV) or track number (music)
 }
 
 // SessionUser represents the user associated with a session

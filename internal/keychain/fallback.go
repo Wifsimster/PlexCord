@@ -36,6 +36,11 @@ func setTokenFallback(token string) error {
 		return err
 	}
 
+	// Ensure parent directory exists before writing
+	if err := os.MkdirAll(filepath.Dir(credPath), 0700); err != nil {
+		return errors.Wrap(err, errors.ENCRYPTION_FAILED, "failed to create credential directory")
+	}
+
 	// Write to file with restricted permissions (0600 = user read/write only)
 	err = os.WriteFile(credPath, []byte(encoded), 0600)
 	if err != nil {

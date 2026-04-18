@@ -39,7 +39,7 @@ type PINResponse struct {
 	Trusted          bool      `json:"trusted"`
 }
 
-// Authenticatorstores PIN authentication state
+// Authenticator stores PIN authentication state.
 type Authenticator struct {
 	httpClient *http.Client
 	clientID   string

@@ -179,11 +179,12 @@ func (tvBuilder) Build(data *PresenceData) client.Activity {
 	} else {
 		// Episode title as details, show + S/E as state
 		activity.Details = data.Track
-		if data.ShowTitle != "" && data.Season > 0 && data.Episode > 0 {
+		switch {
+		case data.ShowTitle != "" && data.Season > 0 && data.Episode > 0:
 			activity.State = fmt.Sprintf("%s • S%02dE%02d", data.ShowTitle, data.Season, data.Episode)
-		} else if data.ShowTitle != "" {
+		case data.ShowTitle != "":
 			activity.State = data.ShowTitle
-		} else {
+		default:
 			activity.State = "TV Episode"
 		}
 	}

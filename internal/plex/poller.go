@@ -19,8 +19,8 @@ type Poller struct {
 	lastErrorTime time.Time // Track when last error occurred
 	client        *Client
 	stopCh        chan struct{}
-	sessionC      chan *MusicSession  // nil indicates no session / stopped playback (music mode)
-	mediaC        chan *MediaSession  // nil indicates no session / stopped playback (media mode)
+	sessionC      chan *MusicSession // nil indicates no session / stopped playback (music mode)
+	mediaC        chan *MediaSession // nil indicates no session / stopped playback (media mode)
 
 	// Error handling (Story 6.5)
 	onError     func(err error) // Called when poll errors occur
@@ -54,8 +54,8 @@ func NewPoller(client *Client, userID string, interval time.Duration) *Poller {
 		userID:   userID,
 		interval: interval,
 		stopCh:   make(chan struct{}),
-		sessionC: make(chan *MusicSession, 1),  // Buffered to prevent blocking
-		mediaC:   make(chan *MediaSession, 1),   // Buffered to prevent blocking
+		sessionC: make(chan *MusicSession, 1), // Buffered to prevent blocking
+		mediaC:   make(chan *MediaSession, 1), // Buffered to prevent blocking
 	}
 }
 
