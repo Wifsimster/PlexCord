@@ -34,7 +34,11 @@ func SetToken(token string) error {
 
 	err := keyring.Set(ServiceName, TokenKey, token)
 	if err != nil {
-		return errors.Wrap(err, errors.KEYCHAIN_STORE_FAILED, "failed to store token in keychain")
+		// OS keychain unavailable — fall back to encrypted file storage
+		if fallbackErr := setTokenFallback(token); fallbackErr != nil {
+			return errors.Wrap(fallbackErr, errors.KEYCHAIN_STORE_FAILED, "failed to store token in keychain or fallback")
+		}
+		return nil
 	}
 
 	return nil
@@ -62,7 +66,12 @@ func GetToken() (string, error) {
 			return "", nil
 		}
 
-		return "", errors.Wrap(err, errors.KEYCHAIN_READ_FAILED, "failed to retrieve token from keychain")
+		// OS keychain unavailable — fall back to encrypted file storage
+		fallbackToken, fallbackErr := getTokenFallback()
+		if fallbackErr != nil {
+			return "", errors.Wrap(fallbackErr, errors.KEYCHAIN_READ_FAILED, "failed to retrieve token from keychain or fallback")
+		}
+		return fallbackToken, nil
 	}
 
 	return token, nil
@@ -82,11 +91,23 @@ func DeleteToken() error {
 	if err != nil {
 		// Token not found is not an error
 		if err == keyring.ErrNotFound {
+			// Still attempt to clear any fallback file
+			if fallbackErr := deleteTokenFallback(); fallbackErr != nil {
+				return errors.Wrap(fallbackErr, errors.KEYCHAIN_READ_FAILED, "failed to delete token fallback")
+			}
 			return nil
 		}
 
-		return errors.Wrap(err, errors.KEYCHAIN_READ_FAILED, "failed to delete token from keychain")
+		// OS keychain unavailable — clear the fallback file instead
+		if fallbackErr := deleteTokenFallback(); fallbackErr != nil {
+			return errors.Wrap(fallbackErr, errors.KEYCHAIN_READ_FAILED, "failed to delete token from keychain or fallback")
+		}
+		return nil
 	}
 
+	// Also clear fallback to avoid stale file if keyring became available later
+	if fallbackErr := deleteTokenFallback(); fallbackErr != nil {
+		return errors.Wrap(fallbackErr, errors.KEYCHAIN_READ_FAILED, "failed to delete token fallback")
+	}
 	return nil
 }

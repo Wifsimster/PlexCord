@@ -13,9 +13,9 @@ import (
 // the TokenStore interface for dependency injection.
 type keychainTokenStore struct{}
 
-func (keychainTokenStore) Get() (string, error)     { return keychain.GetToken() }
-func (keychainTokenStore) Set(token string) error   { return keychain.SetToken(token) }
-func (keychainTokenStore) Delete() error            { return keychain.DeleteToken() }
+func (keychainTokenStore) Get() (string, error)   { return keychain.GetToken() }
+func (keychainTokenStore) Set(token string) error { return keychain.SetToken(token) }
+func (keychainTokenStore) Delete() error          { return keychain.DeleteToken() }
 
 // newKeychainTokenStore returns the default OS-keychain-backed TokenStore.
 func newKeychainTokenStore() TokenStore {

@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"time"
 
 	"plexcord/internal/errors"
 )
@@ -26,30 +25,12 @@ type transport struct {
 	token      string
 }
 
-// newTransport constructs a transport bound to a server and token.
-func newTransport(serverURL, token string, timeout time.Duration) *transport {
-	return &transport{
-		serverURL: serverURL,
-		token:     token,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
-	}
-}
-
 // get executes a GET request against the given path with standard headers
 // and returns the response body bytes. The path should start with "/".
 // Authentication is always appended via X-Plex-Token query parameter.
 // The response body is fully read and closed before returning.
 func (t *transport) get(ctx context.Context, path string) ([]byte, error) {
 	reqURL := fmt.Sprintf("%s%s?X-Plex-Token=%s", t.serverURL, path, url.QueryEscape(t.token))
-	return t.doRequest(ctx, "GET", reqURL)
-}
-
-// getWithoutAuth executes a GET without appending the token (for endpoints
-// like /identity that don't require authentication).
-func (t *transport) getWithoutAuth(ctx context.Context, path string) ([]byte, error) {
-	reqURL := fmt.Sprintf("%s%s", t.serverURL, path)
 	return t.doRequest(ctx, "GET", reqURL)
 }
 
@@ -85,15 +66,6 @@ func (t *transport) doRequest(ctx context.Context, method, reqURL string) ([]byt
 	return body, nil
 }
 
-// buildArtworkURL constructs the absolute, token-authenticated artwork URL.
-// Moved here from Client because it's a transport-level concern (URL + auth).
-func (t *transport) buildArtworkURL(thumbPath string) string {
-	if thumbPath == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s%s?X-Plex-Token=%s", t.serverURL, thumbPath, url.QueryEscape(t.token))
-}
-
 // ----------------------------------------------------------------------------
 // Parser functions — pure XML → domain-object transformations with no I/O.
 // These are trivially unit-testable with in-memory byte slices.
@@ -105,24 +77,6 @@ func parseSessionsResponse(body []byte) (*SessionsResponse, error) {
 	var resp SessionsResponse
 	if err := xml.Unmarshal(body, &resp); err != nil {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid sessions response format")
-	}
-	return &resp, nil
-}
-
-// parseIdentityResponse deserializes the /identity XML payload.
-func parseIdentityResponse(body []byte) (*IdentityResponse, error) {
-	var resp IdentityResponse
-	if err := xml.Unmarshal(body, &resp); err != nil {
-		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid identity response format")
-	}
-	return &resp, nil
-}
-
-// parseLibraryResponse deserializes the /library/sections XML payload.
-func parseLibraryResponse(body []byte) (*LibraryResponse, error) {
-	var resp LibraryResponse
-	if err := xml.Unmarshal(body, &resp); err != nil {
-		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid library response format")
 	}
 	return &resp, nil
 }
