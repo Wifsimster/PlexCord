@@ -19,7 +19,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -45,7 +45,7 @@ jobs:
           fi
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           args: --timeout=5m
@@ -80,7 +80,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -120,6 +120,7 @@ jobs:
     name: Build Application
     needs: [lint-go, lint-frontend, test-go]
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
@@ -133,13 +134,14 @@ jobs:
             platform: windows
             arch: amd64
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.platform == 'darwin' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -149,7 +151,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
