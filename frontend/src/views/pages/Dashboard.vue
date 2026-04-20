@@ -62,14 +62,7 @@ const handleRetry = (source) => {
                     <p class="text-surface-500 dark:text-surface-400 mt-1">Manage your PlexCord integration</p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <Button
-                        :icon="presencePaused ? 'pi pi-play' : 'pi pi-pause'"
-                        :severity="presencePaused ? 'warn' : 'secondary'"
-                        :label="presencePaused ? 'Resume Presence' : 'Pause Presence'"
-                        size="small"
-                        outlined
-                        @click="togglePresencePause"
-                    />
+                    <Button :icon="presencePaused ? 'pi pi-play' : 'pi pi-pause'" :severity="presencePaused ? 'warn' : 'secondary'" :label="presencePaused ? 'Resume Presence' : 'Pause Presence'" size="small" outlined @click="togglePresencePause" />
                     <div v-if="version" class="text-sm text-surface-400 dark:text-surface-500 font-mono">v{{ version }}</div>
                 </div>
             </div>

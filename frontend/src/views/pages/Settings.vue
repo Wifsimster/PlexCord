@@ -499,12 +499,9 @@ const goToDashboard = () => {
                 <Button label="Add Server" icon="pi pi-plus" size="small" @click="openAddServerDialog" />
             </div>
 
-            <div v-if="servers.length === 0" class="py-3 text-muted-color text-sm">
-                No servers configured. Add a server to get started.
-            </div>
+            <div v-if="servers.length === 0" class="py-3 text-muted-color text-sm">No servers configured. Add a server to get started.</div>
 
-            <div v-for="(server, index) in servers" :key="server.url"
-                 :class="['flex items-center justify-between py-3', { 'border-b border-surface-200 dark:border-surface-700': index < servers.length - 1 }]">
+            <div v-for="(server, index) in servers" :key="server.url" :class="['flex items-center justify-between py-3', { 'border-b border-surface-200 dark:border-surface-700': index < servers.length - 1 }]">
                 <div class="flex-1 min-w-0 mr-4">
                     <div class="font-medium truncate">{{ server.name }}</div>
                     <div class="text-sm text-muted-color truncate">{{ server.url }}</div>

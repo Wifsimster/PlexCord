@@ -17,12 +17,8 @@ const startSetup = () => {
         <!-- Hero Section -->
         <div class="text-center mb-10 max-w-2xl mx-auto animate-fadein">
             <h2 class="text-3xl md:text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-indigo-500">Bridge Your Music</h2>
-            <p class="text-xl text-surface-600 dark:text-surface-300 leading-relaxed mb-4">
-                PlexCord shows what you're listening to on Plex as a Discord Rich Presence status &mdash; complete with album art, track info, and live progress.
-            </p>
-            <p class="text-surface-500 dark:text-surface-400 mb-8">
-                Setup takes about <strong>2 minutes</strong>. Let's get you connected.
-            </p>
+            <p class="text-xl text-surface-600 dark:text-surface-300 leading-relaxed mb-4">PlexCord shows what you're listening to on Plex as a Discord Rich Presence status &mdash; complete with album art, track info, and live progress.</p>
+            <p class="text-surface-500 dark:text-surface-400 mb-8">Setup takes about <strong>2 minutes</strong>. Let's get you connected.</p>
             <Button label="Get Started" icon="pi pi-arrow-right" iconPos="right" size="large" rounded @click="startSetup" class="px-8 py-4 text-xl shadow-lg hover:shadow-xl transition-all" />
         </div>
 
