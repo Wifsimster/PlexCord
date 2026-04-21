@@ -14,7 +14,8 @@
         "build-watch": "vite build --watch --emptyOutDir false",
         "vite": "vite",
         "test": "vitest run",
-        "test:watch": "vitest"
+        "test:watch": "vitest",
+        "prepare": "cd .. && husky frontend/.husky"
     },
     "dependencies": {
         "@primeuix/themes": "^2.0.3",
@@ -27,6 +28,8 @@
         "vue-router": "^5.0.4"
     },
     "devDependencies": {
+        "@commitlint/cli": "^19.0.0",
+        "@commitlint/config-conventional": "^19.0.0",
         "@primevue/auto-import-resolver": "^4.5.5",
         "@rushstack/eslint-patch": "^1.16.1",
         "@tailwindcss/vite": "^4.2.2",
@@ -34,6 +37,7 @@
         "@vue/eslint-config-prettier": "^10.2.0",
         "eslint": "^10.2.1",
         "eslint-plugin-vue": "^10.8.0",
+        "husky": "^9.0.0",
         "prettier": "^3.8.3",
         "sass": "^1.99.0",
         "tailwindcss": "^4.2.2",
