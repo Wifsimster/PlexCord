@@ -188,11 +188,16 @@ export const useConnectionStore = defineStore('connection', {
                 if (data?.error) {
                     this.discord.error = data.error;
                 }
-                // Add error banner
-                if (data?.code) {
-                    this.addError('discord', data.code);
+                // The backend emits `discord.ConnectionEvent` which marshals
+                // as `{connected, error: {code, message}, clientId}`. The
+                // code lives at `data.error.code`, not on the top-level
+                // payload — the previous `data?.code` check always missed
+                // and the banner showed DISCORD_NOT_RUNNING regardless of
+                // the actual failure.
+                const code = data?.error?.code || data?.code;
+                if (code) {
+                    this.addError('discord', code);
                 } else if (data?.error) {
-                    // Fallback: use DISCORD_NOT_RUNNING as default code
                     this.addError('discord', 'DISCORD_NOT_RUNNING');
                 }
             });
