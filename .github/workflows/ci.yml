@@ -45,7 +45,8 @@ jobs:
           fi
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        # action v7 is required to run golangci-lint v2.x binaries.
+        uses: golangci/golangci-lint-action@v7
         with:
           # `version: latest` was resolving to v1.64.8 (built with Go 1.24),
           # which refuses to lint a project whose go.mod declares 1.25.
