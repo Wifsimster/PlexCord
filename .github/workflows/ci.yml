@@ -19,7 +19,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -45,9 +45,14 @@ jobs:
           fi
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        # action v7 is required to run golangci-lint v2.x binaries.
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          # `version: latest` was resolving to v1.64.8 (built with Go 1.24),
+          # which refuses to lint a project whose go.mod declares 1.25.
+          # v2.12.x is built with Go 1.25 and supports the v2 config in
+          # `.golangci.yml`.
+          version: v2.12.2
           args: --timeout=5m
 
   lint-frontend:
@@ -80,7 +85,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -104,7 +109,10 @@ jobs:
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > build/appicon.png
 
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        # Exclude `frontend/node_modules/...` from the test set: after `npm ci`
+        # the flatted package shows up under `./...` and trips on the Go 1.25
+        # toolchain's missing `covdata` tool when `-covermode=atomic` is used.
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v 'frontend/node_modules')
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -139,7 +147,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -161,7 +169,15 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # Ubuntu 24.04 ships webkit2gtk-4.1 only; Wails defaults to looking for
+      # webkit2gtk-4.0, so Linux builds need the `webkit2_41` build tag. The
+      # tag is Linux-only inside Wails, harmless on macOS/Windows.
+      - name: Build application (Linux)
+        if: matrix.platform == 'linux'
+        run: wails build -clean -tags webkit2_41 -platform ${{ matrix.platform }}/${{ matrix.arch }}
+
       - name: Build application
+        if: matrix.platform != 'linux'
         run: wails build -clean -platform ${{ matrix.platform }}/${{ matrix.arch }}
 
       - name: Upload build artifacts
