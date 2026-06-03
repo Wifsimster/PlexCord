@@ -10,17 +10,32 @@ import (
 
 // GetServers returns the list of configured Plex servers from config.
 // Returns an empty slice (never nil) so the frontend can iterate safely.
+// A copy is returned so the caller cannot mutate the in-store slice
+// outside of cfgStore.Update.
 func (a *App) GetServers() []config.ServerConfig {
-	if a.config.Servers == nil {
+	if a.cfgStore == nil {
+		if a.config.Servers == nil {
+			return []config.ServerConfig{}
+		}
+		return a.config.Servers
+	}
+	cfg := a.cfgStore.Get()
+	if len(cfg.Servers) == 0 {
 		return []config.ServerConfig{}
 	}
-	return a.config.Servers
+	out := make([]config.ServerConfig, len(cfg.Servers))
+	copy(out, cfg.Servers)
+	return out
 }
 
 // AddServer appends a new server to the configuration. The URL must use
 // http or https and must be unique within the existing server list.
 // userID and userName are optional and may be filled in later via the
 // per-server user-selection flow.
+//
+// The uniqueness check and the append happen inside a single
+// cfgStore.Update so two concurrent AddServer calls with the same URL
+// can't both pass the check and end up adding duplicates.
 func (a *App) AddServer(name, serverURL, userID, userName string) error {
 	if name == "" {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server name cannot be empty")
@@ -32,22 +47,28 @@ func (a *App) AddServer(name, serverURL, userID, userName string) error {
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL must use http or https scheme")
 	}
-	for _, s := range a.config.Servers {
-		if s.URL == serverURL {
-			return errors.New(errors.CONFIG_WRITE_FAILED, "server with this URL already exists")
-		}
-	}
 
-	a.config.Servers = append(a.config.Servers, config.ServerConfig{
-		Name:     name,
-		URL:      serverURL,
-		UserID:   userID,
-		UserName: userName,
-		Active:   true,
-	})
-	if err := a.saveConfig(); err != nil {
+	var dup bool
+	if err := a.cfgStore.Update(func(c *config.Config) {
+		for _, s := range c.Servers {
+			if s.URL == serverURL {
+				dup = true
+				return
+			}
+		}
+		c.Servers = append(c.Servers, config.ServerConfig{
+			Name:     name,
+			URL:      serverURL,
+			UserID:   userID,
+			UserName: userName,
+			Active:   true,
+		})
+	}); err != nil {
 		log.Printf("ERROR: Failed to save server: %v", err)
 		return err
+	}
+	if dup {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server with this URL already exists")
 	}
 	log.Printf("Server added: %s (%s)", name, serverURL)
 	return nil
@@ -59,20 +80,22 @@ func (a *App) RemoveServer(serverURL string) error {
 	if serverURL == "" {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL cannot be empty")
 	}
-	idx := -1
-	for i, s := range a.config.Servers {
-		if s.URL == serverURL {
-			idx = i
-			break
+
+	var found bool
+	if err := a.cfgStore.Update(func(c *config.Config) {
+		for i, s := range c.Servers {
+			if s.URL == serverURL {
+				c.Servers = append(c.Servers[:i], c.Servers[i+1:]...)
+				found = true
+				return
+			}
 		}
-	}
-	if idx < 0 {
-		return errors.New(errors.CONFIG_WRITE_FAILED, "server not found")
-	}
-	a.config.Servers = append(a.config.Servers[:idx], a.config.Servers[idx+1:]...)
-	if err := a.saveConfig(); err != nil {
+	}); err != nil {
 		log.Printf("ERROR: Failed to save servers after removal: %v", err)
 		return err
+	}
+	if !found {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server not found")
 	}
 	log.Printf("Server removed: %s", serverURL)
 	return nil
@@ -84,16 +107,23 @@ func (a *App) SetServerActive(serverURL string, active bool) error {
 	if serverURL == "" {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL cannot be empty")
 	}
-	for i := range a.config.Servers {
-		if a.config.Servers[i].URL == serverURL {
-			a.config.Servers[i].Active = active
-			if err := a.saveConfig(); err != nil {
-				log.Printf("ERROR: Failed to save server active state: %v", err)
-				return err
+
+	var found bool
+	if err := a.cfgStore.Update(func(c *config.Config) {
+		for i := range c.Servers {
+			if c.Servers[i].URL == serverURL {
+				c.Servers[i].Active = active
+				found = true
+				return
 			}
-			log.Printf("Server %s active=%v", serverURL, active)
-			return nil
 		}
+	}); err != nil {
+		log.Printf("ERROR: Failed to save server active state: %v", err)
+		return err
 	}
-	return errors.New(errors.CONFIG_WRITE_FAILED, "server not found")
+	if !found {
+		return errors.New(errors.CONFIG_WRITE_FAILED, "server not found")
+	}
+	log.Printf("Server %s active=%v", serverURL, active)
+	return nil
 }
