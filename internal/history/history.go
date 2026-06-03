@@ -160,13 +160,18 @@ func (s *Store) Load() error {
 }
 
 // Save writes the current history to disk.
+//
+// A write lock is held even though entries are only read here, because
+// json.Marshal walks the slice while WriteFile runs — and two concurrent
+// Save() calls under RLock would race the file write and could interleave
+// JSON output on disk.
 func (s *Store) Save() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.saveLocked()
 }
 
-// saveLocked performs the actual file write. Caller must hold at least a read lock.
+// saveLocked performs the actual file write. Caller must hold the write lock.
 func (s *Store) saveLocked() error {
 	data, err := json.MarshalIndent(s.entries, "", "  ")
 	if err != nil {
