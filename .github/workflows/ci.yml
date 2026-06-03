@@ -169,7 +169,15 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # Ubuntu 24.04 ships webkit2gtk-4.1 only; Wails defaults to looking for
+      # webkit2gtk-4.0, so Linux builds need the `webkit2_41` build tag. The
+      # tag is Linux-only inside Wails, harmless on macOS/Windows.
+      - name: Build application (Linux)
+        if: matrix.platform == 'linux'
+        run: wails build -clean -tags webkit2_41 -platform ${{ matrix.platform }}/${{ matrix.arch }}
+
       - name: Build application
+        if: matrix.platform != 'linux'
         run: wails build -clean -platform ${{ matrix.platform }}/${{ matrix.arch }}
 
       - name: Upload build artifacts
