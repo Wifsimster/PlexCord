@@ -6,6 +6,7 @@ package events
 
 import (
 	"context"
+	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -60,8 +61,11 @@ func (b *WailsBus) Emit(name string, payload ...interface{}) {
 	runtime.EventsEmit(b.ctx, name, payload...)
 }
 
-// RecordingBus captures emitted events in memory for test assertions.
+// RecordingBus captures emitted events in memory for test assertions. It is
+// safe for concurrent use: some producers (e.g. the automatic update checker)
+// emit from a background goroutine while the test reads via Count/Snapshot.
 type RecordingBus struct {
+	mu     sync.Mutex
 	Events []RecordedEvent
 }
 
@@ -78,16 +82,22 @@ func NewRecordingBus() *RecordingBus {
 
 // Emit records the event.
 func (b *RecordingBus) Emit(name string, payload ...interface{}) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.Events = append(b.Events, RecordedEvent{Name: name, Payload: payload})
 }
 
 // Reset clears all recorded events.
 func (b *RecordingBus) Reset() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.Events = b.Events[:0]
 }
 
 // Count returns the number of events matching the given name.
 func (b *RecordingBus) Count(name string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	n := 0
 	for _, e := range b.Events {
 		if e.Name == name {
@@ -95,4 +105,14 @@ func (b *RecordingBus) Count(name string) int {
 		}
 	}
 	return n
+}
+
+// Snapshot returns a copy of the recorded events, taken under the lock, so
+// callers can iterate without racing a concurrent Emit.
+func (b *RecordingBus) Snapshot() []RecordedEvent {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]RecordedEvent, len(b.Events))
+	copy(out, b.Events)
+	return out
 }

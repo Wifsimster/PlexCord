@@ -288,7 +288,7 @@ func TestDownloadEmitsProgressAndReady(t *testing.T) {
 	}
 
 	// Payload shape: percent must be present and computed.
-	for _, e := range bus.Events {
+	for _, e := range bus.Snapshot() {
 		if e.Name != events.UpdateDownloadProgress {
 			continue
 		}
