@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/url"
 	"os"
@@ -184,7 +185,11 @@ func (a *App) RestartApplication() error {
 		exe = ap
 	}
 
-	cmd := exec.Command(exe)
+	// Use context.Background (not a.ctx): a.ctx is cancelled by the
+	// runtime.Quit below, which would otherwise terminate the relaunched
+	// process. The child must outlive this one.
+	// #nosec G204 -- exe is our own resolved executable path, not user input
+	cmd := exec.CommandContext(context.Background(), exe) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

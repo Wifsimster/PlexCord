@@ -128,7 +128,9 @@ func downloadBody(ctx context.Context, client *http.Client, url string) (*http.R
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
+		if cerr := resp.Body.Close(); cerr != nil {
+			log.Printf("Warning: Failed to close response body: %v", cerr)
+		}
 		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
 	}
 	return resp, nil
