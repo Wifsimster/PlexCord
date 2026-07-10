@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	stderrors "errors"
 	"log"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"plexcord/internal/errors"
 	"plexcord/internal/events"
 	"plexcord/internal/history"
+	"plexcord/internal/updater"
 	"plexcord/internal/version"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -138,11 +140,21 @@ func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 		a.bus.Emit(events.UpdateError, version.ErrUpdateNotSupported.Error())
 		return nil, errors.Wrap(version.ErrUpdateNotSupported, errors.UNKNOWN_ERROR, "update not supported")
 	}
+	if a.updater == nil {
+		return nil, errors.New(errors.UNKNOWN_ERROR, "updater is not ready yet")
+	}
 
 	log.Printf("Starting in-app update download...")
 
 	info, err := a.updater.StartDownload(a.ctx, false)
 	if err != nil {
+		// A background (or concurrent) download already owns the lock. That is
+		// not a failure — the in-flight download's progress/ready events drive
+		// the UI — so report the current state instead of an error toast.
+		if stderrors.Is(err, updater.ErrDownloadInProgress) {
+			log.Printf("Update download already in progress; joining it")
+			return a.updater.GetStatus().Info, nil
+		}
 		log.Printf("ERROR: Update failed: %v", err)
 		return nil, errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to install update")
 	}

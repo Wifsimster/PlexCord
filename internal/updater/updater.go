@@ -163,20 +163,27 @@ func (u *Updater) runAutoCheck(ctx context.Context) {
 	}
 
 	u.mu.Lock()
-	alreadyHandled := info.LatestVersion == u.notifiedVersion
-	if !alreadyHandled {
+	// A download or applied-and-pending-restart (manual or automatic) already
+	// owns the status; leave it alone and revisit on the next tick so we never
+	// clobber an in-flight StateDownloading or emit a spurious event mid-work.
+	if u.status.State == StateDownloading || u.status.State == StateReady {
+		u.mu.Unlock()
+		return
+	}
+	// Announce each version once. Retrying a previously failed download for the
+	// same version must not re-emit, so gate the event on the version, not on
+	// whether we then (re)start a download.
+	newVersion := info.LatestVersion != u.notifiedVersion
+	if newVersion {
 		u.notifiedVersion = info.LatestVersion
 		u.status = Status{State: StateAvailable, Info: info, Auto: true}
 	}
 	u.mu.Unlock()
-	if alreadyHandled {
-		// Already announced (and possibly downloaded) this version; a
-		// failed auto-download resets notifiedVersion to retry instead.
-		return
-	}
 
-	log.Printf("Automatic update check: %s -> %s available", info.CurrentVersion, info.LatestVersion)
-	u.bus.Emit(events.UpdateAvailable, info)
+	if newVersion {
+		log.Printf("Automatic update check: %s -> %s available", info.CurrentVersion, info.LatestVersion)
+		u.bus.Emit(events.UpdateAvailable, info)
+	}
 
 	if !u.canSelf() {
 		// Platform without in-place self-update (macOS): notify-only, the
@@ -184,6 +191,8 @@ func (u *Updater) runAutoCheck(ctx context.Context) {
 		return
 	}
 
+	// Download the update, or retry a download that failed on an earlier tick
+	// (state is still StateAvailable in that case).
 	if _, err := u.StartDownload(ctx, true); err != nil && !errors.Is(err, ErrDownloadInProgress) {
 		log.Printf("Automatic update download failed (will retry next check): %v", err)
 	}
@@ -233,14 +242,15 @@ func (u *Updater) StartDownload(ctx context.Context, auto bool) (*version.Update
 	info, err := u.download(ctx, progress)
 	if err != nil {
 		u.mu.Lock()
+		// Fall back to StateAvailable so the next automatic tick retries the
+		// download (runAutoCheck retries whenever the state is available);
+		// notifiedVersion is left intact so the retry does not re-announce.
 		if u.status.Info != nil {
 			u.status.State = StateAvailable
 		} else {
 			u.status.State = StateIdle
 		}
 		u.status.Progress = 0
-		// Let the next automatic check retry the download for this version.
-		u.notifiedVersion = ""
 		u.mu.Unlock()
 
 		if !auto {

@@ -226,6 +226,71 @@ func TestStartDownloadRejectsConcurrentAndCachesReady(t *testing.T) {
 	}
 }
 
+func TestAutoCheckDoesNotClobberInFlightDownload(t *testing.T) {
+	bus := events.NewRecordingBus()
+	u := newTestUpdater(bus)
+	// No prior auto-announce: a purely manual download, notifiedVersion == "".
+	u.check = func() (*version.UpdateInfo, error) {
+		return updateInfo("v9.9.9"), nil
+	}
+
+	release := make(chan struct{})
+	u.download = func(context.Context, version.ProgressFunc) (*version.UpdateInfo, error) {
+		<-release
+		return &version.UpdateInfo{LatestVersion: "v9.9.9"}, nil
+	}
+
+	// Start a manual download and let it reach StateDownloading.
+	done := make(chan error, 1)
+	go func() {
+		_, err := u.StartDownload(context.Background(), false)
+		done <- err
+	}()
+	waitFor(t, func() bool { return u.GetStatus().State == StateDownloading }, "manual download reaches downloading")
+
+	// An automatic check firing now must not overwrite the downloading status
+	// nor emit a spurious UpdateAvailable.
+	u.runAutoCheck(context.Background())
+
+	if st := u.GetStatus().State; st != StateDownloading {
+		t.Errorf("status = %s after auto-check during download, want downloading (no clobber)", st)
+	}
+	if got := bus.Count(events.UpdateAvailable); got != 0 {
+		t.Errorf("UpdateAvailable emitted %d times during an in-flight download, want 0", got)
+	}
+
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("manual download failed: %v", err)
+	}
+}
+
+func TestAutoDownloadFailureRetriesWithoutReannouncing(t *testing.T) {
+	bus := events.NewRecordingBus()
+	u := newTestUpdater(bus)
+
+	var downloads atomic.Int32
+	u.check = func() (*version.UpdateInfo, error) { return updateInfo("v9.9.9"), nil }
+	u.download = func(context.Context, version.ProgressFunc) (*version.UpdateInfo, error) {
+		downloads.Add(1)
+		return nil, errors.New("network exploded")
+	}
+
+	u.StartChecker(context.Background())
+	defer u.StopChecker()
+
+	waitFor(t, func() bool { return downloads.Load() >= 3 }, "download retried across ticks")
+
+	// The update is announced exactly once even though the download keeps
+	// failing and retrying every tick.
+	if got := bus.Count(events.UpdateAvailable); got != 1 {
+		t.Errorf("UpdateAvailable emitted %d times, want 1 (no re-announce on retry)", got)
+	}
+	if got := bus.Count(events.UpdateError); got != 0 {
+		t.Errorf("UpdateError emitted %d times for automatic downloads, want 0", got)
+	}
+}
+
 func TestAutoDownloadFailureIsSilentAndRetries(t *testing.T) {
 	bus := events.NewRecordingBus()
 	u := newTestUpdater(bus)

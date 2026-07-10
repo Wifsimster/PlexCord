@@ -80,15 +80,22 @@ export const useUpdatesStore = defineStore('updates', {
         },
 
         /**
-         * Hydrate state from the backend updater snapshot
+         * Hydrate state from the backend updater snapshot.
+         * Listeners are registered before this runs, so any transition after
+         * that point already advanced our state via events. Only apply the
+         * snapshot while still idle — otherwise a snapshot dispatched before a
+         * just-delivered event could roll the state backwards (e.g. clobber a
+         * fresh 'ready' with a stale 'downloading').
          */
         async refreshStatus() {
             try {
                 const status = await GetUpdateStatus();
                 if (!status) return;
-                this.status = status.state || 'idle';
-                this.progress = Math.round(status.progress ?? 0);
-                if (status.info) this.info = status.info;
+                if (this.status === 'idle') {
+                    this.status = status.state || 'idle';
+                    this.progress = Math.round(status.progress ?? 0);
+                }
+                if (status.info && !this.info) this.info = status.info;
             } catch (error) {
                 console.error('Failed to refresh update status:', error);
             }
