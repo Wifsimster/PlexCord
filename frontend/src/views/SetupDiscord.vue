@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import { ConnectDiscord, DisconnectDiscord, IsDiscordConnected, GetDefaultDiscordClientID, GetDiscordClientID, SaveDiscordClientID, ValidateDiscordClientID, TestDiscordPresence } from '../../wailsjs/go/main/App';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
@@ -16,6 +16,7 @@ const isConnecting = ref(false);
 const isTesting = ref(false);
 const testSuccess = ref(false);
 const testError = ref('');
+let testSuccessTimer = null;
 
 // Client ID state
 const showCustomClientId = ref(false);
@@ -179,9 +180,15 @@ const testPresence = async () => {
     try {
         await TestDiscordPresence();
         testSuccess.value = true;
-        // Auto-hide success message after 3 seconds
-        setTimeout(() => {
+        // Auto-hide success message after 3 seconds. Clear any previous
+        // pending timer so rapid retries don't leave dangling callbacks
+        // firing after unmount.
+        if (testSuccessTimer) {
+            clearTimeout(testSuccessTimer);
+        }
+        testSuccessTimer = setTimeout(() => {
             testSuccess.value = false;
+            testSuccessTimer = null;
         }, 3000);
     } catch (error) {
         console.error('Test presence failed:', error);
@@ -211,6 +218,13 @@ watch(showCustomClientId, () => {
     if (connectionState.value === 'error' || connectionState.value === 'connected') {
         connectionState.value = 'initial';
         connectionError.value = '';
+    }
+});
+
+onUnmounted(() => {
+    if (testSuccessTimer) {
+        clearTimeout(testSuccessTimer);
+        testSuccessTimer = null;
     }
 });
 </script>
