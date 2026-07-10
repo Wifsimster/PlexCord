@@ -9,6 +9,7 @@ const collapsedByKey = reactive({});
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import TruncatedText from '@/components/TruncatedText.vue';
 import { usePlexConnectionStore } from '@/stores/plexConnection';
 import { useDiscordConnectionStore } from '@/stores/discordConnection';
 import { usePlaybackStore } from '@/stores/playback';
@@ -202,11 +203,11 @@ const retryNow = () => store.retry();
             <template v-if="isPlex">
                 <div class="tile-row">
                     <span class="tile-row-label">account</span>
-                    <span class="tile-row-value">{{ plexStore.userName || '—' }}</span>
+                    <TruncatedText as="span" class="tile-row-value" :text="plexStore.userName || '—'" />
                 </div>
                 <div class="tile-row">
                     <span class="tile-row-label">server</span>
-                    <span class="pc-chip-mono tile-row-chip">{{ plexHost }}</span>
+                    <TruncatedText as="span" class="pc-chip-mono tile-row-chip" :text="plexHost" />
                 </div>
             </template>
             <template v-else>
