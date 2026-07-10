@@ -201,11 +201,11 @@ const retryNow = () => store.retry();
         <div class="tile-rows">
             <template v-if="isPlex">
                 <div class="tile-row">
-                    <span class="tile-row-label">acct</span>
+                    <span class="tile-row-label">account</span>
                     <span class="tile-row-value">{{ plexStore.userName || '—' }}</span>
                 </div>
                 <div class="tile-row">
-                    <span class="tile-row-label">srv</span>
+                    <span class="tile-row-label">server</span>
                     <span class="pc-chip-mono tile-row-chip">{{ plexHost }}</span>
                 </div>
             </template>
