@@ -17,6 +17,7 @@ import (
 	"plexcord/internal/plex"
 	"plexcord/internal/retry"
 	"plexcord/internal/updater"
+	"plexcord/internal/version"
 )
 
 // App struct
@@ -121,6 +122,11 @@ func (a *App) startup(ctx context.Context) {
 	// Perform your setup here
 	a.ctx = ctx
 	a.bus = events.NewWailsBus(ctx)
+
+	// Capture the executable's launch path now, while the running binary still
+	// has its original name. A self-update later renames it in place, so this
+	// pre-update snapshot is what a restart must relaunch to run the new version.
+	version.CaptureLaunchPath()
 
 	// Load configuration
 	cfg, err := config.Load()
