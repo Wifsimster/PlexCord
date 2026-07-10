@@ -186,24 +186,37 @@ func (p *Poller) IsInErrorState() bool {
 
 // pollLoop is the main polling goroutine for music-only mode.
 // It delegates the actual loop logic to runPollLoop (see poll_runner.go).
+//
+// Channels are captured locally at goroutine start so subsequent Start/Stop
+// cycles that replace the struct fields cannot cause this goroutine to send
+// on (or close) the wrong channel.
 func (p *Poller) pollLoop(ctx context.Context) {
+	p.mu.Lock()
+	sessionC := p.sessionC
+	stopCh := p.stopCh
+	p.mu.Unlock()
+
 	// Ensure proper cleanup when goroutine exits
 	defer func() {
 		p.mu.Lock()
-		p.running = false
-		close(p.sessionC)
+		// Only flip running off if this goroutine still owns the current
+		// channel — otherwise a later Start has taken over.
+		if p.sessionC == sessionC {
+			p.running = false
+		}
 		p.mu.Unlock()
+		close(sessionC)
 	}()
 
 	runPollLoop[*MusicSession](
 		ctx,
-		p.stopCh,
+		stopCh,
 		p.GetInterval,
 		p.doPoll,
 		sessionChanged,
 		func(session *MusicSession) {
 			select {
-			case p.sessionC <- session:
+			case sessionC <- session:
 			default:
 				log.Printf("Session channel full, skipping update")
 			}
@@ -260,25 +273,34 @@ func (p *Poller) doPoll() (*MusicSession, bool) {
 
 // mediaPollLoop is the main polling goroutine for multi-media mode.
 // It delegates the actual loop logic to runPollLoop (see poll_runner.go).
+//
+// See pollLoop for the channel-capture rationale.
 func (p *Poller) mediaPollLoop(ctx context.Context) {
+	p.mu.Lock()
+	mediaC := p.mediaC
+	stopCh := p.stopCh
+	p.mu.Unlock()
+
 	// Ensure proper cleanup when goroutine exits
 	defer func() {
 		p.mu.Lock()
-		p.running = false
-		p.mediaMode = false
-		close(p.mediaC)
+		if p.mediaC == mediaC {
+			p.running = false
+			p.mediaMode = false
+		}
 		p.mu.Unlock()
+		close(mediaC)
 	}()
 
 	runPollLoop[*MediaSession](
 		ctx,
-		p.stopCh,
+		stopCh,
 		p.GetInterval,
 		p.doMediaPoll,
 		mediaSessionChanged,
 		func(session *MediaSession) {
 			select {
-			case p.mediaC <- session:
+			case mediaC <- session:
 			default:
 				log.Printf("Media session channel full, skipping update")
 			}
