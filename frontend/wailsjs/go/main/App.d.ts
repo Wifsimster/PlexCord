@@ -9,7 +9,13 @@ import {config} from '../models';
 
 export function AddServer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
+export function CanSelfUpdate():Promise<boolean>;
+
 export function CheckForUpdate():Promise<version.UpdateInfo>;
+
+export function DownloadAndInstallUpdate():Promise<version.UpdateInfo>;
+
+export function RestartApplication():Promise<void>;
 
 export function CheckPlexPINAuth(arg1:number):Promise<Record<string, any>>;
 
