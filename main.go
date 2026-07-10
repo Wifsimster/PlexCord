@@ -32,7 +32,7 @@ func main() {
 		MinHeight:     768,
 		DisableResize: false,
 		Fullscreen:    false,
-		Frameless:     false,
+		Frameless:     true, // Custom in-app title bar (single merged header)
 		StartHidden:   false,
 		// Close behavior is handled dynamically in app.beforeClose so it can
 		// honor the user's "Minimize to tray" setting: hide to the background

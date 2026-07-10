@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Popover from 'primevue/popover';
 import BrandMark from '@/components/BrandMark.vue';
@@ -9,6 +9,7 @@ import { usePlaybackStore } from '@/stores/playback';
 import { usePlexConnectionStore } from '@/stores/plexConnection';
 import { useDiscordConnectionStore } from '@/stores/discordConnection';
 import { usePresenceStore } from '@/stores/presence';
+import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit } from '../../wailsjs/runtime/runtime';
 
 const { toggleDarkMode, isDarkTheme } = useLayout();
 const route = useRoute();
@@ -138,17 +139,46 @@ const reconnectDiscord = async () => {
         console.error('Discord reconnect failed:', error);
     }
 };
+
+// ---- Window controls (frameless title bar, spec §5.1) --------------------
+const isMaximised = ref(false);
+
+const syncMaximised = async () => {
+    try {
+        isMaximised.value = await WindowIsMaximised();
+    } catch {
+        // Runtime unavailable (e.g. browser preview) — leave as-is.
+    }
+};
+
+const minimiseWindow = () => WindowMinimise();
+const toggleMaximise = () => {
+    WindowToggleMaximise();
+    // The runtime has no maximise event; re-read shortly after the toggle.
+    setTimeout(syncMaximised, 60);
+};
+// Mirrors the native close button: Quit() runs the OnBeforeClose hook, which
+// hides to the background or quits depending on the "Minimize to tray" setting.
+const closeWindow = () => Quit();
+
+onMounted(() => {
+    syncMaximised();
+    window.addEventListener('resize', syncMaximised);
+});
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', syncMaximised);
+});
 </script>
 
 <template>
-    <header class="layout-topbar">
+    <header class="layout-topbar" style="--wails-draggable: drag">
         <!-- Left: brand lockup -->
-        <router-link to="/" class="topbar-brand" aria-label="PlexCord dashboard">
+        <router-link to="/" class="topbar-brand" aria-label="PlexCord dashboard" style="--wails-draggable: no-drag">
             <BrandMark />
         </router-link>
 
         <!-- Center: the signal path -->
-        <nav class="signal-path" aria-label="Signal path">
+        <nav class="signal-path" aria-label="Signal path" style="--wails-draggable: no-drag">
             <button type="button" class="signal-node" aria-haspopup="dialog" @click="togglePlexPopover">
                 <span class="pc-dot" :class="plexDotClass" aria-hidden="true"></span>
                 <span class="signal-node-name">Plex</span>
@@ -173,24 +203,43 @@ const reconnectDiscord = async () => {
             </button>
         </nav>
 
-        <!-- Right: global actions -->
-        <div class="topbar-actions">
-            <button
-                type="button"
-                class="topbar-action"
-                v-tooltip.bottom="shortcutTooltip(presenceStore.paused ? 'Resume presence' : 'Pause presence', 'P')"
-                :aria-label="presenceStore.paused ? 'Resume presence' : 'Pause presence'"
-                :aria-pressed="presenceStore.paused"
-                @click="presenceStore.toggle()"
-            >
-                <i :class="presenceStore.paused ? 'pi pi-play' : 'pi pi-pause'"></i>
-            </button>
-            <button type="button" class="topbar-action" v-tooltip.bottom="shortcutTooltip(isSettings ? 'Back to dashboard' : 'Settings', ',')" :aria-label="isSettings ? 'Back to dashboard' : 'Settings'" @click="toggleSettings">
-                <i :class="isSettings ? 'pi pi-arrow-left' : 'pi pi-cog'"></i>
-            </button>
-            <button type="button" class="topbar-action" v-tooltip.bottom="{ value: isDarkTheme ? 'Light theme' : 'Dark theme', showDelay: 300 }" :aria-label="isDarkTheme ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleDarkMode">
-                <i :class="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'"></i>
-            </button>
+        <!-- Right: global actions + window controls -->
+        <div class="topbar-right">
+            <div class="topbar-actions" style="--wails-draggable: no-drag">
+                <button
+                    type="button"
+                    class="topbar-action"
+                    v-tooltip.bottom="shortcutTooltip(presenceStore.paused ? 'Resume presence' : 'Pause presence', 'P')"
+                    :aria-label="presenceStore.paused ? 'Resume presence' : 'Pause presence'"
+                    :aria-pressed="presenceStore.paused"
+                    @click="presenceStore.toggle()"
+                >
+                    <i :class="presenceStore.paused ? 'pi pi-play' : 'pi pi-pause'"></i>
+                </button>
+                <button type="button" class="topbar-action" v-tooltip.bottom="shortcutTooltip(isSettings ? 'Back to dashboard' : 'Settings', ',')" :aria-label="isSettings ? 'Back to dashboard' : 'Settings'" @click="toggleSettings">
+                    <i :class="isSettings ? 'pi pi-arrow-left' : 'pi pi-cog'"></i>
+                </button>
+                <button type="button" class="topbar-action" v-tooltip.bottom="{ value: isDarkTheme ? 'Light theme' : 'Dark theme', showDelay: 300 }" :aria-label="isDarkTheme ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleDarkMode">
+                    <i :class="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'"></i>
+                </button>
+            </div>
+
+            <!-- Window caption buttons (frameless title bar) -->
+            <div class="window-controls" style="--wails-draggable: no-drag">
+                <button type="button" class="caption-btn" aria-label="Minimise" @click="minimiseWindow">
+                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0" y="4.5" width="10" height="1" fill="currentColor" /></svg>
+                </button>
+                <button type="button" class="caption-btn" :aria-label="isMaximised ? 'Restore' : 'Maximise'" @click="toggleMaximise">
+                    <svg v-if="isMaximised" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                        <rect x="0.5" y="2.5" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1" />
+                        <path d="M2.5 2.5 V0.5 H9.5 V7.5 H7.5" fill="none" stroke="currentColor" stroke-width="1" />
+                    </svg>
+                    <svg v-else width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1" /></svg>
+                </button>
+                <button type="button" class="caption-btn caption-btn--close" aria-label="Close" @click="closeWindow">
+                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0.5 0.5 L9.5 9.5 M9.5 0.5 L0.5 9.5" stroke="currentColor" stroke-width="1" /></svg>
+                </button>
+            </div>
         </div>
 
         <!-- Plex node popover -->
@@ -246,7 +295,8 @@ const reconnectDiscord = async () => {
     z-index: 997;
     display: flex;
     align-items: center;
-    padding: 0 var(--pc-page-gutter);
+    /* No right gutter: window caption buttons sit flush in the corner. */
+    padding: 0 0 0 var(--pc-page-gutter);
     background: var(--pc-overlay);
     border-bottom: 1px solid var(--pc-border);
 }
@@ -350,12 +400,26 @@ const reconnectDiscord = async () => {
     text-overflow: ellipsis;
 }
 
-/* ---- Right actions (32px ghost icon buttons) ---- */
-.topbar-actions {
+/* ---- Right cluster: app actions + window caption buttons ---- */
+.topbar-right {
     margin-left: auto;
     display: flex;
+    align-items: center;
+    align-self: stretch;
+    flex: none;
+}
+
+/* ---- App actions (32px ghost icon buttons) ---- */
+.topbar-actions {
+    display: flex;
+    align-items: center;
     gap: 8px;
     flex: none;
+    /* Divider between app actions and the window caption buttons. */
+    padding: 0 var(--pc-page-gutter) 0 0;
+    margin-right: 4px;
+    border-right: 1px solid var(--pc-border);
+    height: 24px;
 }
 .topbar-action {
     display: inline-flex;
@@ -378,6 +442,42 @@ const reconnectDiscord = async () => {
 }
 .topbar-action i {
     font-size: 14px;
+}
+
+/* ---- Window caption buttons (full-height, flush to the corner) ---- */
+.window-controls {
+    display: flex;
+    align-self: stretch;
+    flex: none;
+}
+.caption-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 100%;
+    border: none;
+    background: transparent;
+    color: var(--pc-text-secondary);
+    cursor: pointer;
+    transition:
+        background-color var(--pc-dur-1) var(--pc-ease-out),
+        color var(--pc-dur-1) var(--pc-ease-out);
+}
+.caption-btn:hover {
+    background: var(--pc-raised);
+    color: var(--pc-text);
+}
+.caption-btn:active {
+    background: var(--pc-surface-700);
+}
+.caption-btn--close:hover {
+    background: var(--pc-danger);
+    color: #ffffff;
+}
+.caption-btn--close:active {
+    background: var(--pc-danger);
+    filter: brightness(0.9);
 }
 
 /* ---- Node popovers (overlay recipe; content teleports with scoped attrs) ---- */
