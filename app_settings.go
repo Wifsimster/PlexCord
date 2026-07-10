@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -32,9 +33,21 @@ func (a *App) MinimizeWindow() {
 
 // QuitApp terminates the application completely.
 // This is called from the tray menu or when the user explicitly quits.
+// It flags an explicit quit so beforeClose allows shutdown instead of
+// hiding the window when "Minimize to tray" is enabled.
 func (a *App) QuitApp() {
 	log.Printf("Quit requested")
+	a.quitting.Store(true)
 	runtime.Quit(a.ctx)
+}
+
+// onSecondInstanceLaunch is invoked (via SingleInstanceLock) when the user
+// launches PlexCord again while an instance is already running in the
+// background. Since Wails v2 has no native system tray, relaunching the app
+// is the restore path: bring the existing window back to the foreground.
+func (a *App) onSecondInstanceLaunch(options.SecondInstanceData) {
+	log.Printf("Second instance launched: restoring existing window")
+	a.ShowWindow()
 }
 
 // GetMinimizeToTray returns whether the app should minimize to tray.
