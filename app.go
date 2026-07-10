@@ -59,6 +59,7 @@ type App struct {
 	// Presence pause state
 	presencePaused bool        // Manual one-click pause toggle
 	pauseTimer     *time.Timer // Timer for delayed hide-when-paused
+	pauseTimerGen  uint64      // Incremented every schedule/cancel so a fired-but-cancelled callback bails out
 
 	// Mutexes grouped together for alignment
 	pollerMu   sync.Mutex
