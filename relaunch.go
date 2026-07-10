@@ -38,7 +38,9 @@ func waitForPreviousInstanceExit() {
 	}
 	// Clear it so this instance's own environment (and any future relaunch it
 	// spawns) starts clean rather than inheriting a stale predecessor PID.
-	_ = os.Unsetenv(relaunchPIDEnv)
+	if err := os.Unsetenv(relaunchPIDEnv); err != nil {
+		log.Printf("Warning: failed to clear %s: %v", relaunchPIDEnv, err)
+	}
 
 	pid, err := strconv.Atoi(raw)
 	if err != nil || pid <= 0 {

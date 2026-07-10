@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"runtime"
@@ -15,9 +16,9 @@ func deadPID(t *testing.T) int {
 	t.Helper()
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", "exit")
+		cmd = exec.CommandContext(context.Background(), "cmd", "/c", "exit")
 	} else {
-		cmd = exec.Command("sh", "-c", "exit 0")
+		cmd = exec.CommandContext(context.Background(), "sh", "-c", "exit 0")
 	}
 	if err := cmd.Start(); err != nil {
 		t.Skipf("could not start helper process: %v", err)
