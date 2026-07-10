@@ -1,5 +1,6 @@
 node_modules
 coverage
+components.d.ts
 *.log*
 .nuxt
 .nitro

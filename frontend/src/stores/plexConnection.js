@@ -73,6 +73,13 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
          */
         async autoReconnect() {
             setTimeout(async () => {
+                // Nothing to connect to yet — an active server and a selected
+                // user are both required. Without this guard the dashboard
+                // fires a retry that can never succeed and gets stuck showing
+                // "Retrying..." indefinitely.
+                if (!this.serverUrl || !this.userId) {
+                    return;
+                }
                 if ((!this.connected || !this.polling) && !this.loading && !this.isRetrying) {
                     console.log('Auto-reconnecting to Plex after page refresh...');
                     try {
@@ -148,6 +155,19 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             this.loading = true;
             try {
                 await RetryPlexConnection();
+            } catch (error) {
+                // Surface the failure (e.g. no server/user configured yet)
+                // instead of leaving the Reconnect button looking like it
+                // did nothing.
+                this.inErrorState = true;
+                this.error = {
+                    code: 'PLEX_RETRY_FAILED',
+                    title: 'Reconnect Failed',
+                    description: error?.message || 'Unable to reconnect to Plex.',
+                    suggestion: 'Check your Plex server and user settings, then try again.',
+                    retryable: true
+                };
+                throw error;
             } finally {
                 this.loading = false;
             }

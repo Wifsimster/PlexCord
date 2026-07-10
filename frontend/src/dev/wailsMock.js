@@ -85,6 +85,11 @@ export function installWailsMock() {
         GetVersion: () => ({ version: '4.3.0-dev', commit: 'a1b2c3d4e5f6', buildDate: nowIso() }),
         CheckSetupComplete: () => true,
         CheckForUpdate: () => ({ available: false, latestVersion: '4.3.0' }),
+        // Browsers can't swap the running binary; false exercises the
+        // open-release-page fallback in Settings → About.
+        CanSelfUpdate: () => false,
+        DownloadAndInstallUpdate: () => {},
+        RestartApplication: () => {},
         GetCurrentSession: () => session,
         IsPresencePaused: () => state.presencePaused,
         TogglePresencePause: () => {
@@ -186,7 +191,10 @@ export function installWailsMock() {
             }
             return [{ id: '1', name: 'demo-user', thumb: '' }];
         },
-        // Matches plex.Server (GDM discovery result shape)
+        // Matches plex.Server (GDM discovery result shape). Superset of what
+        // both consumers read: SetupPlex keys rows by `id`; Settings builds
+        // URLs from `name`/`address`/`port`/`isLocal`. The first entry's URL
+        // matches the pre-seeded server so the "Added" state is exercisable.
         DiscoverPlexServers: () =>
             empty
                 ? []
@@ -257,6 +265,10 @@ export function installWailsMock() {
                         (listeners.get(name) || []).filter((f) => f !== cb)
                     );
             },
+            // The wailsjs runtime.js wrapper routes EventsOn/EventsOnce
+            // through EventsOnMultiple — without this, wrapper-based
+            // subscriptions are silent no-ops in the browser.
+            EventsOnMultiple: (name, cb) => window.runtime.EventsOn(name, cb),
             EventsOnce: (name, cb) => window.runtime.EventsOn(name, cb),
             EventsOff: (name) => listeners.delete(name),
             EventsEmit: (name, ...data) => (listeners.get(name) || []).forEach((cb) => cb(...data)),

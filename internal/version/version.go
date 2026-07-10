@@ -43,13 +43,21 @@ func GetInfo() Info {
 
 // GitHubRelease represents a release from GitHub's API.
 type GitHubRelease struct {
-	PublishedAt time.Time `json:"published_at"`
-	TagName     string    `json:"tag_name"`
-	Name        string    `json:"name"`
-	Body        string    `json:"body"`
-	HTMLURL     string    `json:"html_url"`
-	Draft       bool      `json:"draft"`
-	Prerelease  bool      `json:"prerelease"`
+	PublishedAt time.Time      `json:"published_at"`
+	TagName     string         `json:"tag_name"`
+	Name        string         `json:"name"`
+	Body        string         `json:"body"`
+	HTMLURL     string         `json:"html_url"`
+	Assets      []ReleaseAsset `json:"assets"`
+	Draft       bool           `json:"draft"`
+	Prerelease  bool           `json:"prerelease"`
+}
+
+// ReleaseAsset represents a single downloadable file attached to a release.
+type ReleaseAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+	Size               int64  `json:"size"`
 }
 
 // UpdateInfo contains information about an available update.
@@ -65,57 +73,76 @@ type UpdateInfo struct {
 // GitHubRepo is the repository to check for updates.
 const GitHubRepo = "Wifsimster/PlexCord"
 
-// CheckForUpdate checks GitHub releases for a newer version.
-func CheckForUpdate() (*UpdateInfo, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", GitHubRepo)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+// newGitHubRequest builds a GET request pre-populated with the headers the
+// GitHub REST API expects (Accept + a descriptive User-Agent).
+func newGitHubRequest(ctx context.Context, url string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "PlexCord/"+Version)
+	return req, nil
+}
+
+// fetchLatestRelease retrieves the latest published release from GitHub.
+// The returned notFound flag is true when the repository has no releases yet
+// (HTTP 404), which callers treat as "up to date" rather than an error.
+func fetchLatestRelease(ctx context.Context) (release *GitHubRelease, notFound bool, err error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", GitHubRepo)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := newGitHubRequest(ctx, url)
+	if err != nil {
+		return nil, false, err
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check for updates: %w", err)
+		return nil, false, fmt.Errorf("failed to check for updates: %w", err)
 	}
 	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			log.Printf("Warning: Failed to close response body: %v", err)
+		if cerr := resp.Body.Close(); cerr != nil {
+			log.Printf("Warning: Failed to close response body: %v", cerr)
 		}
 	}()
 
 	if resp.StatusCode == http.StatusNotFound {
-		// No releases yet
-		return &UpdateInfo{
-			Available:      false,
-			CurrentVersion: Version,
-			LatestVersion:  Version,
-		}, nil
+		return nil, true, nil
 	}
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+		return nil, false, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
 
-	var release GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("failed to decode release info: %w", err)
+	var r GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return nil, false, fmt.Errorf("failed to decode release info: %w", err)
+	}
+	return &r, false, nil
+}
+
+// upToDate builds an UpdateInfo that reports no update is available.
+func upToDate() *UpdateInfo {
+	return &UpdateInfo{
+		Available:      false,
+		CurrentVersion: Version,
+		LatestVersion:  Version,
+	}
+}
+
+// CheckForUpdate checks GitHub releases for a newer version.
+func CheckForUpdate() (*UpdateInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	release, notFound, err := fetchLatestRelease(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	// Skip draft and prerelease versions
-	if release.Draft || release.Prerelease {
-		return &UpdateInfo{
-			Available:      false,
-			CurrentVersion: Version,
-			LatestVersion:  Version,
-		}, nil
+	// No releases yet, or the latest is a draft/prerelease we don't offer.
+	if notFound || release.Draft || release.Prerelease {
+		return upToDate(), nil
 	}
 
 	// Compare versions

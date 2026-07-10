@@ -14,6 +14,7 @@ import { usePresenceStore } from '@/stores/presence';
 import { usePlayback } from '@/composables/usePlayback';
 import { useVersion } from '@/composables/useVersion';
 import { validatePlexServerUrl, PLEX_URL_PLACEHOLDER } from '@/utils/plexUrl';
+import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime';
 import {
     GetPollingInterval,
     SetPollingInterval,
@@ -29,6 +30,9 @@ import {
     DisconnectDiscord,
     TestDiscordPresence,
     CheckForUpdate,
+    CanSelfUpdate,
+    DownloadAndInstallUpdate,
+    RestartApplication,
     OpenReleasesPage,
     OpenReleaseURL,
     ResetApplication,
@@ -41,7 +45,8 @@ import {
     RemoveServer,
     SetServerActive,
     ValidatePlexConnection,
-    GetPlexToken
+    GetPlexToken,
+    DiscoverPlexServers
 } from '../../../wailsjs/go/main/App';
 
 const router = useRouter();
@@ -198,6 +203,11 @@ onMounted(async () => {
         } catch {
             hasPlexToken.value = false;
         }
+        try {
+            canSelfUpdate.value = !!(await CanSelfUpdate());
+        } catch {
+            canSelfUpdate.value = false;
+        }
         refreshAllServerHealth();
     } catch (error) {
         toastFailure('Failed to load settings', error, 'Could not read settings from the backend.');
@@ -221,9 +231,27 @@ onMounted(async () => {
         const el = document.getElementById(s.id);
         if (el) sectionObserver.observe(el);
     });
+
+    // In-app update lifecycle: progress, completion, and failure all arrive
+    // as runtime events emitted by the Go updater.
+    EventsOn('UpdateDownloadProgress', (p) => {
+        updateProgress.value = Math.round(p?.percent ?? 0);
+    });
+    EventsOn('UpdateReady', () => {
+        updateProgress.value = 100;
+        installingUpdate.value = false;
+        updateReady.value = true;
+    });
+    EventsOn('UpdateError', (message) => {
+        installingUpdate.value = false;
+        toastFailure('Update failed', message, 'The update could not be installed.');
+    });
 });
 
 onBeforeUnmount(() => {
+    EventsOff('UpdateDownloadProgress');
+    EventsOff('UpdateReady');
+    EventsOff('UpdateError');
     sectionObserver?.disconnect();
     Object.values(savedTimers).forEach(clearTimeout);
     clearTimeout(pollingTimer);
@@ -350,11 +378,48 @@ const newServerUrlValidation = computed(() => validatePlexServerUrl(newServerURL
 const newServerUrlTouched = computed(() => newServerURL.value.trim().length > 0);
 const canAddServer = computed(() => newServerName.value.trim().length > 0 && newServerUrlValidation.value.valid);
 
+// Server auto-discovery (GDM) inside the add-server dialog
+const isDiscovering = ref(false);
+const hasDiscovered = ref(false);
+const discoveryError = ref('');
+const discoveredServers = ref([]);
+
 function openAddServerDialog() {
     newServerName.value = '';
     newServerURL.value = '';
     addServerError.value = '';
+    isDiscovering.value = false;
+    hasDiscovered.value = false;
+    discoveryError.value = '';
+    discoveredServers.value = [];
     showAddServerDialog.value = true;
+}
+
+async function discoverServers() {
+    isDiscovering.value = true;
+    discoveryError.value = '';
+    try {
+        discoveredServers.value = (await DiscoverPlexServers()) || [];
+        hasDiscovered.value = true;
+    } catch {
+        discoveredServers.value = [];
+        hasDiscovered.value = false;
+        discoveryError.value = 'Discovery failed. Make sure your Plex server is on the same network, or enter the URL manually.';
+    } finally {
+        isDiscovering.value = false;
+    }
+}
+
+const discoveredServerURL = (server) => `http://${server.address}:${server.port}`;
+
+function isServerAlreadyAdded(server) {
+    return servers.value.some((s) => s.url === discoveredServerURL(server));
+}
+
+function selectDiscoveredServer(server) {
+    if (isServerAlreadyAdded(server)) return;
+    newServerName.value = server.name || 'Plex Server';
+    newServerURL.value = discoveredServerURL(server);
 }
 
 async function addServer() {
@@ -611,6 +676,36 @@ function openUpdatePage() {
         OpenReleaseURL(updateInfo.value.releaseUrl);
     } else {
         OpenReleasesPage();
+    }
+}
+
+// In-app self-update (platforms where the binary can replace itself)
+const canSelfUpdate = ref(false);
+const installingUpdate = ref(false);
+const updateProgress = ref(0);
+const updateReady = ref(false);
+
+// Progress, completion, and failure are surfaced through the
+// UpdateDownloadProgress / UpdateReady / UpdateError events subscribed in
+// onMounted, so the promise here only resets local state on rejection.
+async function installUpdate() {
+    if (installingUpdate.value) return;
+    installingUpdate.value = true;
+    updateProgress.value = 0;
+    updateReady.value = false;
+    try {
+        await DownloadAndInstallUpdate();
+    } catch {
+        // The UpdateError event handler surfaces the message.
+        installingUpdate.value = false;
+    }
+}
+
+async function restartApp() {
+    try {
+        await RestartApplication();
+    } catch (error) {
+        toastFailure('Failed to restart', error, 'PlexCord could not restart itself — please restart it manually.');
     }
 }
 
@@ -925,11 +1020,26 @@ async function executeReset() {
                     </div>
 
                     <div v-if="updateInfo?.available" class="pc-panel--raised update-row">
-                        <div class="row-text">
-                            <span class="row-label">Update available — {{ updateInfo.latestVersion }}</span>
-                            <p v-if="truncatedReleaseNotes" class="row-caption">{{ truncatedReleaseNotes }}</p>
+                        <div class="update-row-main">
+                            <div class="row-text">
+                                <span class="row-label">Update available — {{ updateInfo.latestVersion }}</span>
+                                <p v-if="truncatedReleaseNotes" class="row-caption">{{ truncatedReleaseNotes }}</p>
+                                <p v-if="updateReady" class="row-caption row-caption--success">Update installed. Restart PlexCord to finish updating to {{ updateInfo.latestVersion }}.</p>
+                            </div>
+                            <!-- Self-updating platforms install in place; the rest fall back to the release page -->
+                            <button v-if="updateReady" type="button" class="pc-btn pc-btn--success" @click="restartApp"><i class="pi pi-refresh" aria-hidden="true"></i>Restart now</button>
+                            <button v-else-if="canSelfUpdate" type="button" class="pc-btn pc-btn--primary" :class="{ 'is-loading': installingUpdate }" :disabled="installingUpdate" @click="installUpdate">
+                                <span class="btn-label"><i class="pi pi-download" aria-hidden="true"></i>Download &amp; install</span>
+                                <i v-if="installingUpdate" class="pi pi-spinner pi-spin btn-spinner" aria-hidden="true"></i>
+                            </button>
+                            <button v-else type="button" class="pc-btn pc-btn--primary" @click="openUpdatePage"><i class="pi pi-download" aria-hidden="true"></i>Download</button>
                         </div>
-                        <button type="button" class="pc-btn pc-btn--primary" @click="openUpdatePage"><i class="pi pi-download" aria-hidden="true"></i>Download</button>
+                        <div v-if="installingUpdate" class="update-progress">
+                            <div class="update-progress-track" role="progressbar" aria-label="Update download progress" :aria-valuenow="updateProgress" aria-valuemin="0" aria-valuemax="100">
+                                <div class="update-progress-fill" :style="{ width: `${updateProgress}%` }"></div>
+                            </div>
+                            <p class="row-caption">Downloading update… {{ updateProgress }}%</p>
+                        </div>
                     </div>
 
                     <div class="setting-row">
@@ -960,6 +1070,40 @@ async function executeReset() {
         <!-- Add server dialog -->
         <Dialog v-model:visible="showAddServerDialog" modal header="Add server" :style="{ width: '420px' }">
             <div class="dialog-body">
+                <!-- Auto-discovery (GDM) -->
+                <div class="dialog-discovery">
+                    <button v-if="!isDiscovering" type="button" class="pc-btn pc-btn--secondary discovery-btn" @click="discoverServers">
+                        <i class="pi pi-search" aria-hidden="true"></i>{{ hasDiscovered ? 'Search again' : 'Discover servers on network' }}
+                    </button>
+                    <p v-else class="row-caption discovery-searching" role="status"><i class="pi pi-spinner pi-spin inline-spinner" aria-hidden="true"></i> Searching for Plex servers on your network…</p>
+
+                    <p v-if="discoveryError" class="row-caption row-caption--danger" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ discoveryError }}</p>
+
+                    <ul v-if="hasDiscovered && discoveredServers.length > 0" class="discovered-list">
+                        <li v-for="server in discoveredServers" :key="`${server.address}:${server.port}`">
+                            <button
+                                type="button"
+                                class="discovered-row"
+                                :class="{ 'discovered-row--added': isServerAlreadyAdded(server), 'discovered-row--selected': newServerURL === discoveredServerURL(server) }"
+                                :disabled="isServerAlreadyAdded(server)"
+                                :aria-pressed="newServerURL === discoveredServerURL(server)"
+                                @click="selectDiscoveredServer(server)"
+                            >
+                                <span class="server-name discovered-name">{{ server.name || 'Plex Server' }}</span>
+                                <span class="pc-chip-mono discovered-url">{{ server.address }}:{{ server.port }}</span>
+                                <span v-if="isServerAlreadyAdded(server)" class="pc-badge">Added</span>
+                                <span v-else class="pc-badge">{{ server.isLocal ? 'Local' : 'Remote' }}</span>
+                            </button>
+                        </li>
+                    </ul>
+
+                    <p v-if="hasDiscovered && !discoveryError && discoveredServers.length === 0" class="row-caption">No servers found — enter the server details manually below.</p>
+                </div>
+
+                <div class="dialog-divider" aria-hidden="true">
+                    <span class="pc-eyebrow">or enter manually</span>
+                </div>
+
                 <div class="dialog-field">
                     <label class="row-label" for="new-server-name">Server name</label>
                     <InputText id="new-server-name" v-model="newServerName" placeholder="My Plex Server" class="dialog-input" autocomplete="off" @keyup.enter="addServer" />
@@ -1323,13 +1467,47 @@ async function executeReset() {
     margin-top: 6px;
 }
 .update-row {
+    padding: 12px 16px;
+    margin: 4px 0 8px;
+    border: 1px solid var(--pc-border);
+}
+.update-row-main {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 12px 16px;
-    margin: 4px 0 8px;
-    border: 1px solid var(--pc-border);
+}
+.update-row-main .pc-btn {
+    flex: none;
+}
+.update-progress {
+    margin-top: 10px;
+}
+.update-progress-track {
+    height: 4px;
+    border-radius: var(--pc-radius-full);
+    background: var(--pc-raised);
+    border: 1px solid var(--pc-border-subtle);
+    overflow: hidden;
+}
+.update-progress-fill {
+    height: 100%;
+    border-radius: var(--pc-radius-full);
+    background: var(--pc-accent);
+    transition: width var(--pc-dur-2) var(--pc-ease-out);
+}
+.update-progress .row-caption {
+    margin-top: 6px;
+    font-variant-numeric: tabular-nums;
+}
+/* Success-severity confirm for the restart step (tokens only) */
+.pc-btn--success {
+    background: var(--pc-success);
+    border-color: transparent;
+    color: var(--pc-accent-contrast);
+}
+.pc-btn--success:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--pc-success) 88%, var(--pc-text));
 }
 .danger-zone {
     margin-top: 8px;
@@ -1346,6 +1524,83 @@ async function executeReset() {
     display: flex;
     flex-direction: column;
     gap: 14px;
+}
+.dialog-discovery {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.discovery-btn {
+    width: 100%;
+}
+.discovery-searching {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 32px;
+    margin: 0;
+}
+.discovered-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.discovered-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    background: var(--pc-raised);
+    border: 1px solid var(--pc-border);
+    border-radius: var(--pc-radius-md);
+    text-align: left;
+    cursor: pointer;
+    color: var(--pc-text);
+    font-family: var(--pc-font-ui);
+    transition:
+        border-color var(--pc-dur-1) var(--pc-ease-out),
+        background-color var(--pc-dur-1) var(--pc-ease-out);
+}
+.discovered-row:hover:not(:disabled) {
+    border-color: var(--pc-border-strong);
+}
+.discovered-row--selected {
+    border-color: var(--pc-accent);
+    background: var(--pc-accent-dim);
+}
+.discovered-row--added {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.discovered-name {
+    font-size: var(--pc-text-body);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.discovered-url {
+    margin-left: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dialog-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.dialog-divider::before,
+.dialog-divider::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid var(--pc-border-subtle);
 }
 .dialog-field {
     display: flex;

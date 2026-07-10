@@ -12,9 +12,26 @@ func (a *App) setupRetryCallbacks() {
 	// Plex retry callback
 	a.plexRetry.SetCallbacks(
 		func() error {
-			// Try to reconnect to Plex
-			_, err := a.ValidatePlexConnection(a.config.ServerURL)
-			if err != nil {
+			// Nothing to connect to yet: no active server or no user
+			// selected. Returning nil stops the retry loop so the dashboard
+			// settles on "Not Connected" instead of retrying a target that
+			// can never succeed (e.g. a server added via the Settings dialog
+			// before a user has been selected).
+			serverURL := a.activePlexServerURL()
+			if serverURL == "" || a.config.SelectedPlexUserID == "" {
+				a.stopPlexRetry()
+				return nil
+			}
+
+			// Try to reconnect to the active Plex server.
+			if _, err := a.ValidatePlexConnection(serverURL); err != nil {
+				// Auth/config problems won't be fixed by retrying — stop the
+				// loop rather than spin forever.
+				code := errors.GetCode(err)
+				if errors.IsAuthError(code) || (code != "" && !errors.IsRetryable(code)) {
+					a.stopPlexRetry()
+					return nil
+				}
 				return err
 			}
 			// Also restart polling if it was running
@@ -51,8 +68,17 @@ func (a *App) GetDiscordRetryState() retry.RetryState {
 
 // RetryPlexConnection manually triggers a Plex connection retry.
 // Resets the backoff schedule and attempts immediately.
-func (a *App) RetryPlexConnection() {
+//
+// Returns an error immediately when there's no active server or no selected
+// user configured, rather than silently doing nothing. Without this check
+// the Reconnect button appeared completely unresponsive whenever Plex hadn't
+// been set up yet, since the retry callback would just stop the loop.
+func (a *App) RetryPlexConnection() error {
+	if a.activePlexServerURL() == "" || a.config.SelectedPlexUserID == "" {
+		return errors.New(errors.PLEX_NOT_CONFIGURED, "No Plex server or user configured")
+	}
 	a.plexRetry.ManualRetry()
+	return nil
 }
 
 // RetryDiscordConnection manually triggers a Discord connection retry.

@@ -21,6 +21,12 @@ const (
 	DiscordConnected       = "DiscordConnected"
 	DiscordDisconnected    = "DiscordDisconnected"
 	DiscordRetryState      = "DiscordRetryState"
+
+	// Update lifecycle events emitted while an in-app update is downloaded
+	// and applied.
+	UpdateDownloadProgress = "UpdateDownloadProgress"
+	UpdateReady            = "UpdateReady"
+	UpdateError            = "UpdateError"
 )
 
 // Bus is the abstraction for emitting events to the frontend. Production code
