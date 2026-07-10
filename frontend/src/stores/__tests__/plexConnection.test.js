@@ -272,6 +272,47 @@ describe('plexConnection store', () => {
       })
     })
 
+    describe('markLivePoll', () => {
+      it('marks the connection live and clears error state', () => {
+        store.connected = false
+        store.polling = false
+        store.inErrorState = true
+        store.error = { code: 'PLEX_UNREACHABLE' }
+
+        store.markLivePoll()
+
+        expect(store.connected).toBe(true)
+        expect(store.polling).toBe(true)
+        expect(store.inErrorState).toBe(false)
+        expect(store.error).toBeNull()
+      })
+
+      it('resolves a stuck "Idle" snapshot into "Connected"', () => {
+        // Reproduces the startup race: the status snapshot was taken before
+        // the poller started, so the tile shows "Idle" + Reconnect while music
+        // is actually playing. A live poll must correct it.
+        store.connected = false
+        store.polling = false
+        expect(store.statusLabel).toBe('Not Connected')
+
+        store.markLivePoll()
+
+        expect(store.statusLabel).toBe('Connected')
+      })
+
+      it('is a no-op when already connected and polling', () => {
+        store.connected = true
+        store.polling = true
+        store.inErrorState = false
+        const clearSpy = vi.spyOn(store, 'clearError')
+
+        store.markLivePoll()
+
+        expect(clearSpy).not.toHaveBeenCalled()
+        clearSpy.mockRestore()
+      })
+    })
+
     describe('initialize', () => {
       it('only initializes once', async () => {
         // Suppress console.log from autoReconnect
@@ -304,6 +345,9 @@ describe('plexConnection store', () => {
         eventHandlers['PlexConnectionRestored']()
 
         expect(store.connected).toBe(true)
+        // Recovery means the poller resumed — polling must flip on too, or the
+        // tile stays "Idle" (healthy = connected && polling) after recovery.
+        expect(store.polling).toBe(true)
         expect(store.inErrorState).toBe(false)
         expect(store.lastConnected).toBeTruthy()
         expect(store.error).toBeNull()
