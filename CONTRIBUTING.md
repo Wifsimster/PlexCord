@@ -82,26 +82,116 @@ Please be respectful and constructive in all interactions. We aim to foster an i
    cd frontend && npm run lint
    ```
 
-4. **Commit your changes**
-   ```bash
-   git add .
-   git commit -m "feat: add awesome feature"
-   ```
-   
-   Use conventional commit messages:
-   - `feat:` - New feature
-   - `fix:` - Bug fix
-   - `docs:` - Documentation
-   - `style:` - Code style/formatting
-   - `refactor:` - Code refactoring
-   - `test:` - Tests
-   - `chore:` - Maintenance
+4. **Commit your changes** (see [Commit Message Format](#commit-message-format) below)
 
 5. **Push and create PR**
    ```bash
    git push origin feature/your-feature-name
    ```
    Then create a Pull Request on GitHub.
+
+## Commit Message Format
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for automated versioning and changelog generation. Your commit messages are validated by commitlint when you commit.
+
+### Format
+
+```
+type(scope): description
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Supported Types
+
+| Type | Description | Version Bump |
+|------|-------------|--------------|
+| `feat` | A new feature | Minor (0.x.0) |
+| `fix` | A bug fix | Patch (0.0.x) |
+| `docs` | Documentation only changes | None |
+| `style` | Code style/formatting (no logic changes) | None |
+| `refactor` | Code change that neither fixes a bug nor adds a feature | None |
+| `perf` | A code change that improves performance | Patch (0.0.x) |
+| `test` | Adding missing tests or correcting existing tests | None |
+| `build` | Changes to build system or external dependencies | None |
+| `ci` | Changes to CI configuration files and scripts | None |
+| `chore` | Other changes that don't modify src or test files | None |
+
+### Scope (Optional)
+
+The scope provides additional context about what area of the codebase is affected:
+
+```
+feat(discord): add custom activity support
+fix(plex): handle connection timeout
+docs(readme): update installation instructions
+```
+
+Common scopes: `discord`, `plex`, `frontend`, `config`, `keychain`, `platform`
+
+### Examples
+
+**Feature:**
+```
+feat(discord): add support for custom activity images
+
+Add ability to configure custom images for Discord Rich Presence
+activity using Plex poster artwork.
+```
+
+**Bug fix:**
+```
+fix(plex): handle reconnection after network timeout
+
+Previously, the connection would not recover after a network
+interruption. Now retries with exponential backoff.
+
+Closes #123
+```
+
+**Breaking change (using `!`):**
+```
+feat(api)!: change configuration file format to YAML
+
+BREAKING CHANGE: The config file is now YAML instead of JSON.
+Run `plexcord migrate-config` to convert your existing config.
+```
+
+**Breaking change (using footer):**
+```
+refactor(config): restructure configuration schema
+
+BREAKING CHANGE: Configuration keys have been renamed.
+- `plex_server` is now `plex.server_url`
+- `discord_id` is now `discord.client_id`
+```
+
+### Breaking Changes
+
+To indicate a breaking change, you can either:
+
+1. Add `!` after the type/scope: `feat(api)!: description`
+2. Add a `BREAKING CHANGE:` footer in the commit body
+
+Breaking changes trigger a major version bump (x.0.0).
+
+### Rules
+
+- **Type** must be lowercase
+- **Scope** must be lowercase (if provided)
+- **Description** must not be empty
+- **Description** must not end with a period
+- **Header** (type + scope + description) must be 100 characters or less
+
+### Why This Matters
+
+Conventional commits enable:
+- Automated semantic versioning (version bumps based on commit types)
+- Automated changelog generation
+- Easier navigation through commit history
+- Triggering CI/CD workflows based on change types
 
 ## Code Style
 

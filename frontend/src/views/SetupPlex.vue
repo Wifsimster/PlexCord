@@ -18,6 +18,8 @@ const pinID = ref(null);
 const authURL = ref('');
 const authError = ref('');
 const checkInterval = ref(null);
+const pinPollFailures = ref(0);
+const MAX_PIN_POLL_FAILURES = 5;
 
 // Server discovery state
 const isDiscovering = ref(false);
@@ -72,6 +74,7 @@ const startPINAuth = async () => {
         pinID.value = result.pinID;
         authURL.value = result.authURL;
         authStep.value = 'waiting';
+        pinPollFailures.value = 0;
 
         // Start polling for authorization
         checkInterval.value = setInterval(checkPINStatus, 2000);
@@ -86,41 +89,44 @@ const startPINAuth = async () => {
 };
 
 // Check PIN status
+const stopPinPolling = () => {
+    if (checkInterval.value) {
+        clearInterval(checkInterval.value);
+        checkInterval.value = null;
+    }
+};
+
 const checkPINStatus = async () => {
     try {
         const result = await CheckPlexPINAuth(pinID.value);
+        pinPollFailures.value = 0;
 
         if (result.authorized) {
             // Success! Save the token
             setupStore.setPlexToken(result.authToken);
             authStep.value = 'success';
-
-            // Stop polling
-            if (checkInterval.value) {
-                clearInterval(checkInterval.value);
-                checkInterval.value = null;
-            }
+            stopPinPolling();
         } else if (result.expired) {
             authError.value = 'PIN expired. Please try again.';
             authStep.value = 'error';
-
-            // Stop polling
-            if (checkInterval.value) {
-                clearInterval(checkInterval.value);
-                checkInterval.value = null;
-            }
+            stopPinPolling();
         }
     } catch (error) {
         console.error('Error checking PIN status:', error);
+        // Bail out after repeated failures so the interval doesn't loop
+        // forever on a persistent network/backend failure.
+        pinPollFailures.value += 1;
+        if (pinPollFailures.value >= MAX_PIN_POLL_FAILURES) {
+            authError.value = error?.message || 'Failed to check PIN status. Please try again.';
+            authStep.value = 'error';
+            stopPinPolling();
+        }
     }
 };
 
 // Cancel PIN auth
 const cancelPINAuth = () => {
-    if (checkInterval.value) {
-        clearInterval(checkInterval.value);
-        checkInterval.value = null;
-    }
+    stopPinPolling();
     authStep.value = 'initial';
     pinCode.value = '';
     pinID.value = null;
@@ -130,9 +136,7 @@ const cancelPINAuth = () => {
 
 // Cleanup on unmount
 onUnmounted(() => {
-    if (checkInterval.value) {
-        clearInterval(checkInterval.value);
-    }
+    stopPinPolling();
 });
 
 // Discover Plex servers

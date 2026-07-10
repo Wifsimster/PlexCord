@@ -340,6 +340,12 @@ func (a *App) SetHideWhenPaused(enabled bool, delaySeconds int) error {
 }
 
 // scheduleHideOnPause schedules clearing Discord presence after the configured delay.
+//
+// timer.Stop() doesn't wait for an already-firing callback, so a stale
+// callback could race against a subsequent play-resume and clear the
+// presence we just restored. Each schedule bumps pauseTimerGen and the
+// callback checks the generation before clearing; if a cancel/reschedule
+// has happened since the timer was armed, the callback returns.
 func (a *App) scheduleHideOnPause() {
 	a.pauseMu.Lock()
 	defer a.pauseMu.Unlock()
@@ -349,6 +355,8 @@ func (a *App) scheduleHideOnPause() {
 		a.pauseTimer.Stop()
 		a.pauseTimer = nil
 	}
+	a.pauseTimerGen++
+	gen := a.pauseTimerGen
 
 	delay := time.Duration(a.config.HideWhenPausedDelay) * time.Second
 	if delay <= 0 {
@@ -358,12 +366,20 @@ func (a *App) scheduleHideOnPause() {
 	}
 
 	a.pauseTimer = time.AfterFunc(delay, func() {
+		a.pauseMu.Lock()
+		stale := gen != a.pauseTimerGen
+		a.pauseMu.Unlock()
+		if stale {
+			return
+		}
 		log.Printf("Hide-when-paused delay elapsed, clearing presence")
 		a.clearDiscordOnStop()
 	})
 }
 
 // cancelPauseTimer cancels any pending hide-when-paused timer.
+// Bumps the generation so an already-firing callback returns without
+// clearing presence.
 func (a *App) cancelPauseTimer() {
 	a.pauseMu.Lock()
 	defer a.pauseMu.Unlock()
@@ -372,6 +388,7 @@ func (a *App) cancelPauseTimer() {
 		a.pauseTimer.Stop()
 		a.pauseTimer = nil
 	}
+	a.pauseTimerGen++
 }
 
 // ============================================================================
