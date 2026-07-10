@@ -41,6 +41,13 @@ var errorInfoMap = map[string]ErrorInfo{
 		Suggestion:  "The server may be slow or your network may be congested. Please try again.",
 		Retryable:   true,
 	},
+	PLEX_NOT_CONFIGURED: {
+		Code:        PLEX_NOT_CONFIGURED,
+		Title:       "Plex Not Configured",
+		Description: "No Plex server or user is set up yet.",
+		Suggestion:  "Add a Plex server and select a user in Settings, then try again.",
+		Retryable:   false,
+	},
 
 	// Discord Errors
 	DISCORD_NOT_RUNNING: {

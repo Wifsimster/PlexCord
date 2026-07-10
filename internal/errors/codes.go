@@ -59,6 +59,15 @@ const (
 	//
 	// Recommended action: Check network connection and server status, then retry.
 	TIMEOUT = "TIMEOUT"
+
+	// PLEX_NOT_CONFIGURED indicates there is no active Plex server or no
+	// selected user to connect to yet.
+	// This typically occurs when:
+	// - No server has been added in Settings
+	// - A server was added but no user has been selected for it
+	//
+	// Recommended action: Add a Plex server and select a user in Settings.
+	PLEX_NOT_CONFIGURED = "PLEX_NOT_CONFIGURED"
 )
 
 // Discord Error Codes
