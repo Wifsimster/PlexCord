@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 import { GetCurrentSession } from '../../wailsjs/go/main/App';
+import { usePlexConnectionStore } from './plexConnection';
 
 /**
  * Playback Store
@@ -85,13 +86,18 @@ export const usePlaybackStore = defineStore('playback', {
                 return;
             }
 
-            // Listen for PlaybackUpdated events
+            // Listen for PlaybackUpdated events. A playback event is proof the
+            // Plex poller reached the server, so tell the connection store the
+            // link is live — this keeps its tile from getting stuck on "Idle"
+            // when the startup status snapshot raced ahead of the poller.
             EventsOn('PlaybackUpdated', (session) => {
+                usePlexConnectionStore().markLivePoll();
                 this.setTrack(session);
             });
 
             // Listen for PlaybackStopped events
             EventsOn('PlaybackStopped', () => {
+                usePlexConnectionStore().markLivePoll();
                 this.clearTrack();
             });
 
@@ -103,6 +109,7 @@ export const usePlaybackStore = defineStore('playback', {
                 const currentSession = await GetCurrentSession();
                 if (currentSession) {
                     console.log('Restoring current playback session after page refresh');
+                    usePlexConnectionStore().markLivePoll();
                     this.setTrack(currentSession);
                 }
             } catch (error) {
