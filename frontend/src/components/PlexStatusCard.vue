@@ -2,8 +2,24 @@
 import { computed } from 'vue';
 import { usePlexConnectionStore } from '@/stores/plexConnection';
 import Button from 'primevue/button';
+import { useToast } from 'primevue/usetoast';
 
 const plexStore = usePlexConnectionStore();
+const toast = useToast();
+
+const handleReconnect = async () => {
+    try {
+        await plexStore.retry();
+        toast.add({ severity: 'info', summary: 'Reconnecting', detail: 'Attempting to reconnect to Plex…', life: 3000 });
+    } catch (error) {
+        toast.add({
+            severity: 'error',
+            summary: plexStore.error?.title || 'Reconnect Failed',
+            detail: plexStore.error?.description || error?.message || 'Unable to reconnect to Plex.',
+            life: 6000
+        });
+    }
+};
 
 // Computed status color
 const statusColorClass = computed(() => {
@@ -64,7 +80,7 @@ const iconClass = computed(() => {
 
         <!-- Actions -->
         <div v-if="!plexStore.connected || plexStore.hasError" class="mt-5 pt-4 border-t border-surface-200 dark:border-surface-700">
-            <Button label="Reconnect" icon="pi pi-refresh" severity="secondary" size="small" :loading="plexStore.loading || plexStore.isRetrying" @click="plexStore.retry()" class="w-full" outlined />
+            <Button label="Reconnect" icon="pi pi-refresh" severity="secondary" size="small" :loading="plexStore.loading || plexStore.isRetrying" @click="handleReconnect" class="w-full" outlined />
         </div>
     </div>
 </template>
