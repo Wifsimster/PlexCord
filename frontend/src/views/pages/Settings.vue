@@ -7,6 +7,8 @@ import InputNumber from 'primevue/inputnumber';
 import ToggleSwitch from 'primevue/toggleswitch';
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
+import Badge from 'primevue/badge';
+import ProgressSpinner from 'primevue/progressspinner';
 import { useToast } from 'primevue/usetoast';
 import {
     GetPollingInterval,
@@ -31,7 +33,8 @@ import {
     GetServers,
     AddServer,
     RemoveServer,
-    SetServerActive
+    SetServerActive,
+    DiscoverPlexServers
 } from '../../../wailsjs/go/main/App';
 
 const router = useRouter();
@@ -74,6 +77,12 @@ const servers = ref([]);
 const showAddServerDialog = ref(false);
 const newServerName = ref('');
 const newServerURL = ref('');
+
+// Server auto-discovery (GDM)
+const isDiscovering = ref(false);
+const hasDiscovered = ref(false);
+const discoveryError = ref('');
+const discoveredServers = ref([]);
 
 // Reset confirmation dialog
 const showResetDialog = ref(false);
@@ -334,7 +343,42 @@ const removeServer = async (server) => {
 const openAddServerDialog = () => {
     newServerName.value = '';
     newServerURL.value = '';
+    isDiscovering.value = false;
+    hasDiscovered.value = false;
+    discoveryError.value = '';
+    discoveredServers.value = [];
     showAddServerDialog.value = true;
+};
+
+const discoverServers = async () => {
+    isDiscovering.value = true;
+    discoveryError.value = '';
+
+    try {
+        discoveredServers.value = (await DiscoverPlexServers()) || [];
+        hasDiscovered.value = true;
+    } catch (error) {
+        console.error('Failed to discover servers:', error);
+        discoveredServers.value = [];
+        hasDiscovered.value = false;
+        discoveryError.value = 'Discovery failed. Make sure your Plex server is on the same network, or enter the URL manually.';
+    } finally {
+        isDiscovering.value = false;
+    }
+};
+
+const discoveredServerURL = (server) => `http://${server.address}:${server.port}`;
+
+const isServerAlreadyAdded = (server) => {
+    return servers.value.some((s) => s.url === discoveredServerURL(server));
+};
+
+const selectDiscoveredServer = (server) => {
+    if (isServerAlreadyAdded(server)) {
+        return;
+    }
+    newServerName.value = server.name || 'Plex Server';
+    newServerURL.value = discoveredServerURL(server);
 };
 
 const addServer = async () => {
@@ -518,8 +562,64 @@ const goToDashboard = () => {
         </div>
 
         <!-- Add Server Dialog -->
-        <Dialog v-model:visible="showAddServerDialog" modal header="Add Server" :style="{ width: '400px' }">
+        <Dialog v-model:visible="showAddServerDialog" modal header="Add Server" :style="{ width: '440px' }">
             <div class="flex flex-col gap-4">
+                <!-- Auto-discovery -->
+                <div>
+                    <Button
+                        v-if="!isDiscovering"
+                        :label="hasDiscovered ? 'Search Again' : 'Discover Servers on Network'"
+                        icon="pi pi-search"
+                        severity="secondary"
+                        outlined
+                        class="w-full"
+                        @click="discoverServers"
+                    />
+                    <div v-if="isDiscovering" class="flex items-center justify-center gap-3 py-2">
+                        <ProgressSpinner style="width: 24px; height: 24px" strokeWidth="4" />
+                        <span class="text-sm text-muted-color">Searching for Plex servers on your network...</span>
+                    </div>
+
+                    <div v-if="discoveryError" class="mt-2 text-sm text-red-500 flex items-center gap-1">
+                        <i class="pi pi-exclamation-triangle"></i>
+                        <span>{{ discoveryError }}</span>
+                    </div>
+
+                    <!-- Discovered servers -->
+                    <div v-if="hasDiscovered && discoveredServers.length > 0" class="mt-3 flex flex-col gap-2">
+                        <div
+                            v-for="server in discoveredServers"
+                            :key="`${server.address}:${server.port}`"
+                            :class="[
+                                'flex items-center justify-between gap-3 p-3 rounded-lg border border-surface-200 dark:border-surface-700',
+                                isServerAlreadyAdded(server)
+                                    ? 'opacity-60 cursor-not-allowed'
+                                    : 'cursor-pointer hover:border-primary-500 hover:bg-surface-50 dark:hover:bg-surface-800',
+                                { 'ring-1 ring-primary-500': newServerURL === discoveredServerURL(server) }
+                            ]"
+                            @click="selectDiscoveredServer(server)"
+                        >
+                            <div class="min-w-0">
+                                <div class="font-medium truncate">{{ server.name || 'Plex Server' }}</div>
+                                <div class="text-sm text-muted-color font-mono truncate">{{ server.address }}:{{ server.port }}</div>
+                            </div>
+                            <Badge v-if="isServerAlreadyAdded(server)" severity="secondary" value="Added" />
+                            <Badge v-else :severity="server.isLocal ? 'success' : 'info'" :value="server.isLocal ? 'Local' : 'Remote'" />
+                        </div>
+                    </div>
+
+                    <div v-if="hasDiscovered && discoveredServers.length === 0" class="mt-2 text-sm text-muted-color flex items-center gap-1">
+                        <i class="pi pi-info-circle"></i>
+                        <span>No servers found. Enter the server details manually below.</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="flex-1 border-t border-surface-200 dark:border-surface-700"></div>
+                    <span class="text-xs text-muted-color uppercase">or enter manually</span>
+                    <div class="flex-1 border-t border-surface-200 dark:border-surface-700"></div>
+                </div>
+
                 <div>
                     <label class="block font-medium mb-1">Server Name</label>
                     <InputText v-model="newServerName" placeholder="My Plex Server" class="w-full" @keyup.enter="addServer" />
