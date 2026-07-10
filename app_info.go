@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -183,11 +184,24 @@ func (a *App) RestartApplication() error {
 	cmd := exec.CommandContext(context.Background(), exe) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	// Hand the child our PID so it waits for this process to fully exit — and
+	// thereby release the Wails single-instance lock — before its own runtime
+	// tries to acquire that lock. Without this, the freshly-installed binary
+	// starts while we still hold the lock, is treated as a second instance
+	// (it merely restores our window and exits), and the OLD version keeps
+	// running. See waitForPreviousInstanceExit in relaunch.go.
+	cmd.Env = append(os.Environ(), relaunchPIDEnv+"="+strconv.Itoa(os.Getpid()))
 	if err := cmd.Start(); err != nil {
 		return errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to relaunch application")
 	}
 
 	log.Printf("Relaunching application to apply update")
+	// Mark this as an explicit quit so beforeClose does not intercept
+	// runtime.Quit and merely hide the window when "Minimize to tray" is
+	// enabled. Without this flag the old process would linger in the tray
+	// running the previous version, the single-instance lock would never be
+	// released, and the update would never take effect. Mirrors QuitApp.
+	a.quitting.Store(true)
 	runtime.Quit(a.ctx)
 	return nil
 }
