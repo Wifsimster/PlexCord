@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
 // Mock Wails runtime
@@ -328,6 +328,44 @@ describe('plexConnection store', () => {
         eventHandlers['PlexRetryState'](state)
 
         expect(store.retryState).toEqual(state)
+      })
+    })
+
+    describe('autoReconnect', () => {
+      beforeEach(() => {
+        vi.useFakeTimers()
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      it('does not retry when no server URL or user is configured', async () => {
+        store.serverUrl = ''
+        store.userId = ''
+        store.connected = false
+        store.polling = false
+
+        store.autoReconnect()
+        await vi.runAllTimersAsync()
+
+        // Without a configured server/user there is nothing to connect to,
+        // so the dashboard must not spin in a perpetual "Retrying..." state.
+        expect(RetryPlexConnection).not.toHaveBeenCalled()
+      })
+
+      it('retries when a server and user are configured but disconnected', async () => {
+        const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+        store.serverUrl = 'http://plex:32400'
+        store.userId = '123'
+        store.connected = false
+        store.polling = false
+
+        store.autoReconnect()
+        await vi.runAllTimersAsync()
+
+        expect(RetryPlexConnection).toHaveBeenCalled()
+        consoleSpy.mockRestore()
       })
     })
   })
