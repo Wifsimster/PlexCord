@@ -5,7 +5,9 @@ import {plex} from '../models';
 import {main} from '../models';
 import {retry} from '../models';
 import {errors} from '../models';
+import {history} from '../models';
 import {config} from '../models';
+import {updater} from '../models';
 
 export function AddServer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
@@ -13,15 +15,13 @@ export function CanSelfUpdate():Promise<boolean>;
 
 export function CheckForUpdate():Promise<version.UpdateInfo>;
 
-export function DownloadAndInstallUpdate():Promise<version.UpdateInfo>;
-
-export function RestartApplication():Promise<void>;
-
 export function CheckPlexPINAuth(arg1:number):Promise<Record<string, any>>;
 
 export function CheckSetupComplete():Promise<boolean>;
 
 export function ClearDiscordPresence():Promise<void>;
+
+export function ClearListeningHistory():Promise<void>;
 
 export function CompleteSetup():Promise<void>;
 
@@ -31,7 +31,11 @@ export function DisconnectDiscord():Promise<void>;
 
 export function DiscoverPlexServers():Promise<Array<plex.Server>>;
 
+export function DownloadAndInstallUpdate():Promise<version.UpdateInfo>;
+
 export function GetAutoStart():Promise<boolean>;
+
+export function GetAutoUpdateCheck():Promise<boolean>;
 
 export function GetConnectionHistory():Promise<main.ConnectionHistory>;
 
@@ -47,9 +51,9 @@ export function GetErrorInfo(arg1:string):Promise<errors.ErrorInfo>;
 
 export function GetHideWhenPaused():Promise<Record<string, any>>;
 
-export function GetPresenceFormat():Promise<main.PresenceFormatSettings>;
+export function GetListeningHistory(arg1:number):Promise<Array<history.Entry>>;
 
-export function IsPresencePaused():Promise<boolean>;
+export function GetListeningStats():Promise<history.Stats>;
 
 export function GetMinimizeToTray():Promise<boolean>;
 
@@ -61,11 +65,15 @@ export function GetPlexToken():Promise<string>;
 
 export function GetPlexUsers(arg1:string):Promise<Array<plex.PlexUser>>;
 
-export function GetServers():Promise<Array<config.ServerConfig>>;
-
 export function GetPollingInterval():Promise<number>;
 
+export function GetPresenceFormat():Promise<main.PresenceFormatSettings>;
+
 export function GetResourceStats():Promise<main.ResourceStats>;
+
+export function GetServers():Promise<Array<config.ServerConfig>>;
+
+export function GetUpdateStatus():Promise<updater.Status>;
 
 export function GetVersion():Promise<version.Info>;
 
@@ -78,6 +86,8 @@ export function IsAuthError(arg1:string):Promise<boolean>;
 export function IsDiscordConnected():Promise<boolean>;
 
 export function IsPollingActive():Promise<boolean>;
+
+export function IsPresencePaused():Promise<boolean>;
 
 export function IsRetryableError(arg1:string):Promise<boolean>;
 
@@ -93,6 +103,8 @@ export function RemoveServer(arg1:string):Promise<void>;
 
 export function ResetApplication():Promise<void>;
 
+export function RestartApplication():Promise<void>;
+
 export function RetryDiscordConnection():Promise<void>;
 
 export function RetryPlexConnection():Promise<void>;
@@ -107,17 +119,17 @@ export function SaveServerURL(arg1:string):Promise<void>;
 
 export function SetAutoStart(arg1:boolean):Promise<void>;
 
-export function SetServerActive(arg1:string,arg2:boolean):Promise<void>;
+export function SetAutoUpdateCheck(arg1:boolean):Promise<void>;
 
 export function SetHideWhenPaused(arg1:boolean,arg2:number):Promise<void>;
-
-export function SetPresenceFormat(arg1:string,arg2:string):Promise<void>;
-
-export function TogglePresencePause():Promise<boolean>;
 
 export function SetMinimizeToTray(arg1:boolean):Promise<void>;
 
 export function SetPollingInterval(arg1:number):Promise<void>;
+
+export function SetPresenceFormat(arg1:string,arg2:string):Promise<void>;
+
+export function SetServerActive(arg1:string,arg2:boolean):Promise<void>;
 
 export function ShowWindow():Promise<void>;
 
@@ -130,6 +142,8 @@ export function StartSessionPolling():Promise<void>;
 export function StopSessionPolling():Promise<void>;
 
 export function TestDiscordPresence():Promise<void>;
+
+export function TogglePresencePause():Promise<boolean>;
 
 export function UpdateDiscordPresence(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number,arg6:number):Promise<void>;
 

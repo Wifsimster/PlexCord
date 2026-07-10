@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
+import { storeToRefs } from 'pinia';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import ToggleSwitch from 'primevue/toggleswitch';
@@ -12,11 +13,11 @@ import DiscordSpecimen from '@/components/DiscordSpecimen.vue';
 import SavedIndicator from '@/components/settings/SavedIndicator.vue';
 import { useSetupStore } from '@/stores/setup';
 import { usePresenceStore } from '@/stores/presence';
+import { useUpdatesStore } from '@/stores/updates';
 import { usePlayback } from '@/composables/usePlayback';
 import { useVersion } from '@/composables/useVersion';
 import { validatePlexServerUrl, PLEX_URL_PLACEHOLDER } from '@/utils/plexUrl';
 import { setLocale, SUPPORTED_LOCALES } from '@/i18n';
-import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime';
 import {
     GetPollingInterval,
     SetPollingInterval,
@@ -24,6 +25,8 @@ import {
     SetAutoStart,
     GetMinimizeToTray,
     SetMinimizeToTray,
+    GetAutoUpdateCheck,
+    SetAutoUpdateCheck,
     GetDiscordClientID,
     GetDefaultDiscordClientID,
     SaveDiscordClientID,
@@ -31,10 +34,6 @@ import {
     ConnectDiscord,
     DisconnectDiscord,
     TestDiscordPresence,
-    CheckForUpdate,
-    CanSelfUpdate,
-    DownloadAndInstallUpdate,
-    RestartApplication,
     OpenReleasesPage,
     OpenReleaseURL,
     ResetApplication,
@@ -57,6 +56,7 @@ const toast = useToast();
 const confirm = useConfirm();
 const setupStore = useSetupStore();
 const presenceStore = usePresenceStore();
+const updatesStore = useUpdatesStore();
 const { currentTrack, hasActiveSession } = usePlayback();
 const { version, commit, buildDate } = useVersion();
 
@@ -79,6 +79,7 @@ const loaded = ref(false);
 const pollingInterval = ref(2);
 const autoStart = ref(false);
 const minimizeToTray = ref(true);
+const autoUpdateCheck = ref(true);
 const hideWhenPaused = ref(false);
 const hideWhenPausedDelay = ref(0);
 const detailsFormat = ref('');
@@ -192,6 +193,7 @@ onMounted(async () => {
         pollingInterval.value = await GetPollingInterval();
         autoStart.value = await GetAutoStart();
         minimizeToTray.value = await GetMinimizeToTray();
+        autoUpdateCheck.value = await GetAutoUpdateCheck();
         discordClientId.value = await GetDiscordClientID();
         defaultClientId.value = await GetDefaultDiscordClientID();
 
@@ -215,11 +217,9 @@ onMounted(async () => {
         } catch {
             hasPlexToken.value = false;
         }
-        try {
-            canSelfUpdate.value = !!(await CanSelfUpdate());
-        } catch {
-            canSelfUpdate.value = false;
-        }
+        // Idempotent: AppLayout initializes it too, but a direct navigation
+        // to /settings should not depend on that ordering.
+        await updatesStore.initialize();
         refreshAllServerHealth();
     } catch (error) {
         toastFailure(t('settings.toast.loadFailed'), error, t('settings.toast.loadFailedDetail'));
@@ -243,27 +243,9 @@ onMounted(async () => {
         const el = document.getElementById(s.id);
         if (el) sectionObserver.observe(el);
     });
-
-    // In-app update lifecycle: progress, completion, and failure all arrive
-    // as runtime events emitted by the Go updater.
-    EventsOn('UpdateDownloadProgress', (p) => {
-        updateProgress.value = Math.round(p?.percent ?? 0);
-    });
-    EventsOn('UpdateReady', () => {
-        updateProgress.value = 100;
-        installingUpdate.value = false;
-        updateReady.value = true;
-    });
-    EventsOn('UpdateError', (message) => {
-        installingUpdate.value = false;
-        toastFailure(t('settings.toast.updateFailed'), message, t('settings.toast.updateFailedDetail'));
-    });
 });
 
 onBeforeUnmount(() => {
-    EventsOff('UpdateDownloadProgress');
-    EventsOff('UpdateReady');
-    EventsOff('UpdateError');
     sectionObserver?.disconnect();
     Object.values(savedTimers).forEach(clearTimeout);
     clearTimeout(pollingTimer);
@@ -587,6 +569,22 @@ async function updateMinimizeToTray(value) {
     }
 }
 
+const autoUpdateCheckSaving = ref(false);
+
+async function updateAutoUpdateCheck(value) {
+    autoUpdateCheckSaving.value = true;
+    autoUpdateCheck.value = value;
+    try {
+        await SetAutoUpdateCheck(value);
+        flashSaved('autoUpdateCheck');
+    } catch (error) {
+        autoUpdateCheck.value = !value;
+        toastFailure(t('settings.toast.autoUpdateFailed'), error, t('settings.toast.autoUpdateFailedDetail'));
+    } finally {
+        autoUpdateCheckSaving.value = false;
+    }
+}
+
 // ---------------- Advanced: Discord Client ID (explicit Apply) ----------------
 const applyingClientId = ref(false);
 const clientIdError = ref('');
@@ -661,8 +659,15 @@ async function sendTestPresence() {
 }
 
 // ---------------- About: updates + changelog ----------------
+// Update state lives in the updates store: the backend checks and downloads
+// automatically in the background, so the state must survive page navigation
+// (an update downloaded while on the Dashboard still shows "Restart now"
+// here). The store also owns the update runtime event subscriptions.
+const { info: updateInfo, progress: updateProgress, canSelfUpdate } = storeToRefs(updatesStore);
+const updateReady = computed(() => updatesStore.updateReady);
+const installingUpdate = computed(() => updatesStore.installing);
+const showUpdatePanel = computed(() => updatesStore.showUpdatePanel);
 const checkingUpdate = ref(false);
-const updateInfo = ref(null);
 const truncatedReleaseNotes = computed(() => {
     const notes = updateInfo.value?.releaseNotes ?? '';
     return notes.length > 120 ? `${notes.slice(0, 120)}…` : notes;
@@ -672,8 +677,8 @@ async function checkForUpdates() {
     if (checkingUpdate.value) return;
     checkingUpdate.value = true;
     try {
-        updateInfo.value = await CheckForUpdate();
-        if (!updateInfo.value?.available) {
+        const info = await updatesStore.checkNow();
+        if (!info?.available) {
             flashSaved('upToDate');
         }
     } catch (error) {
@@ -691,31 +696,21 @@ function openUpdatePage() {
     }
 }
 
-// In-app self-update (platforms where the binary can replace itself)
-const canSelfUpdate = ref(false);
-const installingUpdate = ref(false);
-const updateProgress = ref(0);
-const updateReady = ref(false);
-
-// Progress, completion, and failure are surfaced through the
-// UpdateDownloadProgress / UpdateReady / UpdateError events subscribed in
-// onMounted, so the promise here only resets local state on rejection.
+// Progress and completion are surfaced through the store (fed by the
+// UpdateDownloadProgress / UpdateReady events); the rejection carries the
+// failure message.
 async function installUpdate() {
     if (installingUpdate.value) return;
-    installingUpdate.value = true;
-    updateProgress.value = 0;
-    updateReady.value = false;
     try {
-        await DownloadAndInstallUpdate();
-    } catch {
-        // The UpdateError event handler surfaces the message.
-        installingUpdate.value = false;
+        await updatesStore.install();
+    } catch (error) {
+        toastFailure(t('settings.toast.updateFailed'), error, t('settings.toast.updateFailedDetail'));
     }
 }
 
 async function restartApp() {
     try {
-        await RestartApplication();
+        await updatesStore.restart();
     } catch (error) {
         toastFailure(t('settings.toast.restartFailed'), error, t('settings.toast.restartFailedDetail'));
     }
@@ -942,6 +937,16 @@ async function executeReset() {
                         </div>
                         <div class="setting-row">
                             <div class="row-text">
+                                <span class="row-label" id="lbl-auto-update">{{ $t('settings.autoUpdateCheck') }}</span>
+                                <p class="row-caption">{{ canSelfUpdate ? $t('settings.autoUpdateCheckCaption') : $t('settings.autoUpdateCheckCaptionNotify') }}</p>
+                            </div>
+                            <div class="row-control">
+                                <SavedIndicator :visible="!!savedFlags.autoUpdateCheck" />
+                                <ToggleSwitch :modelValue="autoUpdateCheck" :disabled="autoUpdateCheckSaving" aria-labelledby="lbl-auto-update" @update:modelValue="updateAutoUpdateCheck" />
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="row-text">
                                 <label class="row-label" for="language-select">{{ $t('settings.language') }}</label>
                                 <p class="row-caption">{{ $t('settings.languageCaption') }}</p>
                             </div>
@@ -1042,12 +1047,13 @@ async function executeReset() {
                         </div>
                     </div>
 
-                    <div v-if="updateInfo?.available" class="pc-panel--raised update-row">
+                    <!-- Also shown for an already-downloaded update (whose info.available is false) -->
+                    <div v-if="showUpdatePanel" class="pc-panel--raised update-row">
                         <div class="update-row-main">
                             <div class="row-text">
-                                <span class="row-label">{{ $t('settings.updateAvailable', { version: updateInfo.latestVersion }) }}</span>
+                                <span class="row-label">{{ $t('settings.updateAvailable', { version: updateInfo?.latestVersion }) }}</span>
                                 <p v-if="truncatedReleaseNotes" class="row-caption">{{ truncatedReleaseNotes }}</p>
-                                <p v-if="updateReady" class="row-caption row-caption--success">{{ $t('settings.updateInstalled', { version: updateInfo.latestVersion }) }}</p>
+                                <p v-if="updateReady" class="row-caption row-caption--success">{{ $t('settings.updateInstalled', { version: updateInfo?.latestVersion }) }}</p>
                             </div>
                             <!-- Self-updating platforms install in place; the rest fall back to the release page -->
                             <button v-if="updateReady" type="button" class="pc-btn pc-btn--success" @click="restartApp"><i class="pi pi-refresh" aria-hidden="true"></i>{{ $t('settings.restartNow') }}</button>

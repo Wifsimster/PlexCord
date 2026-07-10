@@ -9,6 +9,8 @@
  *   ?mock=empty  — nothing playing, everything disconnected (empty states)
  *   ?mock=error  — Plex unreachable + auto-retrying (error/countdown states)
  *   ?mock=users  — multiple Plex users (wizard Select User grid)
+ *   ?mock=update — background auto-update completes shortly after load
+ *                  (AppLayout "Update ready" toast + Settings restart row)
  */
 
 const ALBUM_ART =
@@ -32,6 +34,7 @@ export function installWailsMock() {
     const empty = scenario === 'empty';
     const plexError = scenario === 'error';
     const multiUsers = scenario === 'users';
+    const updateSim = scenario === 'update';
 
     const listeners = new Map();
 
@@ -51,9 +54,21 @@ export function installWailsMock() {
                   playerName: 'Plexamp'
               };
 
+    // ?mock=update — auto-download finishes ~2s after load
+    const mockUpdateInfo = {
+        available: false, // matches the backend: false once the update is applied
+        currentVersion: '4.3.0-dev',
+        latestVersion: 'v9.9.9',
+        releaseUrl: 'https://github.com/Wifsimster/PlexCord/releases',
+        releaseNotes: 'Mock release notes: automatic background updates.',
+        publishedAt: nowIso()
+    };
+    const updateStatus = { state: 'idle', progress: 0, auto: false };
+
     const state = {
         presencePaused: false,
         autoStart: true,
+        autoUpdateCheck: true,
         minimizeToTray: true,
         hideWhenPaused: false,
         hideWhenPausedDelay: 0,
@@ -84,12 +99,19 @@ export function installWailsMock() {
     const appMocks = {
         GetVersion: () => ({ version: '4.3.0-dev', commit: 'a1b2c3d4e5f6', buildDate: nowIso() }),
         CheckSetupComplete: () => true,
-        CheckForUpdate: () => ({ available: false, latestVersion: '4.3.0' }),
+        CheckForUpdate: () => (updateSim ? { ...mockUpdateInfo, available: true } : { available: false, latestVersion: '4.3.0' }),
         // Browsers can't swap the running binary; false exercises the
-        // open-release-page fallback in Settings → About.
-        CanSelfUpdate: () => false,
+        // open-release-page fallback in Settings → About. The ?mock=update
+        // scenario pretends self-update works so the ready/restart flow and
+        // the AppLayout toast are exercisable.
+        CanSelfUpdate: () => updateSim,
         DownloadAndInstallUpdate: () => {},
         RestartApplication: () => {},
+        GetUpdateStatus: () => ({ ...updateStatus, info: updateStatus.info ?? null }),
+        GetAutoUpdateCheck: () => state.autoUpdateCheck,
+        SetAutoUpdateCheck: (v) => {
+            state.autoUpdateCheck = v;
+        },
         GetCurrentSession: () => session,
         IsPresencePaused: () => state.presencePaused,
         TogglePresencePause: () => {
@@ -280,6 +302,29 @@ export function installWailsMock() {
             }
         }
     );
+
+    // Simulate the automatic updater (?mock=update): announce, stream download
+    // progress, then flip to ready — same event sequence as the Go updater.
+    if (updateSim) {
+        setTimeout(() => {
+            updateStatus.state = 'available';
+            updateStatus.info = { ...mockUpdateInfo, available: true };
+            window.runtime.EventsEmit('UpdateAvailable', { ...mockUpdateInfo, available: true });
+            let percent = 0;
+            const tick = setInterval(() => {
+                percent += 25;
+                updateStatus.state = 'downloading';
+                updateStatus.progress = percent;
+                window.runtime.EventsEmit('UpdateDownloadProgress', { downloaded: percent * 1e6, total: 1e8, percent });
+                if (percent >= 100) {
+                    clearInterval(tick);
+                    updateStatus.state = 'ready';
+                    updateStatus.info = { ...mockUpdateInfo };
+                    window.runtime.EventsEmit('UpdateReady', { ...mockUpdateInfo });
+                }
+            }, 400);
+        }, 2000);
+    }
 
     // Simulate playback progress so time-based UI (progress bars) animates.
     if (session) {

@@ -297,6 +297,9 @@
         "startOnLoginCaption": "Iniciar PlexCord automáticamente al iniciar sesión",
         "minimizeToTray": "Minimizar a la bandeja",
         "minimizeToTrayCaption": "Seguir ejecutándose en la bandeja del sistema al cerrar la ventana",
+        "autoUpdateCheck": "Buscar actualizaciones automáticamente",
+        "autoUpdateCheckCaption": "Comprueba cada 6 horas y descarga las actualizaciones en segundo plano",
+        "autoUpdateCheckCaptionNotify": "Comprueba cada 6 horas y avisa cuando haya una nueva versión",
         "language": "Idioma",
         "languageCaption": "Elige el idioma en el que se muestra PlexCord",
         "discordClientId": "Client ID de Discord",
@@ -377,7 +380,9 @@
             "resetFailed": "No se pudo restablecer la aplicación",
             "resetFailedDetail": "No se pudo restablecer la aplicación.",
             "resetComplete": "Restablecimiento completado",
-            "resetCompleteDetail": "PlexCord se ha restablecido — volviendo a la configuración."
+            "resetCompleteDetail": "PlexCord se ha restablecido — volviendo a la configuración.",
+            "autoUpdateFailed": "No se pudieron guardar las actualizaciones automáticas",
+            "autoUpdateFailedDetail": "No se pudo guardar el ajuste."
         },
         "confirm": {
             "removeHeader": "¿Eliminar el servidor?",

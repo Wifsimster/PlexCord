@@ -297,6 +297,9 @@
         "startOnLoginCaption": "Lancer PlexCord automatiquement à votre connexion",
         "minimizeToTray": "Réduire dans la zone de notification",
         "minimizeToTrayCaption": "Continuer à fonctionner dans la zone de notification lorsque la fenêtre est fermée",
+        "autoUpdateCheck": "Vérifier automatiquement les mises à jour",
+        "autoUpdateCheckCaption": "Vérifie toutes les 6 heures et télécharge les mises à jour en arrière-plan",
+        "autoUpdateCheckCaptionNotify": "Vérifie toutes les 6 heures et vous avertit quand une nouvelle version est disponible",
         "language": "Langue",
         "languageCaption": "Choisissez la langue d'affichage de PlexCord",
         "discordClientId": "ID client Discord",
@@ -377,7 +380,9 @@
             "resetFailed": "Échec de la réinitialisation de l'application",
             "resetFailedDetail": "L'application n'a pas pu être réinitialisée.",
             "resetComplete": "Réinitialisation terminée",
-            "resetCompleteDetail": "PlexCord a été réinitialisé — retour à la configuration."
+            "resetCompleteDetail": "PlexCord a été réinitialisé — retour à la configuration.",
+            "autoUpdateFailed": "Échec de l'enregistrement des mises à jour automatiques",
+            "autoUpdateFailedDetail": "Le paramètre n'a pas pu être enregistré."
         },
         "confirm": {
             "removeHeader": "Supprimer le serveur ?",

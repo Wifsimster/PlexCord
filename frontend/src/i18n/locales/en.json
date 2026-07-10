@@ -297,6 +297,9 @@
         "startOnLoginCaption": "Launch PlexCord automatically when you log in",
         "minimizeToTray": "Minimize to tray",
         "minimizeToTrayCaption": "Keep running in the system tray when the window is closed",
+        "autoUpdateCheck": "Automatically check for updates",
+        "autoUpdateCheckCaption": "Check every 6 hours and download updates in the background",
+        "autoUpdateCheckCaptionNotify": "Check every 6 hours and notify when a new version is out",
         "language": "Language",
         "languageCaption": "Choose the language PlexCord is displayed in",
         "discordClientId": "Discord Client ID",
@@ -377,7 +380,9 @@
             "resetFailed": "Failed to reset application",
             "resetFailedDetail": "The application could not be reset.",
             "resetComplete": "Reset complete",
-            "resetCompleteDetail": "PlexCord has been reset — returning to setup."
+            "resetCompleteDetail": "PlexCord has been reset — returning to setup.",
+            "autoUpdateFailed": "Failed to save automatic updates",
+            "autoUpdateFailedDetail": "The setting could not be saved."
         },
         "confirm": {
             "removeHeader": "Remove server?",

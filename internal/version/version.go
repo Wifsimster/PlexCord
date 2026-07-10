@@ -158,6 +158,13 @@ func CheckForUpdate() (*UpdateInfo, error) {
 	}, nil
 }
 
+// IsDevBuild reports whether this binary is a development build (no release
+// tag injected via -ldflags). Automatic update flows must be disabled for dev
+// builds because isNewerVersion always reports an update for them.
+func IsDevBuild() bool {
+	return Version == "dev" || strings.Contains(Version, "-dev")
+}
+
 // isNewerVersion compares two semantic version strings.
 // Returns true if latest is newer than current.
 func isNewerVersion(latest, current string) bool {

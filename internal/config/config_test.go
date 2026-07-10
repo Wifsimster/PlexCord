@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,5 +100,31 @@ func TestDefaultConfig(t *testing.T) {
 	// This test verifies the field exists and is the expected empty default.
 	if cfg.DiscordClientID != "" {
 		t.Error("Default Discord client ID should be empty (use package default)")
+	}
+}
+
+// TestIsAutoUpdateCheckEnabled verifies the nil-means-enabled default so that
+// config files written before the setting existed keep automatic updates on.
+func TestIsAutoUpdateCheckEnabled(t *testing.T) {
+	if !DefaultConfig().IsAutoUpdateCheckEnabled() {
+		t.Error("automatic update checks should default to enabled")
+	}
+
+	// Old config file without the autoUpdateCheck key -> enabled.
+	var legacy Config
+	if err := json.Unmarshal([]byte(`{"serverUrl":"http://plex:32400"}`), &legacy); err != nil {
+		t.Fatalf("unmarshal legacy config: %v", err)
+	}
+	if !legacy.IsAutoUpdateCheckEnabled() {
+		t.Error("configs without the autoUpdateCheck key should be enabled")
+	}
+
+	enabled := true
+	disabled := false
+	if !(&Config{AutoUpdateCheck: &enabled}).IsAutoUpdateCheckEnabled() {
+		t.Error("explicit true should be enabled")
+	}
+	if (&Config{AutoUpdateCheck: &disabled}).IsAutoUpdateCheckEnabled() {
+		t.Error("explicit false should be disabled")
 	}
 }

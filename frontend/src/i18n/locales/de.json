@@ -297,6 +297,9 @@
         "startOnLoginCaption": "PlexCord automatisch starten, wenn du dich anmeldest",
         "minimizeToTray": "In den Tray minimieren",
         "minimizeToTrayCaption": "Im System-Tray weiterlaufen lassen, wenn das Fenster geschlossen wird",
+        "autoUpdateCheck": "Automatisch nach Updates suchen",
+        "autoUpdateCheckCaption": "Alle 6 Stunden prüfen und Updates im Hintergrund herunterladen",
+        "autoUpdateCheckCaptionNotify": "Alle 6 Stunden prüfen und benachrichtigen, wenn eine neue Version verfügbar ist",
         "language": "Sprache",
         "languageCaption": "Wähle die Sprache, in der PlexCord angezeigt wird",
         "discordClientId": "Discord-Client-ID",
@@ -377,7 +380,9 @@
             "resetFailed": "Anwendung konnte nicht zurückgesetzt werden",
             "resetFailedDetail": "Die Anwendung konnte nicht zurückgesetzt werden.",
             "resetComplete": "Zurücksetzen abgeschlossen",
-            "resetCompleteDetail": "PlexCord wurde zurückgesetzt — Rückkehr zur Einrichtung."
+            "resetCompleteDetail": "PlexCord wurde zurückgesetzt — Rückkehr zur Einrichtung.",
+            "autoUpdateFailed": "Automatische Updates konnten nicht gespeichert werden",
+            "autoUpdateFailedDetail": "Die Einstellung konnte nicht gespeichert werden."
         },
         "confirm": {
             "removeHeader": "Server entfernen?",
