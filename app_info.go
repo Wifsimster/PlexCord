@@ -123,19 +123,13 @@ func (a *App) CanSelfUpdate() bool {
 	return version.CanSelfUpdate()
 }
 
-// UpdateProgress describes the state of an in-progress download for the
-// frontend progress bar.
-type UpdateProgress struct {
-	Downloaded int64   `json:"downloaded"`
-	Total      int64   `json:"total"`
-	Percent    float64 `json:"percent"`
-}
-
 // DownloadAndInstallUpdate downloads the latest release for the current
 // platform, verifies its checksum, and replaces the running executable.
-// Download progress is streamed to the frontend via the UpdateDownloadProgress
-// event; on completion an UpdateReady event carries the new version and on
-// failure an UpdateError event carries a message.
+// It shares the updater's single download path with the automatic background
+// checker, so concurrent downloads are impossible. Download progress is
+// streamed to the frontend via the UpdateDownloadProgress event; on
+// completion an UpdateReady event carries the new version and on failure an
+// UpdateError event carries a message.
 //
 // The application must be restarted for the update to take effect — the
 // frontend is responsible for prompting the user to do so.
@@ -147,27 +141,11 @@ func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 
 	log.Printf("Starting in-app update download...")
 
-	progress := func(downloaded, total int64) {
-		var percent float64
-		if total > 0 {
-			percent = float64(downloaded) / float64(total) * 100
-		}
-		a.bus.Emit(events.UpdateDownloadProgress, UpdateProgress{
-			Downloaded: downloaded,
-			Total:      total,
-			Percent:    percent,
-		})
-	}
-
-	info, err := version.DownloadAndApplyUpdate(a.ctx, progress)
+	info, err := a.updater.StartDownload(a.ctx, false)
 	if err != nil {
 		log.Printf("ERROR: Update failed: %v", err)
-		a.bus.Emit(events.UpdateError, err.Error())
 		return nil, errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to install update")
 	}
-
-	log.Printf("Update installed: %s (restart required)", info.LatestVersion)
-	a.bus.Emit(events.UpdateReady, info)
 	return info, nil
 }
 

@@ -23,7 +23,10 @@ const (
 	DiscordRetryState      = "DiscordRetryState"
 
 	// Update lifecycle events emitted while an in-app update is downloaded
-	// and applied.
+	// and applied. UpdateAvailable is emitted by the automatic update checker
+	// when a newer release exists (before an auto-download starts, or instead
+	// of one on platforms without self-update support).
+	UpdateAvailable        = "UpdateAvailable"
 	UpdateDownloadProgress = "UpdateDownloadProgress"
 	UpdateReady            = "UpdateReady"
 	UpdateError            = "UpdateError"
