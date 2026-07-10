@@ -4,8 +4,8 @@
     <div class="notfound-wrapper">
         <div class="pc-panel notfound-panel">
             <span class="pc-mono notfound-code">404</span>
-            <p class="notfound-caption">This route doesn't exist.</p>
-            <router-link to="/" class="pc-btn pc-btn--primary">Back to dashboard</router-link>
+            <p class="notfound-caption">{{ $t('notFound.caption') }}</p>
+            <router-link to="/" class="pc-btn pc-btn--primary">{{ $t('notFound.backToDashboard') }}</router-link>
         </div>
     </div>
 </template>

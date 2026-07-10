@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch, computed, inject, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useSetupStore } from '@/stores/setup';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
 import { DiscoverPlexServers, ValidatePlexConnection, SavePlexToken, SaveServerURL, StartPlexPINAuth, CheckPlexPINAuth } from '../../wailsjs/go/main/App';
@@ -7,6 +8,7 @@ import { validatePlexServerUrl, PLEX_URL_PLACEHOLDER } from '@/utils/plexUrl';
 import InputText from 'primevue/inputtext';
 import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
+const { t } = useI18n();
 const setupStore = useSetupStore();
 const wizard = inject('setupWizard', null);
 
@@ -42,7 +44,7 @@ const canValidate = computed(() => setupStore.isPlexStepValid && hasServerUrl.va
 
 const libraryLabel = computed(() => {
     const count = setupStore.validationResult?.libraryCount ?? 0;
-    return `${count} ${count === 1 ? 'library' : 'libraries'}`;
+    return t('plex.libraryCount', { n: count }, count);
 });
 
 // ---- PIN auth ------------------------------------------------------------
@@ -65,7 +67,7 @@ const startPINAuth = async () => {
         BrowserOpenURL(authURL.value);
     } catch (error) {
         console.error('Failed to start PIN auth:', error);
-        authError.value = error?.message || 'Failed to start authentication';
+        authError.value = error?.message || t('plex.errStartAuth');
         authStep.value = 'error';
     }
 };
@@ -88,7 +90,7 @@ const checkPINStatus = async () => {
             authStep.value = 'success';
             stopPinPolling();
         } else if (result.expired) {
-            authError.value = 'PIN expired. Please try again.';
+            authError.value = t('plex.errPinExpired');
             authStep.value = 'error';
             stopPinPolling();
         }
@@ -98,7 +100,7 @@ const checkPINStatus = async () => {
         // forever on a persistent network/backend failure.
         pinPollFailures.value += 1;
         if (pinPollFailures.value >= MAX_PIN_POLL_FAILURES) {
-            authError.value = error?.message || 'Failed to check PIN status. Please try again.';
+            authError.value = error?.message || t('plex.errPinStatus');
             authStep.value = 'error';
             stopPinPolling();
         }
@@ -125,7 +127,7 @@ const discoverServers = async () => {
         hasDiscovered.value = true;
     } catch (error) {
         console.error('Failed to discover servers:', error);
-        discoveryError.value = 'Discovery failed. Try again, or enter your server address manually.';
+        discoveryError.value = t('plex.errDiscovery');
         setupStore.setDiscoveredServers([]);
         hasDiscovered.value = true;
     } finally {
@@ -168,7 +170,7 @@ const validateConnection = async () => {
     } catch (error) {
         console.error('Connection validation failed:', error);
 
-        let errorMessage = 'Failed to connect to Plex server';
+        let errorMessage = t('plex.errConnect');
         if (error && typeof error === 'string') {
             errorMessage = error;
         } else if (error && error.message) {
@@ -303,43 +305,43 @@ onUnmounted(() => {
 
 <template>
     <div>
-        <h1 class="setup-title">Connect to your Plex account</h1>
-        <p class="setup-lede">Sign in with a secure PIN code, then pick the server PlexCord should watch.</p>
+        <h1 class="setup-title">{{ $t('plex.title') }}</h1>
+        <p class="setup-lede">{{ $t('plex.lede') }}</p>
 
         <div class="setup-panels">
             <!-- Sign-in panel -->
             <section class="pc-panel">
-                <span class="pc-eyebrow">Plex account</span>
+                <span class="pc-eyebrow">{{ $t('plex.accountEyebrow') }}</span>
                 <Transition name="pc-state" mode="out-in">
                     <!-- initial / loading -->
                     <div v-if="authStep === 'initial' || authStep === 'loading'" key="initial" class="auth-initial">
                         <button type="button" class="pc-btn pc-btn--primary pc-btn--lg auth-signin" :disabled="authStep === 'loading'" @click="startPINAuth">
                             <i v-if="authStep === 'loading'" class="pi pi-spin pi-spinner" aria-hidden="true"></i>
-                            Sign in with Plex
+                            {{ $t('plex.signIn') }}
                         </button>
-                        <span class="auth-caption">Opens plex.tv in your browser</span>
+                        <span class="auth-caption">{{ $t('plex.signInCaption') }}</span>
                     </div>
 
                     <!-- waiting for authorization -->
                     <div v-else-if="authStep === 'waiting'" key="waiting" class="auth-waiting">
-                        <span class="auth-pin" aria-label="Your Plex PIN code">{{ pinCode }}</span>
-                        <span class="auth-caption"><i class="pi pi-spin pi-spinner auth-spinner" aria-hidden="true"></i> Enter this code at plex.tv/link</span>
+                        <span class="auth-pin" :aria-label="$t('plex.pinAria')">{{ pinCode }}</span>
+                        <span class="auth-caption"><i class="pi pi-spin pi-spinner auth-spinner" aria-hidden="true"></i> {{ $t('plex.enterCode') }}</span>
                         <div class="auth-actions">
-                            <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="BrowserOpenURL(authURL)">Open browser again</button>
-                            <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="cancelPINAuth">Cancel</button>
+                            <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="BrowserOpenURL(authURL)">{{ $t('plex.openBrowserAgain') }}</button>
+                            <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="cancelPINAuth">{{ $t('common.cancel') }}</button>
                         </div>
                     </div>
 
                     <!-- signed in (collapsed row) -->
                     <div v-else-if="authStep === 'success'" key="success" class="auth-done">
                         <DrawnCheck :size="14" />
-                        <span>Signed in with Plex</span>
+                        <span>{{ $t('plex.signedIn') }}</span>
                     </div>
 
                     <!-- error -->
                     <div v-else key="error" class="auth-error" role="alert">
                         <p class="auth-error-text"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ authError }}</p>
-                        <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="startPINAuth">Try again</button>
+                        <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="startPINAuth">{{ $t('common.tryAgain') }}</button>
                     </div>
                 </Transition>
             </section>
@@ -347,14 +349,14 @@ onUnmounted(() => {
             <!-- Server panel (appears once signed in; discovery auto-runs) -->
             <section v-if="signedIn" class="pc-panel">
                 <div class="server-head">
-                    <span class="pc-eyebrow">Plex server</span>
-                    <button v-if="!showManualEntry && hasDiscovered && !isDiscovering" type="button" class="server-head-link" @click="discoverServers">Search again</button>
+                    <span class="pc-eyebrow">{{ $t('plex.serverEyebrow') }}</span>
+                    <button v-if="!showManualEntry && hasDiscovered && !isDiscovering" type="button" class="server-head-link" @click="discoverServers">{{ $t('common.searchAgain') }}</button>
                 </div>
 
                 <!-- Discovery mode -->
                 <template v-if="!showManualEntry">
                     <!-- skeleton rows while discovering (M20) -->
-                    <div v-if="isDiscovering" class="server-skeletons" aria-label="Searching for Plex servers">
+                    <div v-if="isDiscovering" class="server-skeletons" :aria-label="$t('plex.searchingAria')">
                         <div class="pc-skeleton server-skeleton"></div>
                         <div class="pc-skeleton server-skeleton"></div>
                         <div class="pc-skeleton server-skeleton"></div>
@@ -363,7 +365,7 @@ onUnmounted(() => {
                     <!-- discovery error -->
                     <div v-else-if="discoveryError" class="server-note" role="alert">
                         <p class="server-note-text server-note-text--danger"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ discoveryError }}</p>
-                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="discoverServers">Search again</button>
+                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="discoverServers">{{ $t('common.searchAgain') }}</button>
                     </div>
 
                     <!-- selectable server rows -->
@@ -379,7 +381,7 @@ onUnmounted(() => {
                                 <span class="pc-dot" :class="serverDotClass(server)" aria-hidden="true"></span>
                                 <span class="server-name">{{ server.name }}</span>
                                 <span class="pc-chip-mono server-url">{{ serverUrlOf(server) }}</span>
-                                <span class="pc-badge">{{ server.isLocal ? 'Local' : 'Remote' }}</span>
+                                <span class="pc-badge">{{ server.isLocal ? $t('plex.local') : $t('plex.remote') }}</span>
                                 <i v-if="isSelected(server) && isValidating" class="pi pi-spin pi-spinner server-spinner" aria-hidden="true"></i>
                                 <DrawnCheck v-else-if="isSelected(server) && setupStore.isConnectionValidated" :size="14" />
                             </button>
@@ -388,21 +390,21 @@ onUnmounted(() => {
 
                     <!-- no servers found -->
                     <div v-else-if="hasDiscovered" class="server-note">
-                        <p class="server-note-text">No Plex servers found on your local network. Make sure your server is running, or enter its address manually below.</p>
-                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="discoverServers">Search again</button>
+                        <p class="server-note-text">{{ $t('plex.noServersFound') }}</p>
+                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="discoverServers">{{ $t('common.searchAgain') }}</button>
                     </div>
 
                     <!-- persistent manual-entry hint (F25) -->
                     <p class="server-hint">
-                        Docker or remote server?
-                        <a href="#" @click.prevent="enterManually">Enter its address manually</a>
+                        {{ $t('plex.dockerHint') }}
+                        <a href="#" @click.prevent="enterManually">{{ $t('plex.enterManually') }}</a>
                     </p>
                 </template>
 
                 <!-- Manual entry mode -->
                 <template v-else>
                     <div class="manual-entry">
-                        <label class="manual-label" for="manual-server-url">Server address</label>
+                        <label class="manual-label" for="manual-server-url">{{ $t('plex.serverAddress') }}</label>
                         <InputText
                             id="manual-server-url"
                             v-model="manualServerUrl"
@@ -420,29 +422,29 @@ onUnmounted(() => {
                         </small>
                         <small v-else-if="isManualUrlValid" id="manual-url-feedback" class="manual-feedback manual-feedback--success">
                             <i class="pi pi-check-circle" aria-hidden="true"></i>
-                            Valid format — press Enter to test the connection
+                            {{ $t('plex.validFormat') }}
                         </small>
-                        <small v-else id="manual-url-feedback" class="manual-feedback">The default Plex port is 32400. Use https for remote connections.</small>
+                        <small v-else id="manual-url-feedback" class="manual-feedback">{{ $t('plex.portHint') }}</small>
                     </div>
 
                     <p class="server-hint">
-                        On your local network?
-                        <a href="#" @click.prevent="useDiscoveryInstead">Use auto-discovery instead</a>
+                        {{ $t('plex.onLocalNetwork') }}
+                        <a href="#" @click.prevent="useDiscoveryInstead">{{ $t('plex.useDiscovery') }}</a>
                     </p>
                 </template>
 
                 <!-- Validation outcome -->
                 <div v-if="isValidating && showManualEntry" class="validate-pending">
                     <i class="pi pi-spin pi-spinner server-spinner" aria-hidden="true"></i>
-                    <span>Testing connection…</span>
+                    <span>{{ $t('plex.testingConnection') }}</span>
                 </div>
 
                 <div v-if="setupStore.isConnectionValidated && setupStore.validationResult" class="validate-ok">
                     <DrawnCheck :size="14" />
                     <span>
-                        Reachable — {{ libraryLabel }}
+                        {{ $t('plex.reachable', { libraries: libraryLabel }) }}
                         <template v-if="setupStore.validationResult.serverName"
-                            >on <strong>{{ setupStore.validationResult.serverName }}</strong></template
+                            >{{ $t('plex.reachableOn') }} <strong>{{ setupStore.validationResult.serverName }}</strong></template
                         >
                     </span>
                 </div>
@@ -451,10 +453,10 @@ onUnmounted(() => {
                 <div class="pc-collapse" :class="{ 'pc-collapse--open': validationError && !isValidating }">
                     <div>
                         <div class="validate-error" role="alert">
-                            <p class="validate-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> Couldn't reach this server</p>
+                            <p class="validate-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> {{ $t('plex.unreachableTitle') }}</p>
                             <p class="validate-error-text">{{ validationError }}</p>
-                            <p class="validate-error-suggestion">Check that your Plex server is running and reachable from this computer.</p>
-                            <button type="button" class="pc-btn pc-btn--ghost-danger pc-btn--sm" @click="retryValidation">Retry</button>
+                            <p class="validate-error-suggestion">{{ $t('plex.unreachableSuggestion') }}</p>
+                            <button type="button" class="pc-btn pc-btn--ghost-danger pc-btn--sm" @click="retryValidation">{{ $t('common.retry') }}</button>
                         </div>
                     </div>
                 </div>

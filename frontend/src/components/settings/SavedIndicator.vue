@@ -7,7 +7,7 @@
  */
 defineProps({
     visible: { type: Boolean, default: false },
-    label: { type: String, default: 'Saved' }
+    label: { type: String, default: '' }
 });
 </script>
 
@@ -15,7 +15,7 @@ defineProps({
     <Transition name="pc-saved">
         <span v-if="visible" class="pc-saved" role="status">
             <i class="pi pi-check" aria-hidden="true"></i>
-            <span>{{ label }}</span>
+            <span>{{ label || $t('common.saved') }}</span>
         </span>
     </Transition>
 </template>

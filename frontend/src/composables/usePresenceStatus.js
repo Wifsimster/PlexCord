@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { usePlaybackStore } from '@/stores/playback';
 import { usePlexConnectionStore } from '@/stores/plexConnection';
 import { useDiscordConnectionStore } from '@/stores/discordConnection';
@@ -20,6 +21,7 @@ import { usePresenceStore } from '@/stores/presence';
  *   'idle'           — nothing playing                  → '– Idle'
  */
 export function usePresenceStatus() {
+    const { t } = useI18n();
     const playback = usePlaybackStore();
     const plex = usePlexConnectionStore();
     const discord = useDiscordConnectionStore();
@@ -40,16 +42,16 @@ export function usePresenceStatus() {
     const headline = computed(() => {
         switch (status.value) {
             case 'plex-error':
-                return 'Plex unreachable';
+                return t('presenceStatus.plexUnreachable');
             case 'discord-error':
-                return 'Discord disconnected';
+                return t('presenceStatus.discordDisconnected');
             case 'paused':
             case 'track-paused':
-                return 'Paused';
+                return t('presenceStatus.paused');
             case 'live':
-                return trackTitle.value ? `Live — ${trackTitle.value}` : 'Live';
+                return trackTitle.value ? t('presenceStatus.liveWithTitle', { title: trackTitle.value }) : t('presenceStatus.live');
             default:
-                return 'Idle';
+                return t('presenceStatus.idle');
         }
     });
 
