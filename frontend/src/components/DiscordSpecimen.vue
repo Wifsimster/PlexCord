@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import TruncatedText from '@/components/TruncatedText.vue';
 import { renderPresenceLines } from '@/utils/presenceFormat';
 
 const { t } = useI18n();
@@ -115,9 +116,9 @@ const duration = computed(() => formatTime(props.track?.duration));
                     </div>
                     <Transition name="specimen-swap" mode="out-in">
                         <div :key="track.sessionKey" class="card-lines">
-                            <p class="card-line card-line--details" :title="lines.details">{{ lines.details }}</p>
-                            <p v-if="lines.state" class="card-line card-line--state" :title="lines.state">{{ lines.state }}</p>
-                            <p v-if="albumLine" class="card-line card-line--album" :title="albumLine">{{ albumLine }}</p>
+                            <TruncatedText as="p" class="card-line card-line--details" :text="lines.details" />
+                            <TruncatedText v-if="lines.state" as="p" class="card-line card-line--state" :text="lines.state" />
+                            <TruncatedText v-if="albumLine" as="p" class="card-line card-line--album" :text="albumLine" />
                         </div>
                     </Transition>
                 </div>

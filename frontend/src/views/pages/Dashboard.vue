@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ConnectionTile from '@/components/ConnectionTile.vue';
 import DiscordSpecimen from '@/components/DiscordSpecimen.vue';
+import TruncatedText from '@/components/TruncatedText.vue';
 import { usePlayback } from '@/composables/usePlayback';
 import { usePresenceStore } from '@/stores/presence';
 import { renderPresenceLines } from '@/utils/presenceFormat';
@@ -156,7 +157,7 @@ const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ?
             <dl v-if="ready && hasActiveSession" class="fact-strip" :class="{ 'fact-strip--dim': presenceStore.paused }">
                 <div v-for="fact in facts" :key="fact.label" class="fact">
                     <dt class="fact-label">{{ fact.label }}</dt>
-                    <dd class="fact-value">{{ fact.value }}</dd>
+                    <TruncatedText as="dd" class="fact-value" :text="fact.value" />
                 </div>
             </dl>
         </section>
