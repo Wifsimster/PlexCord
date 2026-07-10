@@ -22,6 +22,13 @@ var icon []byte
 var iconWindows []byte
 
 func main() {
+	// When this process was spawned by an in-app update relaunch, wait for the
+	// old instance to fully exit before wails.Run acquires the single-instance
+	// lock. Otherwise the lock is still held by the outgoing process and this
+	// (updated) instance would be treated as a second instance and exit,
+	// leaving the previous version running. No-op for normal launches.
+	waitForPreviousInstanceExit()
+
 	// Create an instance of the app structure
 	app := NewApp()
 
