@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/selfupdate"
@@ -50,17 +51,62 @@ func updatableAssetName() (name string, supported bool) {
 	return "", false
 }
 
-// updateTargetPath returns the path of the file that should be replaced by the
-// update. For AppImage builds the running executable resolves to a read-only
-// mount inside /tmp, so the real .AppImage path is taken from $APPIMAGE. An
-// empty return lets selfupdate default to os.Executable().
-func updateTargetPath() string {
+// launchPath holds the absolute path used both as the self-update target and as
+// the executable to relaunch on restart. It is resolved once, up front, and
+// cached — see LaunchPath for why capturing it early matters.
+var (
+	launchPathOnce sync.Once
+	launchPathVal  string
+)
+
+// resolveLaunchPath determines the stable on-disk path of the application binary
+// that an update should replace and that a restart should relaunch. For AppImage
+// builds the running executable resolves to a read-only mount inside /tmp, so the
+// real .AppImage path is taken from $APPIMAGE. Elsewhere it is os.Executable().
+func resolveLaunchPath() string {
 	if runtime.GOOS == "linux" {
 		if p := os.Getenv("APPIMAGE"); p != "" {
 			return p
 		}
 	}
+	if exe, err := os.Executable(); err == nil {
+		return exe
+	}
 	return ""
+}
+
+// CaptureLaunchPath records the launch path while the running binary still has
+// its original name on disk. It MUST be called at startup, before any self-update
+// runs. This matters because minio/selfupdate replaces the binary in place by
+// renaming the running executable to ".<name>.old" and moving the freshly
+// downloaded binary into the original path. After that rename os.Executable() (on
+// Windows especially) resolves to the ".old" file, so relaunching it would start
+// the OLD version. Capturing the original path up front and reusing it for both
+// the update target and the relaunch guarantees we always point at the stable
+// path, which holds the NEW binary once the update completes. Repeat calls are
+// no-ops.
+func CaptureLaunchPath() {
+	launchPathOnce.Do(func() {
+		launchPathVal = resolveLaunchPath()
+	})
+}
+
+// LaunchPath returns the captured launch path, resolving (and caching) it on
+// first use if CaptureLaunchPath was never called — e.g. in tests. In normal
+// operation CaptureLaunchPath runs at startup so this returns the pre-update
+// path even when called after an update has renamed the running executable.
+func LaunchPath() string {
+	launchPathOnce.Do(func() {
+		launchPathVal = resolveLaunchPath()
+	})
+	return launchPathVal
+}
+
+// updateTargetPath returns the path of the file that should be replaced by the
+// update. It is the same stable path used to relaunch the app, so the binary is
+// written to exactly the location the restart will exec.
+func updateTargetPath() string {
+	return LaunchPath()
 }
 
 // CanSelfUpdate reports whether the current platform supports applying updates

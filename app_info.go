@@ -165,14 +165,15 @@ func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 // takes effect. It spawns the (now-updated) executable and quits the current
 // process.
 func (a *App) RestartApplication() error {
-	exe, err := os.Executable()
-	if err != nil {
-		return errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to locate executable")
-	}
-	// On Linux AppImage builds, relaunch the real .AppImage rather than the
-	// temporary mount path.
-	if ap := os.Getenv("APPIMAGE"); ap != "" {
-		exe = ap
+	// Use the launch path captured at startup, NOT a fresh os.Executable().
+	// The self-update renames the running binary to ".<name>.old" and moves the
+	// new binary into the original path; resolving the path after that rename
+	// would relaunch the OLD binary (this is exactly what os.Executable() returns
+	// on Windows post-rename). The captured path always points at the original
+	// location, which now holds the updated binary. See version.CaptureLaunchPath.
+	exe := version.LaunchPath()
+	if exe == "" {
+		return errors.New(errors.UNKNOWN_ERROR, "failed to locate executable")
 	}
 
 	// Use context.Background (not a.ctx): a.ctx is cancelled by the

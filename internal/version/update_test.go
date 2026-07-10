@@ -2,6 +2,7 @@ package version
 
 import (
 	"encoding/hex"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -83,6 +84,40 @@ func TestUpdatableAssetName(t *testing.T) {
 		if supported {
 			t.Errorf("darwin should not support in-place self-update, got supported=true")
 		}
+	}
+}
+
+func TestResolveLaunchPathPrefersAppImage(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("APPIMAGE handling is Linux-only")
+	}
+	t.Setenv("APPIMAGE", "/opt/PlexCord/PlexCord-linux-amd64.AppImage")
+	if got := resolveLaunchPath(); got != "/opt/PlexCord/PlexCord-linux-amd64.AppImage" {
+		t.Errorf("resolveLaunchPath() = %q, want the $APPIMAGE path", got)
+	}
+}
+
+func TestResolveLaunchPathFallsBackToExecutable(t *testing.T) {
+	t.Setenv("APPIMAGE", "")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Skipf("os.Executable() unavailable: %v", err)
+	}
+	if got := resolveLaunchPath(); got != exe {
+		t.Errorf("resolveLaunchPath() = %q, want os.Executable() %q", got, exe)
+	}
+}
+
+func TestLaunchPathIsStableAcrossCalls(t *testing.T) {
+	// The whole point of caching the launch path is that it stays fixed even if
+	// the running binary is renamed underneath us by a self-update. Two reads
+	// must agree; updateTargetPath must return the same path a restart uses.
+	first := LaunchPath()
+	if second := LaunchPath(); first != second {
+		t.Errorf("LaunchPath() not stable: %q then %q", first, second)
+	}
+	if target := updateTargetPath(); target != first {
+		t.Errorf("updateTargetPath() = %q, want LaunchPath() %q", target, first)
 	}
 }
 
