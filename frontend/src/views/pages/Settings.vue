@@ -40,6 +40,8 @@ import {
     SetHideWhenPaused,
     GetPresenceFormat,
     SetPresenceFormat,
+    GetPresenceOptions,
+    SetPresenceOptions,
     GetServers,
     AddServer,
     RemoveServer,
@@ -80,6 +82,9 @@ const hideWhenPaused = ref(false);
 const hideWhenPausedDelay = ref(0);
 const detailsFormat = ref('');
 const stateFormat = ref('');
+const activityStyle = ref('media');
+const statusDisplay = ref('state');
+const artworkLookup = ref(true);
 const discordClientId = ref('');
 const defaultClientId = ref('');
 const servers = ref([]);
@@ -190,6 +195,11 @@ onMounted(async () => {
         const formatSettings = await GetPresenceFormat();
         detailsFormat.value = formatSettings?.detailsFormat ?? '';
         stateFormat.value = formatSettings?.stateFormat ?? '';
+
+        const presenceOptions = await GetPresenceOptions();
+        activityStyle.value = presenceOptions?.activityStyle ?? 'media';
+        statusDisplay.value = presenceOptions?.statusDisplay ?? 'state';
+        artworkLookup.value = presenceOptions?.artworkLookup ?? true;
 
         servers.value = await GetServers();
 
@@ -543,6 +553,46 @@ async function saveHideWhenPausedDelay() {
     }
 }
 
+// ---------------- Presence: display options ----------------
+const presenceOptionsSaving = ref(false);
+
+// savePresenceOptions persists the current activity style, member-list line,
+// and artwork-lookup toggle together, reverting the affected ref on failure.
+async function savePresenceOptions(revert) {
+    presenceOptionsSaving.value = true;
+    try {
+        await SetPresenceOptions({
+            activityStyle: activityStyle.value,
+            statusDisplay: statusDisplay.value,
+            artworkLookup: artworkLookup.value,
+        });
+        flashSaved('presenceOptions');
+    } catch (error) {
+        if (revert) revert();
+        toastFailure('Failed to save presence options', error, 'The setting could not be saved.');
+    } finally {
+        presenceOptionsSaving.value = false;
+    }
+}
+
+function updateActivityStyle(value) {
+    const prev = activityStyle.value;
+    activityStyle.value = value; // optimistic
+    savePresenceOptions(() => { activityStyle.value = prev; });
+}
+
+function updateStatusDisplay(value) {
+    const prev = statusDisplay.value;
+    statusDisplay.value = value; // optimistic
+    savePresenceOptions(() => { statusDisplay.value = prev; });
+}
+
+function updateArtworkLookup(value) {
+    const prev = artworkLookup.value;
+    artworkLookup.value = value; // optimistic
+    savePresenceOptions(() => { artworkLookup.value = prev; });
+}
+
 // ---------------- App: toggles (instant, optimistic + revert) ----------------
 const autoStartSaving = ref(false);
 const minimizeToTraySaving = ref(false);
@@ -871,6 +921,39 @@ async function executeReset() {
 
                         <div class="format-specimen">
                             <DiscordSpecimen :track="specimenTrack" :formats="specimenFormats" :sample="specimenIsSample" :paused="specimenPaused" />
+                        </div>
+
+                        <div class="setting-row divided-row">
+                            <div class="row-text">
+                                <span class="row-label" id="lbl-activity-style">Show as Listening / Watching</span>
+                                <p class="row-caption">Music shows “Listening to”, video “Watching”. Off uses the classic “Playing”.</p>
+                            </div>
+                            <div class="row-control">
+                                <SavedIndicator :visible="!!savedFlags.presenceOptions" />
+                                <ToggleSwitch :modelValue="activityStyle === 'media'" :disabled="presenceOptionsSaving" aria-labelledby="lbl-activity-style" @update:modelValue="(v) => updateActivityStyle(v ? 'media' : 'game')" />
+                            </div>
+                        </div>
+                        <div v-if="activityStyle === 'media'" class="setting-row sub-row">
+                            <div class="row-text">
+                                <label class="row-label" for="status-display">Member-list line</label>
+                                <p class="row-caption">Which line Discord shows next to your name</p>
+                            </div>
+                            <div class="row-control">
+                                <select id="status-display" class="pc-select" :value="statusDisplay" :disabled="presenceOptionsSaving" @change="(e) => updateStatusDisplay(e.target.value)">
+                                    <option value="app">App name (PlexCord)</option>
+                                    <option value="state">Artist / state line</option>
+                                    <option value="details">Track title</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="setting-row divided-row">
+                            <div class="row-text">
+                                <span class="row-label" id="lbl-artwork-lookup">Fetch album art</span>
+                                <p class="row-caption">Look up public cover art so it shows on Discord. Sends artist &amp; album names to iTunes / MusicBrainz.</p>
+                            </div>
+                            <div class="row-control">
+                                <ToggleSwitch :modelValue="artworkLookup" :disabled="presenceOptionsSaving" aria-labelledby="lbl-artwork-lookup" @update:modelValue="updateArtworkLookup" />
+                            </div>
                         </div>
 
                         <div class="setting-row divided-row">
@@ -1399,6 +1482,20 @@ async function executeReset() {
     width: 100%;
     font-family: var(--pc-font-mono);
     font-size: var(--pc-text-mono);
+}
+.pc-select {
+    min-width: 180px;
+    padding: 6px 10px;
+    border: 1px solid var(--pc-border);
+    border-radius: var(--pc-radius-2, 8px);
+    background: var(--pc-surface, transparent);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.pc-select:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 .token-row {
     display: flex;

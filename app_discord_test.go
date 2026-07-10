@@ -94,6 +94,37 @@ func TestUpdateDiscordFromSession_UsesCachedPublicArtwork(t *testing.T) {
 	}
 }
 
+func TestGetPresenceOptions_NormalizesDefaults(t *testing.T) {
+	// A legacy config with empty presence options should read back as the
+	// media/state/artwork-on defaults.
+	a := &App{config: &config.Config{}}
+	opts := a.GetPresenceOptions()
+	if opts.ActivityStyle != "media" {
+		t.Errorf("ActivityStyle = %q, want media", opts.ActivityStyle)
+	}
+	if opts.StatusDisplay != "state" {
+		t.Errorf("StatusDisplay = %q, want state", opts.StatusDisplay)
+	}
+	if !opts.ArtworkLookup {
+		t.Error("ArtworkLookup should default to true for a legacy config")
+	}
+}
+
+func TestSetPresenceOptions_RejectsInvalidValues(t *testing.T) {
+	a := &App{config: config.DefaultConfig()}
+
+	if err := a.SetPresenceOptions(PresenceOptions{ActivityStyle: "bogus", StatusDisplay: "state"}); err == nil {
+		t.Error("expected error for invalid activity style")
+	}
+	if err := a.SetPresenceOptions(PresenceOptions{ActivityStyle: "media", StatusDisplay: "bogus"}); err == nil {
+		t.Error("expected error for invalid status display")
+	}
+	// Config must be untouched after a rejected update.
+	if a.config.PresenceActivityStyle != "media" {
+		t.Errorf("config mutated on rejected update: %q", a.config.PresenceActivityStyle)
+	}
+}
+
 func TestUpdateDiscordFromSession_ArtworkLookupDisabled(t *testing.T) {
 	fake := &fakeDiscordPresence{connected: true}
 	cfg := config.DefaultConfig()

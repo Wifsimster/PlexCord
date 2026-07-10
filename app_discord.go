@@ -484,3 +484,61 @@ func (a *App) SetPresenceFormat(details, state string) error {
 	log.Printf("Presence format updated: details=%q, state=%q", details, state)
 	return nil
 }
+
+// ============================================================================
+// Presence Display Options (activity style, member-list line, artwork lookup)
+// ============================================================================
+
+// PresenceOptions represents the presence display configuration for the frontend.
+type PresenceOptions struct {
+	ActivityStyle string `json:"activityStyle"` // "media" | "game"
+	StatusDisplay string `json:"statusDisplay"` // "app" | "state" | "details"
+	ArtworkLookup bool   `json:"artworkLookup"`
+}
+
+// GetPresenceOptions returns the current presence display options, normalizing
+// unset values to their defaults so the frontend always has a concrete choice.
+func (a *App) GetPresenceOptions() PresenceOptions {
+	style := a.config.PresenceActivityStyle
+	if style == "" {
+		style = discord.ActivityStyleMedia
+	}
+	display := a.config.PresenceStatusDisplay
+	if display == "" {
+		display = discord.StatusDisplayState
+	}
+	return PresenceOptions{
+		ActivityStyle: style,
+		StatusDisplay: display,
+		ArtworkLookup: a.config.ArtworkLookupEnabled(),
+	}
+}
+
+// SetPresenceOptions updates the presence display options. Invalid values are
+// rejected so a bad frontend value cannot corrupt the presence output. The new
+// options take effect on the next presence update — no reconnect required.
+func (a *App) SetPresenceOptions(opts PresenceOptions) error {
+	switch opts.ActivityStyle {
+	case discord.ActivityStyleMedia, discord.ActivityStyleGame:
+	default:
+		return errors.New(errors.CONFIG_WRITE_FAILED, "invalid activity style: "+opts.ActivityStyle)
+	}
+	switch opts.StatusDisplay {
+	case discord.StatusDisplayApp, discord.StatusDisplayState, discord.StatusDisplayDetails:
+	default:
+		return errors.New(errors.CONFIG_WRITE_FAILED, "invalid status display: "+opts.StatusDisplay)
+	}
+
+	a.config.PresenceActivityStyle = opts.ActivityStyle
+	a.config.PresenceStatusDisplay = opts.StatusDisplay
+	lookup := opts.ArtworkLookup
+	a.config.PresenceArtworkLookup = &lookup
+
+	if err := a.saveConfig(); err != nil {
+		log.Printf("ERROR: Failed to save presence options: %v", err)
+		return err
+	}
+	log.Printf("Presence options updated: style=%s, display=%s, artwork=%v",
+		opts.ActivityStyle, opts.StatusDisplay, opts.ArtworkLookup)
+	return nil
+}

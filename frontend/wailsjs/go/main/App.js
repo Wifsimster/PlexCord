@@ -86,6 +86,10 @@ export function GetPresenceFormat() {
   return window['go']['main']['App']['GetPresenceFormat']();
 }
 
+export function GetPresenceOptions() {
+  return window['go']['main']['App']['GetPresenceOptions']();
+}
+
 export function IsPresencePaused() {
   return window['go']['main']['App']['IsPresencePaused']();
 }
@@ -212,6 +216,10 @@ export function SetHideWhenPaused(arg1, arg2) {
 
 export function SetPresenceFormat(arg1, arg2) {
   return window['go']['main']['App']['SetPresenceFormat'](arg1, arg2);
+}
+
+export function SetPresenceOptions(arg1) {
+  return window['go']['main']['App']['SetPresenceOptions'](arg1);
 }
 
 export function TogglePresencePause() {

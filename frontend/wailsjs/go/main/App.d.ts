@@ -49,6 +49,8 @@ export function GetHideWhenPaused():Promise<Record<string, any>>;
 
 export function GetPresenceFormat():Promise<main.PresenceFormatSettings>;
 
+export function GetPresenceOptions():Promise<main.PresenceOptions>;
+
 export function IsPresencePaused():Promise<boolean>;
 
 export function GetMinimizeToTray():Promise<boolean>;
@@ -112,6 +114,8 @@ export function SetServerActive(arg1:string,arg2:boolean):Promise<void>;
 export function SetHideWhenPaused(arg1:boolean,arg2:number):Promise<void>;
 
 export function SetPresenceFormat(arg1:string,arg2:string):Promise<void>;
+
+export function SetPresenceOptions(arg1:main.PresenceOptions):Promise<void>;
 
 export function TogglePresencePause():Promise<boolean>;
 
