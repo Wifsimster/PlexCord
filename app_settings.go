@@ -43,8 +43,8 @@ func (a *App) QuitApp() {
 
 // onSecondInstanceLaunch is invoked (via SingleInstanceLock) when the user
 // launches PlexCord again while an instance is already running in the
-// background. Since Wails v2 has no native system tray, relaunching the app
-// is the restore path: bring the existing window back to the foreground.
+// background. Alongside the system tray, relaunching is a restore path:
+// bring the existing window back to the foreground instead of starting a copy.
 func (a *App) onSecondInstanceLaunch(options.SecondInstanceData) {
 	log.Printf("Second instance launched: restoring existing window")
 	a.ShowWindow()

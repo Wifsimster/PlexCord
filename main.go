@@ -18,9 +18,17 @@ var assets embed.FS
 //go:embed build/appicon.png
 var icon []byte
 
+//go:embed build/windows/icon.ico
+var iconWindows []byte
+
 func main() {
 	// Create an instance of the app structure
 	app := NewApp()
+
+	// Provide the tray icon assets (embedded above) to the app so the platform
+	// layer can render the system tray without importing embedded assets.
+	app.trayIconPNG = icon
+	app.trayIconICO = iconWindows
 
 	// Create application with options
 	// Note: Removed MaxWidth and MaxHeight
@@ -50,9 +58,10 @@ func main() {
 		OnBeforeClose:    app.beforeClose,
 		OnShutdown:       app.shutdown,
 		WindowStartState: options.Normal,
-		// With no native system tray in Wails v2, a single-instance lock gives
-		// users a way back: launching PlexCord again while it runs in the
-		// background restores the existing window instead of starting a copy.
+		// A single-instance lock complements the system tray: it prevents
+		// stacking up background copies and, when PlexCord is relaunched while
+		// already running, restores the existing window instead of starting
+		// another instance.
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               "com.plexcord.app",
 			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
