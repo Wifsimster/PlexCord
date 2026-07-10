@@ -144,7 +144,7 @@ func (a *App) UpdateDiscordPresence(track, artist, album, state string, duration
 		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
 	}
 
-	return a.discord.UpdatePresenceFromPlayback(track, artist, album, state, duration, position, "", "", a.config.PresenceDetailsFormat, a.config.PresenceStateFormat)
+	return a.discord.UpdatePresenceFromPlayback(track, artist, album, state, duration, position, "", "", a.config.PresenceDetailsFormat, a.config.PresenceStateFormat, a.config.PresenceActivityStyle, a.config.PresenceStatusDisplay)
 }
 
 // ClearDiscordPresence removes the Discord Rich Presence.
@@ -220,6 +220,8 @@ func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
 		session.PlayerName,
 		a.config.PresenceDetailsFormat,
 		a.config.PresenceStateFormat,
+		a.config.PresenceActivityStyle,
+		a.config.PresenceStatusDisplay,
 	)
 	if err != nil {
 		log.Printf("Warning: Failed to update Discord presence: %v", err)

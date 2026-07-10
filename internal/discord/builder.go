@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hugolgst/rich-go/client"
+	"plexcord/internal/discord/ipc"
 )
 
-// PresenceBuilder builds a rich-go Activity from PresenceData for a single
+// PresenceBuilder builds an ipc.Activity from PresenceData for a single
 // media type. Adding a new media type (photo slideshow, audiobook, etc.)
 // means implementing this interface and registering it — no changes to
 // existing builders (OCP).
 type PresenceBuilder interface {
 	// Build constructs a Discord Activity for the given presence data.
 	// The builder should only use fields relevant to its media type.
-	Build(data *PresenceData) client.Activity
+	Build(data *PresenceData) ipc.Activity
 }
 
 // builderRegistry maps media type strings to their PresenceBuilder.
@@ -33,7 +33,7 @@ func RegisterPresenceBuilder(mediaType string, builder PresenceBuilder) {
 // buildActivityForMediaType dispatches to the appropriate PresenceBuilder
 // based on data.MediaType. Falls back to the music builder for empty or
 // unknown media types to preserve backward compatibility.
-func buildActivityForMediaType(data *PresenceData) client.Activity {
+func buildActivityForMediaType(data *PresenceData) ipc.Activity {
 	mt := data.MediaType
 	if mt == "" {
 		mt = MediaTypeMusic
@@ -49,15 +49,49 @@ func buildActivityForMediaType(data *PresenceData) client.Activity {
 // Common helpers shared by builders
 // ----------------------------------------------------------------------------
 
-// applyTimestamps sets the elapsed-time display when playing.
-func applyTimestamps(activity *client.Activity, data *PresenceData) {
-	if data.StartTime != nil && data.State == "playing" {
-		activity.Timestamps = &client.Timestamps{Start: data.StartTime}
+// applyTimestamps sets the elapsed-time / progress-bar display when playing.
+//
+// Discord renders a live progress bar when both start and end are present, and
+// a plain elapsed timer with only a start. We therefore send:
+//   - playing + known duration → start + end (progress bar)
+//   - playing + unknown duration (streams) → start only (elapsed timer)
+//   - paused → no timestamps (Discord cannot freeze a bar)
+func applyTimestamps(activity *ipc.Activity, data *PresenceData) {
+	if data.StartTime == nil || data.State != "playing" {
+		return
+	}
+	ts := &ipc.Timestamps{Start: data.StartTime}
+	if data.EndTime != nil && data.Duration > 0 {
+		ts.End = data.EndTime
+	}
+	activity.Timestamps = ts
+}
+
+// applyActivityType sets the Discord activity type and status-display line.
+// base is the media-appropriate type (Listening for music, Watching for video);
+// the "game" style overrides it back to classic Playing.
+func applyActivityType(activity *ipc.Activity, data *PresenceData, base ipc.ActivityType) {
+	if data.ActivityStyle == ActivityStyleGame {
+		activity.Type = ipc.ActivityPlaying
+		return
+	}
+	activity.Type = base
+
+	switch data.StatusDisplay {
+	case StatusDisplayApp:
+		sd := ipc.StatusDisplayName
+		activity.StatusDisplayType = &sd
+	case StatusDisplayState:
+		sd := ipc.StatusDisplayState
+		activity.StatusDisplayType = &sd
+	case StatusDisplayDetails:
+		sd := ipc.StatusDisplayDetails
+		activity.StatusDisplayType = &sd
 	}
 }
 
 // applyPlaybackIcon sets the small image/text based on play state.
-func applyPlaybackIcon(activity *client.Activity, data *PresenceData) {
+func applyPlaybackIcon(activity *ipc.Activity, data *PresenceData) {
 	if data.State == "paused" {
 		activity.SmallImage = "pause"
 		activity.SmallText = "Paused"
@@ -68,7 +102,7 @@ func applyPlaybackIcon(activity *client.Activity, data *PresenceData) {
 }
 
 // applyArtwork sets the large image to the artwork URL or falls back.
-func applyArtwork(activity *client.Activity, data *PresenceData, fallbackText string) {
+func applyArtwork(activity *ipc.Activity, data *PresenceData, fallbackText string) {
 	if data.ArtworkURL != "" {
 		activity.LargeImage = data.ArtworkURL
 		activity.LargeText = data.Album
@@ -107,8 +141,8 @@ func applyFormatTokens(format string, data *PresenceData) string {
 
 type musicBuilder struct{}
 
-func (musicBuilder) Build(data *PresenceData) client.Activity {
-	activity := client.Activity{}
+func (musicBuilder) Build(data *PresenceData) ipc.Activity {
+	activity := ipc.Activity{}
 
 	if data.DetailsFormat != "" || data.StateFormat != "" {
 		activity.Details = applyFormatTokens(data.DetailsFormat, data)
@@ -131,6 +165,7 @@ func (musicBuilder) Build(data *PresenceData) client.Activity {
 		}
 	}
 
+	applyActivityType(&activity, data, ipc.ActivityListening)
 	applyTimestamps(&activity, data)
 	applyArtwork(&activity, data, "Plex Music")
 	applyPlaybackIcon(&activity, data)
@@ -143,8 +178,8 @@ func (musicBuilder) Build(data *PresenceData) client.Activity {
 
 type movieBuilder struct{}
 
-func (movieBuilder) Build(data *PresenceData) client.Activity {
-	activity := client.Activity{}
+func (movieBuilder) Build(data *PresenceData) ipc.Activity {
+	activity := ipc.Activity{}
 
 	if data.DetailsFormat != "" || data.StateFormat != "" {
 		activity.Details = applyFormatTokens(data.DetailsFormat, data)
@@ -158,6 +193,7 @@ func (movieBuilder) Build(data *PresenceData) client.Activity {
 		}
 	}
 
+	applyActivityType(&activity, data, ipc.ActivityWatching)
 	applyTimestamps(&activity, data)
 	applyArtwork(&activity, data, "Plex")
 	applyPlaybackIcon(&activity, data)
@@ -170,8 +206,8 @@ func (movieBuilder) Build(data *PresenceData) client.Activity {
 
 type tvBuilder struct{}
 
-func (tvBuilder) Build(data *PresenceData) client.Activity {
-	activity := client.Activity{}
+func (tvBuilder) Build(data *PresenceData) ipc.Activity {
+	activity := ipc.Activity{}
 
 	if data.DetailsFormat != "" || data.StateFormat != "" {
 		activity.Details = applyFormatTokens(data.DetailsFormat, data)
@@ -189,6 +225,7 @@ func (tvBuilder) Build(data *PresenceData) client.Activity {
 		}
 	}
 
+	applyActivityType(&activity, data, ipc.ActivityWatching)
 	applyTimestamps(&activity, data)
 	applyArtwork(&activity, data, "Plex")
 	applyPlaybackIcon(&activity, data)

@@ -41,6 +41,12 @@ type Config struct {
 	PresenceDetailsFormat string `json:"presenceDetailsFormat"` // Format for Details line, e.g. "{track}"
 	PresenceStateFormat   string `json:"presenceStateFormat"`   // Format for State line, e.g. "by {artist} • {album}"
 
+	// Presence display options
+	// ActivityStyle: "media" (Listening/Watching) or "game" (classic Playing).
+	// StatusDisplay: "app", "state", or "details" — which line shows in the member list.
+	PresenceActivityStyle string `json:"presenceActivityStyle"`
+	PresenceStatusDisplay string `json:"presenceStatusDisplay"`
+
 	// Multi-server support
 	Servers []ServerConfig `json:"servers,omitempty"`
 }
@@ -55,6 +61,10 @@ func DefaultConfig() *Config {
 		MinimizeToTray:  true,
 		AutoStart:       false,
 		DiscordClientID: "", // Empty means use default from discord package
+		// Media-style presence (Listening/Watching) with the state line in the
+		// member list is the new default; users can revert to classic Playing.
+		PresenceActivityStyle: "media",
+		PresenceStatusDisplay: "state",
 	}
 }
 

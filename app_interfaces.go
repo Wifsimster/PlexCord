@@ -40,7 +40,7 @@ type DiscordPresence interface {
 	UpdatePresenceFromPlayback(
 		track, artist, album, state string,
 		duration, position int64,
-		artworkURL, player, detailsFormat, stateFormat string,
+		artworkURL, player, detailsFormat, stateFormat, activityStyle, statusDisplay string,
 	) error
 }
 

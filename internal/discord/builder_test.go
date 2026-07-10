@@ -2,8 +2,9 @@ package discord
 
 import (
 	"testing"
+	"time"
 
-	"github.com/hugolgst/rich-go/client"
+	"plexcord/internal/discord/ipc"
 )
 
 func TestMusicBuilder_DefaultFormat(t *testing.T) {
@@ -177,6 +178,138 @@ type customBuilder struct {
 	marker string
 }
 
-func (c *customBuilder) Build(*PresenceData) client.Activity {
-	return client.Activity{Details: c.marker}
+func (c *customBuilder) Build(*PresenceData) ipc.Activity {
+	return ipc.Activity{Details: c.marker}
+}
+
+// ----------------------------------------------------------------------------
+// Activity type & status-display (US-002)
+// ----------------------------------------------------------------------------
+
+func TestActivityType_PerMediaType(t *testing.T) {
+	tests := []struct {
+		name      string
+		mediaType string
+		want      ipc.ActivityType
+	}{
+		{"music is Listening", MediaTypeMusic, ipc.ActivityListening},
+		{"movie is Watching", MediaTypeMovie, ipc.ActivityWatching},
+		{"tv is Watching", MediaTypeTV, ipc.ActivityWatching},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			activity := buildActivityForMediaType(&PresenceData{
+				MediaType: tt.mediaType,
+				Track:     "x",
+				State:     "playing",
+			})
+			if activity.Type != tt.want {
+				t.Errorf("Type = %d, want %d", activity.Type, tt.want)
+			}
+		})
+	}
+}
+
+func TestActivityType_GameStyleForcesPlaying(t *testing.T) {
+	for _, mt := range []string{MediaTypeMusic, MediaTypeMovie, MediaTypeTV} {
+		activity := buildActivityForMediaType(&PresenceData{
+			MediaType:     mt,
+			Track:         "x",
+			State:         "playing",
+			ActivityStyle: ActivityStyleGame,
+		})
+		if activity.Type != ipc.ActivityPlaying {
+			t.Errorf("mediaType %q with game style: Type = %d, want 0 (Playing)", mt, activity.Type)
+		}
+		if activity.StatusDisplayType != nil {
+			t.Errorf("mediaType %q with game style should not set status_display_type", mt)
+		}
+	}
+}
+
+func TestStatusDisplay_MapsToType(t *testing.T) {
+	tests := []struct {
+		display string
+		want    ipc.StatusDisplayType
+	}{
+		{StatusDisplayApp, ipc.StatusDisplayName},
+		{StatusDisplayState, ipc.StatusDisplayState},
+		{StatusDisplayDetails, ipc.StatusDisplayDetails},
+	}
+	for _, tt := range tests {
+		t.Run(tt.display, func(t *testing.T) {
+			activity := (musicBuilder{}).Build(&PresenceData{
+				Track:         "x",
+				State:         "playing",
+				StatusDisplay: tt.display,
+			})
+			if activity.StatusDisplayType == nil {
+				t.Fatalf("StatusDisplayType is nil for %q", tt.display)
+			}
+			if *activity.StatusDisplayType != tt.want {
+				t.Errorf("StatusDisplayType = %d, want %d", *activity.StatusDisplayType, tt.want)
+			}
+		})
+	}
+}
+
+func TestStatusDisplay_EmptyLeavesNil(t *testing.T) {
+	activity := (musicBuilder{}).Build(&PresenceData{Track: "x", State: "playing"})
+	if activity.StatusDisplayType != nil {
+		t.Error("empty StatusDisplay should leave StatusDisplayType nil (Discord default)")
+	}
+}
+
+// ----------------------------------------------------------------------------
+// Progress-bar timestamps (US-003)
+// ----------------------------------------------------------------------------
+
+func TestApplyTimestamps_PlayingWithDurationSendsStartAndEnd(t *testing.T) {
+	start := time.Unix(1000, 0)
+	end := start.Add(240 * time.Second)
+	activity := (musicBuilder{}).Build(&PresenceData{
+		Track:     "x",
+		State:     "playing",
+		Duration:  240_000,
+		StartTime: &start,
+		EndTime:   &end,
+	})
+	if activity.Timestamps == nil || activity.Timestamps.Start == nil {
+		t.Fatal("expected start timestamp")
+	}
+	if activity.Timestamps.End == nil {
+		t.Error("expected end timestamp for a known duration (progress bar)")
+	}
+}
+
+func TestApplyTimestamps_ZeroDurationSendsStartOnly(t *testing.T) {
+	start := time.Unix(1000, 0)
+	activity := (musicBuilder{}).Build(&PresenceData{
+		Track:     "x",
+		State:     "playing",
+		Duration:  0,
+		StartTime: &start,
+		// EndTime intentionally nil, mirroring UpdatePresenceFromPlayback.
+	})
+	if activity.Timestamps == nil || activity.Timestamps.Start == nil {
+		t.Fatal("expected start timestamp")
+	}
+	if activity.Timestamps.End != nil {
+		t.Error("duration == 0 should send start-only timestamps")
+	}
+}
+
+func TestApplyTimestamps_PausedSendsNone(t *testing.T) {
+	start := time.Unix(1000, 0)
+	end := start.Add(240 * time.Second)
+	activity := (musicBuilder{}).Build(&PresenceData{
+		Track:     "x",
+		State:     "paused",
+		Duration:  240_000,
+		StartTime: &start,
+		EndTime:   &end,
+	})
+	if activity.Timestamps != nil {
+		t.Error("paused sessions should send no timestamps")
+	}
 }
