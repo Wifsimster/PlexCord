@@ -310,7 +310,8 @@ func (a *App) StartSessionPolling() error {
 	}
 
 	// Validate configuration
-	if a.config.ServerURL == "" {
+	serverURL := a.activePlexServerURL()
+	if serverURL == "" {
 		return errors.New(errors.CONFIG_READ_FAILED, "plex server URL not configured")
 	}
 
@@ -330,7 +331,7 @@ func (a *App) StartSessionPolling() error {
 	}
 
 	// Create Plex client
-	client := plex.NewClient(token, a.config.ServerURL)
+	client := plex.NewClient(token, serverURL)
 
 	// Get polling interval from config (default 2 seconds for NFR4 compliance)
 	interval := time.Duration(a.config.PollingInterval) * time.Second
@@ -468,7 +469,7 @@ func (a *App) GetPlexConnectionStatus() PlexConnectionStatus {
 	defer a.pollerMu.Unlock()
 
 	status := PlexConnectionStatus{
-		ServerURL: a.config.ServerURL,
+		ServerURL: a.activePlexServerURL(),
 		UserID:    a.config.SelectedPlexUserID,
 		UserName:  a.config.SelectedPlexUserName,
 	}
@@ -533,7 +534,8 @@ func (a *App) GetCurrentSession() *plex.MusicSession {
 // autoConnectPlex attempts to restore the Plex connection using persisted config.
 // This mirrors Discord auto-connect behavior by validating and restarting polling.
 func (a *App) autoConnectPlex() {
-	if a.config.ServerURL == "" {
+	serverURL := a.activePlexServerURL()
+	if serverURL == "" {
 		log.Printf("Auto-connect skipped: Plex server URL not configured")
 		return
 	}
@@ -554,7 +556,7 @@ func (a *App) autoConnectPlex() {
 	}
 
 	log.Printf("Auto-connecting to Plex on startup...")
-	if _, err := a.ValidatePlexConnection(a.config.ServerURL); err != nil {
+	if _, err := a.ValidatePlexConnection(serverURL); err != nil {
 		log.Printf("Warning: Failed to validate Plex connection on startup: %v", err)
 		a.startPlexRetry(err)
 		return

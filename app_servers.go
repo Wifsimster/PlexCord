@@ -28,6 +28,24 @@ func (a *App) GetServers() []config.ServerConfig {
 	return out
 }
 
+// activePlexServerURL returns the Plex server URL that PlexCord should
+// connect to. It prefers the first active server from the multi-server list
+// (config.Servers) and falls back to the legacy single-server ServerURL for
+// backward compatibility.
+//
+// Without this, servers added through the Settings "Add Server" dialog — which
+// only populate config.Servers — would be ignored by the connection path in
+// favour of the legacy field, leaving the dashboard endlessly retrying a stale
+// or empty target.
+func (a *App) activePlexServerURL() string {
+	for _, s := range a.config.Servers {
+		if s.Active && s.URL != "" {
+			return s.URL
+		}
+	}
+	return a.config.ServerURL
+}
+
 // AddServer appends a new server to the configuration. The URL must use
 // http or https and must be unique within the existing server list.
 // userID and userName are optional and may be filled in later via the
