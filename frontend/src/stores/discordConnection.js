@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 import { IsDiscordConnected, GetConnectionHistory, GetDiscordRetryState, RetryDiscordConnection, ConnectDiscord, GetErrorInfo } from '../../wailsjs/go/main/App';
 import { formatRelativeTime } from '../utils/timeUtils';
+import { t } from '@/i18n';
 
 /**
  * Discord Connection Store
@@ -41,11 +42,11 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
          * Note: Uses function form to access other getters via `this`
          */
         statusLabel() {
-            if (this.connected) return 'Connected';
-            if (this.loading) return 'Connecting...';
-            if (this.isRetrying) return 'Retrying...';
-            if (this.error) return 'Disconnected';
-            return 'Not Connected';
+            if (this.connected) return t('connectionStore.statusConnected');
+            if (this.loading) return t('connectionStore.statusConnecting');
+            if (this.isRetrying) return t('connectionStore.statusRetrying');
+            if (this.error) return t('connectionStore.statusDisconnected');
+            return t('connectionStore.statusNotConnected');
         }
     },
 
@@ -166,9 +167,9 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             } catch (err) {
                 this.error = {
                     code: errorCode,
-                    title: 'Connection Error',
-                    description: 'Failed to connect to Discord',
-                    suggestion: 'Please check your connection and try again.',
+                    title: t('connectionStore.errorTitle'),
+                    description: t('connectionStore.errorDiscord'),
+                    suggestion: t('connectionStore.errorSuggestion'),
                     retryable: true
                 };
             }

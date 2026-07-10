@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useToast } from 'primevue/usetoast';
 import Toast from 'primevue/toast';
 import AppFooter from './AppFooter.vue';
@@ -14,6 +15,7 @@ import { OpenReleaseURL, OpenReleasesPage } from '../../wailsjs/go/main/App';
 
 const router = useRouter();
 const toast = useToast();
+const { t } = useI18n();
 
 const plexStore = usePlexConnectionStore();
 const discordStore = useDiscordConnectionStore();
@@ -91,7 +93,7 @@ const handleShortcuts = (event) => {
         } else if (discordStore.hasError) {
             discordStore.retry();
         } else {
-            toast.add({ severity: 'secondary', summary: 'Nothing to retry', detail: 'Both connections are healthy.', life: 4000 });
+            toast.add({ severity: 'secondary', summary: t('layout.nothingToRetry'), detail: t('layout.connectionsHealthy'), life: 4000 });
         }
     }
 };

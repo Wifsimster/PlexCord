@@ -6,7 +6,7 @@ const { display, buildDate } = useVersion();
 
 <template>
     <footer class="layout-footer">
-        <span class="pc-chip-mono" :title="buildDate ? `Build date: ${buildDate}` : undefined">{{ display }}</span>
+        <span class="pc-chip-mono" :title="buildDate ? $t('footer.buildDate', { date: buildDate }) : undefined">{{ display }}</span>
     </footer>
 </template>
 

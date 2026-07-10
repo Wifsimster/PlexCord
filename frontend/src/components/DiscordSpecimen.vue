@@ -1,6 +1,10 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import TruncatedText from '@/components/TruncatedText.vue';
 import { renderPresenceLines } from '@/utils/presenceFormat';
+
+const { t } = useI18n();
 
 /**
  * <DiscordSpecimen> — pixel-faithful, theme-exempt Discord activity card
@@ -26,11 +30,17 @@ const props = defineProps({
     sample: { type: Boolean, default: false },
     /** Loading state: skeleton card (M20). */
     loading: { type: Boolean, default: false },
-    /** Idle ghost caption (page-specific per spec §5.2/§5.4). */
-    idleTitle: { type: String, default: 'Nothing playing on Plex' },
-    /** Caption beneath the specimen well; empty string hides it. */
-    caption: { type: String, default: 'Exactly what your Discord profile shows.' }
+    /** Idle ghost caption (page-specific per spec §5.2/§5.4). Empty → default. */
+    idleTitle: { type: String, default: '' },
+    /** Caption beneath the specimen well; empty string hides it, undefined → default. */
+    caption: { type: String, default: undefined }
 });
+
+// Resolve i18n defaults here so callers can still override or hide them:
+// idleTitle falls back to the default when empty; caption shows the default
+// only when the prop is omitted (an explicit '' still hides it).
+const resolvedIdleTitle = computed(() => props.idleTitle || t('specimen.idleTitle'));
+const resolvedCaption = computed(() => (props.caption === undefined ? t('specimen.caption') : props.caption));
 
 const normalizedFormats = computed(() => ({
     details: props.formats?.details ?? props.formats?.detailsFormat ?? '',
@@ -81,7 +91,7 @@ const duration = computed(() => formatTime(props.track?.duration));
             <!-- Idle ghost -->
             <div v-else-if="!track" class="specimen-ghost">
                 <span class="ghost-glyph" aria-hidden="true">–</span>
-                <p class="ghost-title">{{ idleTitle }}</p>
+                <p class="ghost-title">{{ resolvedIdleTitle }}</p>
                 <slot name="idle-caption"></slot>
             </div>
 
@@ -89,26 +99,26 @@ const duration = computed(() => formatTime(props.track?.duration));
             <div v-else class="specimen-card" :class="{ 'specimen-card--paused': paused }">
                 <div class="card-header">
                     <i class="pi pi-headphones card-header-glyph" aria-hidden="true"></i>
-                    <span class="card-header-label">Listening to Plex</span>
+                    <span class="card-header-label">{{ $t('specimen.listeningToPlex') }}</span>
                     <span class="card-header-badges">
-                        <span v-if="sample" class="pc-badge">Sample</span>
+                        <span v-if="sample" class="pc-badge">{{ $t('specimen.sample') }}</span>
                         <Transition name="pc-fade">
-                            <span v-if="paused" class="pc-badge pc-badge--warn">Paused</span>
+                            <span v-if="paused" class="pc-badge pc-badge--warn">{{ $t('specimen.paused') }}</span>
                         </Transition>
                     </span>
                 </div>
                 <div class="card-body">
                     <div class="card-art">
                         <Transition name="pc-fade">
-                            <img v-if="track.thumbUrl" :key="track.thumbUrl" :src="track.thumbUrl" :alt="track.album ? `Album art for ${track.album}` : 'Album artwork'" class="card-art-img" />
+                            <img v-if="track.thumbUrl" :key="track.thumbUrl" :src="track.thumbUrl" :alt="track.album ? $t('specimen.albumArtOf', { album: track.album }) : $t('specimen.albumArt')" class="card-art-img" />
                             <span v-else class="card-art-ghost" aria-hidden="true">♪</span>
                         </Transition>
                     </div>
                     <Transition name="specimen-swap" mode="out-in">
                         <div :key="track.sessionKey" class="card-lines">
-                            <p class="card-line card-line--details" :title="lines.details">{{ lines.details }}</p>
-                            <p v-if="lines.state" class="card-line card-line--state" :title="lines.state">{{ lines.state }}</p>
-                            <p v-if="albumLine" class="card-line card-line--album" :title="albumLine">{{ albumLine }}</p>
+                            <TruncatedText as="p" class="card-line card-line--details" :text="lines.details" />
+                            <TruncatedText v-if="lines.state" as="p" class="card-line card-line--state" :text="lines.state" />
+                            <TruncatedText v-if="albumLine" as="p" class="card-line card-line--album" :text="albumLine" />
                         </div>
                     </Transition>
                 </div>
@@ -121,7 +131,7 @@ const duration = computed(() => formatTime(props.track?.duration));
                 </div>
             </div>
         </div>
-        <p v-if="caption" class="specimen-caption">{{ caption }}</p>
+        <p v-if="resolvedCaption" class="specimen-caption">{{ resolvedCaption }}</p>
     </div>
 </template>
 

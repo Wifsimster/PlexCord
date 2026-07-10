@@ -6,13 +6,13 @@
 <template>
     <div>
         <div class="pc-panel-enter">
-            <h1 class="setup-title">Relay your Plex music to Discord.</h1>
-            <p class="setup-lede">PlexCord shows what you're listening to on Plex as a Discord Rich Presence status &mdash; complete with album art, track info, and live progress. Setup takes about two minutes.</p>
+            <h1 class="setup-title">{{ $t('welcome.title') }}</h1>
+            <p class="setup-lede">{{ $t('welcome.lede') }}</p>
         </div>
 
         <div class="setup-panels">
             <!-- Mini signal-path diagram (brand pigments at icon size only) -->
-            <div class="pc-panel welcome-diagram pc-panel-enter pc-panel-enter--2" aria-label="Plex to PlexCord to Discord">
+            <div class="pc-panel welcome-diagram pc-panel-enter pc-panel-enter--2" :aria-label="$t('welcome.diagramAria')">
                 <span class="diagram-node">
                     <svg class="diagram-glyph diagram-glyph--plex" width="24" height="24" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <polyline
@@ -24,7 +24,7 @@
                             points="4.5 24 23.444 24 12.808 9.342 16.883 9.342 27.519 24 16.883 38.658 20.957 38.658 31.594 24 20.957 9.342 25.032 9.342 35.668 24 25.032 38.658 29.107 38.658 39.743 24 43.5 24"
                         />
                     </svg>
-                    <span class="diagram-label">Plex</span>
+                    <span class="diagram-label">{{ $t('welcome.plex') }}</span>
                 </span>
                 <span class="diagram-line" aria-hidden="true"></span>
                 <span class="diagram-node">
@@ -38,26 +38,26 @@
                             fill="currentColor"
                         />
                     </svg>
-                    <span class="diagram-label">Discord</span>
+                    <span class="diagram-label">{{ $t('welcome.discord') }}</span>
                 </span>
             </div>
 
             <!-- What you'll need: two 44px rows with muted check glyphs -->
             <div class="pc-panel welcome-checklist pc-panel-enter pc-panel-enter--3">
-                <span class="pc-eyebrow">What you'll need</span>
+                <span class="pc-eyebrow">{{ $t('welcome.whatYouNeed') }}</span>
                 <ul class="checklist">
                     <li class="checklist-row">
                         <i class="pi pi-check checklist-glyph" aria-hidden="true"></i>
                         <span class="checklist-texts">
-                            <span class="checklist-label">A Plex account</span>
-                            <span class="checklist-caption">With access to a Plex Media Server that has music libraries.</span>
+                            <span class="checklist-label">{{ $t('welcome.needPlexTitle') }}</span>
+                            <span class="checklist-caption">{{ $t('welcome.needPlexCaption') }}</span>
                         </span>
                     </li>
                     <li class="checklist-row">
                         <i class="pi pi-check checklist-glyph" aria-hidden="true"></i>
                         <span class="checklist-texts">
-                            <span class="checklist-label">Discord running on this computer</span>
-                            <span class="checklist-caption">The Discord desktop app must be open on this computer.</span>
+                            <span class="checklist-label">{{ $t('welcome.needDiscordTitle') }}</span>
+                            <span class="checklist-caption">{{ $t('welcome.needDiscordCaption') }}</span>
                         </span>
                     </li>
                 </ul>
