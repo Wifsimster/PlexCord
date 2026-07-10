@@ -212,14 +212,12 @@ jobs:
             build/bin/PlexCord-linux-amd64.AppImage
             build/bin/PlexCord-linux-amd64.AppImage.sha256
 
-  create-release:
-    name: Create Release
+  upload-release-assets:
+    name: Upload Release Assets
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Get version from tag
         id: get_version
@@ -239,50 +237,49 @@ jobs:
           find artifacts -type f -exec cp {} release-files/ \;
           ls -la release-files/
 
-      - name: Generate changelog
-        id: changelog
+      - name: Wait for release to be created
         run: |
-          # Get the previous tag
-          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+          # Wait for semantic-release to create the GitHub release
+          # Retry up to 10 times with 30 second intervals
+          for i in {1..10}; do
+            if gh release view "v${{ steps.get_version.outputs.version }}" &>/dev/null; then
+              echo "Release v${{ steps.get_version.outputs.version }} found"
+              break
+            fi
+            echo "Waiting for release to be created... (attempt $i/10)"
+            sleep 30
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          if [ -z "$PREV_TAG" ]; then
-            # First release - get all commits
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
-          else
-            # Get commits since previous tag
-            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-          fi
+      - name: Upload binaries to existing release
+        run: |
+          gh release upload "v${{ steps.get_version.outputs.version }}" \
+            release-files/* \
+            --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          # Save to output (escape newlines)
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Update release body with installation instructions
+        run: |
+          CURRENT_BODY=$(gh release view "v${{ steps.get_version.outputs.version }}" --json body -q '.body')
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: PlexCord v${{ steps.get_version.outputs.version }}
-          body: |
-            ## PlexCord v${{ steps.get_version.outputs.version }}
+          INSTALL_INSTRUCTIONS="
 
-            ### What's Changed
-            ${{ steps.changelog.outputs.changelog }}
+          ---
 
-            ### Installation
+          ### Installation
 
-            Download the appropriate binary for your platform:
-            - **Windows**: `PlexCord-windows-amd64.exe`
-            - **macOS**: `PlexCord-darwin-universal.dmg`
-            - **Linux**: `PlexCord-linux-amd64.AppImage`
+          Download the appropriate binary for your platform:
+          - **Windows**: \`PlexCord-windows-amd64.exe\`
+          - **macOS**: \`PlexCord-darwin-universal.dmg\`
+          - **Linux**: \`PlexCord-linux-amd64.AppImage\`
 
-            ### Checksums
-            SHA256 checksums are provided for each binary.
+          ### Checksums
+          SHA256 checksums are provided for each binary."
 
-            ---
-
-            **Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}
-          files: release-files/*
-          draft: false
-          prerelease: false
+          gh release edit "v${{ steps.get_version.outputs.version }}" \
+            --title "PlexCord v${{ steps.get_version.outputs.version }}" \
+            --notes "${CURRENT_BODY}${INSTALL_INSTRUCTIONS}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

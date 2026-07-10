@@ -310,6 +310,16 @@ describe('discordConnection store', () => {
         expect(GetErrorInfo).toHaveBeenCalledWith('DISCORD_NOT_RUNNING')
       })
 
+      it('DiscordDisconnected reads code from the nested error payload that the backend actually emits', async () => {
+        // discord.ConnectionEvent marshals as {connected, error: {code, message}, clientId}.
+        await eventHandlers['DiscordDisconnected']({
+          connected: false,
+          error: { code: 'DISCORD_CONN_FAILED', message: 'pipe broken' }
+        })
+
+        expect(GetErrorInfo).toHaveBeenCalledWith('DISCORD_CONN_FAILED')
+      })
+
       it('DiscordDisconnected falls back to DISCORD_NOT_RUNNING code', async () => {
         await eventHandlers['DiscordDisconnected']({})
 

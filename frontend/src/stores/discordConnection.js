@@ -92,7 +92,10 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             EventsOn('DiscordDisconnected', async (data) => {
                 this.connected = false;
 
-                const errorCode = data?.code || 'DISCORD_NOT_RUNNING';
+                // The backend emits `discord.ConnectionEvent` which marshals as
+                // `{connected, error: {code, message}, clientId}`. The code is
+                // nested under `error`, not on the top-level payload.
+                const errorCode = data?.error?.code || data?.code || 'DISCORD_NOT_RUNNING';
                 await this.setError(errorCode);
             });
 

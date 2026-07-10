@@ -1,0 +1,1 @@
+cd "$(dirname "$0")/../.." && npx --prefix frontend commitlint --edit "$1"
