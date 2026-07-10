@@ -1,19 +1,105 @@
 name: Release
 
+# Binaries are attached to the GitHub Release that semantic-release creates.
+#
+# The tag semantic-release pushes is created with the default GITHUB_TOKEN, and
+# GitHub deliberately does NOT start new workflow runs from tags pushed with
+# that token. A plain `on: push: tags` trigger therefore never fires. Instead
+# we chain off the "Semantic Release" workflow's completion (same token
+# context, no recursion block) and, in the `resolve` job, target the latest
+# release — building only when it has no assets yet. The `push`/`workflow_dispatch`
+# triggers are kept so a PAT-pushed tag or a manual run also works.
 on:
+  workflow_run:
+    workflows: ["Semantic Release"]
+    types:
+      - completed
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and attach assets to (e.g. v1.0.2). Defaults to the latest release."
+        required: false
 
 permissions:
   contents: write
 
 jobs:
+  resolve:
+    name: Resolve release
+    runs-on: ubuntu-latest
+    # For the workflow_run trigger, only continue after a successful
+    # Semantic Release run. Other triggers always pass this guard.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      should_release: ${{ steps.decide.outputs.should_release }}
+      tag: ${{ steps.decide.outputs.tag }}
+      version: ${{ steps.decide.outputs.version }}
+    steps:
+      - name: Decide whether to build and which tag to target
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          # Determine the target tag based on how the workflow was triggered.
+          case "$EVENT_NAME" in
+            push)
+              tag="$REF_NAME"
+              ;;
+            workflow_dispatch)
+              tag="${INPUT_TAG:-}"
+              ;;
+            *)
+              tag=""
+              ;;
+          esac
+
+          # Fall back to the latest release for workflow_run and for a manual
+          # run with no tag supplied.
+          if [ -z "$tag" ]; then
+            tag="$(gh release view --json tagName --jq '.tagName' 2>/dev/null || true)"
+          fi
+
+          if [ -z "$tag" ] || [ "$tag" = "null" ]; then
+            echo "No release found to attach assets to; nothing to do."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # On the automatic (workflow_run) path, don't rebuild a release that
+          # already has assets — this makes the workflow idempotent across the
+          # many main pushes that produce no new version.
+          asset_count="$(gh release view "$tag" --json assets --jq '.assets | length' 2>/dev/null || echo 0)"
+          if [ "$EVENT_NAME" = "workflow_run" ] && [ "$asset_count" -gt 0 ]; then
+            echo "Release $tag already has $asset_count asset(s); skipping build."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Targeting release $tag (existing assets: $asset_count)."
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
   build-windows:
     name: Build Windows
+    needs: resolve
+    if: needs.resolve.outputs.should_release == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -27,11 +113,6 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Get version from tag
-        id: get_version
-        shell: bash
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
 
@@ -42,7 +123,7 @@ jobs:
       - name: Build application
         shell: bash
         run: |
-          wails build -clean -platform windows/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ steps.get_version.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          wails build -clean -platform windows/amd64 -ldflags "-X plexcord/internal/version.Version=${{ needs.resolve.outputs.tag }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
       - name: Rename binary
         run: |
@@ -63,9 +144,13 @@ jobs:
 
   build-macos:
     name: Build macOS
+    needs: resolve
+    if: needs.resolve.outputs.should_release == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -79,10 +164,6 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Get version from tag
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
 
@@ -92,7 +173,7 @@ jobs:
 
       - name: Build application
         run: |
-          wails build -clean -platform darwin/universal -ldflags "-X plexcord/internal/version.Version=v${{ steps.get_version.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          wails build -clean -platform darwin/universal -ldflags "-X plexcord/internal/version.Version=${{ needs.resolve.outputs.tag }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
       - name: Create DMG
         run: |
@@ -121,9 +202,13 @@ jobs:
 
   build-linux:
     name: Build Linux
+    needs: resolve
+    if: needs.resolve.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -136,10 +221,6 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Get version from tag
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: |
@@ -155,7 +236,7 @@ jobs:
 
       - name: Build application
         run: |
-          wails build -clean -platform linux/amd64 -ldflags "-X plexcord/internal/version.Version=v${{ steps.get_version.outputs.version }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          wails build -clean -tags webkit2_41 -platform linux/amd64 -ldflags "-X plexcord/internal/version.Version=${{ needs.resolve.outputs.tag }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
       - name: Install AppImage tools
         run: |
@@ -214,17 +295,17 @@ jobs:
 
   upload-release-assets:
     name: Upload Release Assets
-    needs: [build-windows, build-macos, build-linux]
+    needs: [resolve, build-windows, build-macos, build-linux]
+    if: needs.resolve.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.resolve.outputs.tag }}
+      VERSION: ${{ needs.resolve.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Get version from tag
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -237,32 +318,13 @@ jobs:
           find artifacts -type f -exec cp {} release-files/ \;
           ls -la release-files/
 
-      - name: Wait for release to be created
+      - name: Upload binaries to release
         run: |
-          # Wait for semantic-release to create the GitHub release
-          # Retry up to 10 times with 30 second intervals
-          for i in {1..10}; do
-            if gh release view "v${{ steps.get_version.outputs.version }}" &>/dev/null; then
-              echo "Release v${{ steps.get_version.outputs.version }} found"
-              break
-            fi
-            echo "Waiting for release to be created... (attempt $i/10)"
-            sleep 30
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload binaries to existing release
-        run: |
-          gh release upload "v${{ steps.get_version.outputs.version }}" \
-            release-files/* \
-            --clobber
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          gh release upload "$TAG" release-files/* --clobber
 
       - name: Update release body with installation instructions
         run: |
-          CURRENT_BODY=$(gh release view "v${{ steps.get_version.outputs.version }}" --json body -q '.body')
+          CURRENT_BODY=$(gh release view "$TAG" --json body -q '.body')
 
           INSTALL_INSTRUCTIONS="
 
@@ -278,8 +340,6 @@ jobs:
           ### Checksums
           SHA256 checksums are provided for each binary."
 
-          gh release edit "v${{ steps.get_version.outputs.version }}" \
-            --title "PlexCord v${{ steps.get_version.outputs.version }}" \
+          gh release edit "$TAG" \
+            --title "PlexCord $TAG" \
             --notes "${CURRENT_BODY}${INSTALL_INSTRUCTIONS}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
