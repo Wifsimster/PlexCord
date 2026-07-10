@@ -45,6 +45,12 @@ type App struct {
 
 	// Platform integration
 	autostart *platform.AutoStartManager
+	tray      *platform.TrayManager
+
+	// Tray icon data, injected from main so the platform layer stays
+	// asset-agnostic. iconPNG is used on macOS/Linux, iconICO on Windows.
+	trayIconPNG []byte
+	trayIconICO []byte
 
 	// Retry managers (Story 6.4)
 	plexRetry    *retry.Manager
@@ -126,6 +132,15 @@ func (a *App) startup(ctx context.Context) {
 	configDir := config.GetConfigDir()
 	a.history = history.NewStore(configDir, 200)
 
+	// Start the system tray. This is the visible affordance for restoring the
+	// window (or quitting) once the app is running in the background, so it
+	// runs regardless of the "Minimize to tray" setting.
+	a.tray = platform.NewTrayManager(platform.TrayCallbacks{
+		OnShow: a.ShowWindow,
+		OnQuit: a.QuitApp,
+	}, a.trayIconPNG, a.trayIconICO)
+	a.tray.Start()
+
 	// Setup retry callbacks for automatic reconnection
 	a.setupRetryCallbacks()
 
@@ -196,6 +211,11 @@ func (a *App) shutdown(ctx context.Context) {
 		if err := a.discord.Disconnect(); err != nil {
 			log.Printf("Warning: Failed to disconnect Discord: %v", err)
 		}
+	}
+
+	// Remove the system tray icon
+	if a.tray != nil {
+		a.tray.Stop()
 	}
 
 	log.Printf("Application shutdown complete")
