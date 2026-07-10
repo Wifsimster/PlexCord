@@ -47,8 +47,24 @@ type Config struct {
 	PresenceActivityStyle string `json:"presenceActivityStyle"`
 	PresenceStatusDisplay string `json:"presenceStatusDisplay"`
 
+	// PresenceArtworkLookup enables resolving public album art (iTunes /
+	// MusicBrainz) so covers render on Discord. When disabled, PlexCord never
+	// sends external services the artist/album names and shows the Plex logo.
+	// A pointer distinguishes "unset" (legacy config → default on) from an
+	// explicit false; use ArtworkLookupEnabled() to read it.
+	PresenceArtworkLookup *bool `json:"presenceArtworkLookup,omitempty"`
+
 	// Multi-server support
 	Servers []ServerConfig `json:"servers,omitempty"`
+}
+
+// boolPtr returns a pointer to b, for optional bool config fields.
+func boolPtr(b bool) *bool { return &b }
+
+// ArtworkLookupEnabled reports whether public artwork lookup is enabled,
+// defaulting to true when the field is unset (legacy configs).
+func (c *Config) ArtworkLookupEnabled() bool {
+	return c.PresenceArtworkLookup == nil || *c.PresenceArtworkLookup
 }
 
 // DefaultConfig returns a configuration with default values.
@@ -65,6 +81,7 @@ func DefaultConfig() *Config {
 		// member list is the new default; users can revert to classic Playing.
 		PresenceActivityStyle: "media",
 		PresenceStatusDisplay: "state",
+		PresenceArtworkLookup: boolPtr(true),
 	}
 }
 

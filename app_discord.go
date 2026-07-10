@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -198,6 +199,15 @@ func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
 	a.discordMu.Lock()
 	defer a.discordMu.Unlock()
 
+	// Each session update supersedes any in-flight async artwork resolve.
+	gen := a.artworkGen.Add(1)
+
+	// Never send Discord the tokened Plex ThumbURL (credential leak): resolve a
+	// public URL instead. Use a cached cover synchronously so a known album
+	// shows instantly; otherwise fall back to the Plex logo asset and resolve
+	// the real cover in the background below.
+	artURL := a.cachedSessionArtwork(session)
+
 	// If not connected, try to reconnect (auto-recovery for Discord restart)
 	if !a.discord.IsConnected() {
 		a.tryDiscordReconnect()
@@ -208,23 +218,74 @@ func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
 		log.Printf("Discord: Reconnected - restoring presence")
 	}
 
-	// Update presence with session data, including artwork URL and format strings
-	err := a.discord.UpdatePresenceFromPlayback(
+	if err := a.sendPresenceLocked(session, artURL); err != nil {
+		log.Printf("Warning: Failed to update Discord presence: %v", err)
+	}
+
+	// If we have no cover yet, resolve one off the presence path and re-issue
+	// when it lands (dropped if the session has since changed).
+	if artURL == "" && a.artwork != nil && a.config.ArtworkLookupEnabled() {
+		go a.resolveArtworkAsync(session, gen)
+	}
+}
+
+// cachedSessionArtwork returns a public artwork URL for the session if one is
+// already cached (no network), or "" to use the Plex logo fallback. It never
+// returns the tokened Plex ThumbURL.
+func (a *App) cachedSessionArtwork(session *plex.MusicSession) string {
+	if a.artwork == nil || !a.config.ArtworkLookupEnabled() {
+		return ""
+	}
+	if url, ok := a.artwork.Cached(session.Artist, session.Album); ok {
+		return url
+	}
+	return ""
+}
+
+// sendPresenceLocked issues a presence update for the session with the given
+// public artwork URL. The caller must hold discordMu.
+func (a *App) sendPresenceLocked(session *plex.MusicSession, artURL string) error {
+	return a.discord.UpdatePresenceFromPlayback(
 		session.Track,
 		session.Artist,
 		session.Album,
 		session.State,
 		session.Duration,
 		session.ViewOffset,
-		session.ThumbURL,
+		artURL,
 		session.PlayerName,
 		a.config.PresenceDetailsFormat,
 		a.config.PresenceStateFormat,
 		a.config.PresenceActivityStyle,
 		a.config.PresenceStatusDisplay,
 	)
-	if err != nil {
-		log.Printf("Warning: Failed to update Discord presence: %v", err)
+}
+
+// resolveArtworkAsync resolves a public cover off the presence path and, if the
+// session is still current (generation unchanged) and not paused, re-issues the
+// presence with the cover. Runs in its own goroutine.
+func (a *App) resolveArtworkAsync(session *plex.MusicSession, gen uint64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+
+	url, err := a.artwork.Resolve(ctx, session.Artist, session.Album)
+	if err != nil || url == "" {
+		return
+	}
+	// Drop stale resolves (a newer session update superseded this one) and skip
+	// while manually paused, so we don't resurrect a hidden presence.
+	if a.artworkGen.Load() != gen || a.IsPresencePaused() {
+		return
+	}
+
+	a.discordMu.Lock()
+	defer a.discordMu.Unlock()
+	// Re-check under the lock to avoid racing a concurrent session update.
+	if a.artworkGen.Load() != gen || !a.discord.IsConnected() {
+		return
+	}
+	if err := a.sendPresenceLocked(session, url); err != nil {
+		log.Printf("Warning: Failed to update Discord presence with artwork: %v", err)
 	}
 }
 
