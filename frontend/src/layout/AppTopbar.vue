@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import Popover from 'primevue/popover';
 import BrandMark from '@/components/BrandMark.vue';
 import { useLayout } from '@/layout/composables/layout';
@@ -12,6 +13,7 @@ import { usePresenceStore } from '@/stores/presence';
 import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit } from '../../wailsjs/runtime/runtime';
 
 const { toggleDarkMode, isDarkTheme } = useLayout();
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
@@ -84,8 +86,8 @@ const headlineGlyph = computed(() => {
 });
 
 const headlineTitle = computed(() => {
-    if (isErrored.value) return 'Open the dashboard';
-    return presenceStore.paused ? 'Resume presence' : 'Pause presence';
+    if (isErrored.value) return t('topbar.openDashboard');
+    return presenceStore.paused ? t('topbar.resumePresence') : t('topbar.pausePresence');
 });
 
 const onHeadlineClick = () => {
@@ -115,9 +117,9 @@ const plexHost = computed(() => {
 });
 
 const discordPresenceState = computed(() => {
-    if (!discordStore.connected) return 'Inactive';
-    if (presenceStore.paused) return 'Hidden (paused)';
-    return playbackStore.hasActiveSession ? 'Active' : 'Inactive';
+    if (!discordStore.connected) return t('presenceState.inactive');
+    if (presenceStore.paused) return t('presenceState.hiddenPaused');
+    return playbackStore.hasActiveSession ? t('presenceState.active') : t('presenceState.inactive');
 });
 
 const reconnectPlex = async () => {
@@ -173,12 +175,12 @@ onBeforeUnmount(() => {
 <template>
     <header class="layout-topbar" style="--wails-draggable: drag">
         <!-- Left: brand lockup -->
-        <router-link to="/" class="topbar-brand" aria-label="PlexCord dashboard" style="--wails-draggable: no-drag">
+        <router-link to="/" class="topbar-brand" :aria-label="$t('topbar.dashboardAria')" style="--wails-draggable: no-drag">
             <BrandMark />
         </router-link>
 
         <!-- Center: the signal path -->
-        <nav class="signal-path" aria-label="Signal path" style="--wails-draggable: no-drag">
+        <nav class="signal-path" :aria-label="$t('topbar.signalPathAria')" style="--wails-draggable: no-drag">
             <button type="button" class="signal-node" aria-haspopup="dialog" @click="togglePlexPopover">
                 <span class="pc-dot" :class="plexDotClass" aria-hidden="true"></span>
                 <span class="signal-node-name">Plex</span>
@@ -209,34 +211,34 @@ onBeforeUnmount(() => {
                 <button
                     type="button"
                     class="topbar-action"
-                    v-tooltip.bottom="shortcutTooltip(presenceStore.paused ? 'Resume presence' : 'Pause presence', 'P')"
-                    :aria-label="presenceStore.paused ? 'Resume presence' : 'Pause presence'"
+                    v-tooltip.bottom="shortcutTooltip(presenceStore.paused ? $t('topbar.resumePresence') : $t('topbar.pausePresence'), 'P')"
+                    :aria-label="presenceStore.paused ? $t('topbar.resumePresence') : $t('topbar.pausePresence')"
                     :aria-pressed="presenceStore.paused"
                     @click="presenceStore.toggle()"
                 >
                     <i :class="presenceStore.paused ? 'pi pi-play' : 'pi pi-pause'"></i>
                 </button>
-                <button type="button" class="topbar-action" v-tooltip.bottom="shortcutTooltip(isSettings ? 'Back to dashboard' : 'Settings', ',')" :aria-label="isSettings ? 'Back to dashboard' : 'Settings'" @click="toggleSettings">
+                <button type="button" class="topbar-action" v-tooltip.bottom="shortcutTooltip(isSettings ? $t('topbar.backToDashboard') : $t('topbar.settings'), ',')" :aria-label="isSettings ? $t('topbar.backToDashboard') : $t('topbar.settings')" @click="toggleSettings">
                     <i :class="isSettings ? 'pi pi-arrow-left' : 'pi pi-cog'"></i>
                 </button>
-                <button type="button" class="topbar-action" v-tooltip.bottom="{ value: isDarkTheme ? 'Light theme' : 'Dark theme', showDelay: 300 }" :aria-label="isDarkTheme ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleDarkMode">
+                <button type="button" class="topbar-action" v-tooltip.bottom="{ value: isDarkTheme ? $t('topbar.lightTheme') : $t('topbar.darkTheme'), showDelay: 300 }" :aria-label="isDarkTheme ? $t('topbar.switchToLight') : $t('topbar.switchToDark')" @click="toggleDarkMode">
                     <i :class="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'"></i>
                 </button>
             </div>
 
             <!-- Window caption buttons (frameless title bar) -->
             <div class="window-controls" style="--wails-draggable: no-drag">
-                <button type="button" class="caption-btn" aria-label="Minimise" @click="minimiseWindow">
+                <button type="button" class="caption-btn" :aria-label="$t('topbar.minimise')" @click="minimiseWindow">
                     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0" y="4.5" width="10" height="1" fill="currentColor" /></svg>
                 </button>
-                <button type="button" class="caption-btn" :aria-label="isMaximised ? 'Restore' : 'Maximise'" @click="toggleMaximise">
+                <button type="button" class="caption-btn" :aria-label="isMaximised ? $t('topbar.restore') : $t('topbar.maximise')" @click="toggleMaximise">
                     <svg v-if="isMaximised" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                         <rect x="0.5" y="2.5" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1" />
                         <path d="M2.5 2.5 V0.5 H9.5 V7.5 H7.5" fill="none" stroke="currentColor" stroke-width="1" />
                     </svg>
                     <svg v-else width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1" /></svg>
                 </button>
-                <button type="button" class="caption-btn caption-btn--close" aria-label="Close" @click="closeWindow">
+                <button type="button" class="caption-btn caption-btn--close" :aria-label="$t('topbar.close')" @click="closeWindow">
                     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0.5 0.5 L9.5 9.5 M9.5 0.5 L0.5 9.5" stroke="currentColor" stroke-width="1" /></svg>
                 </button>
             </div>
@@ -245,21 +247,21 @@ onBeforeUnmount(() => {
         <!-- Plex node popover -->
         <Popover ref="plexPopover">
             <div class="node-popover">
-                <span class="pc-eyebrow">Plex</span>
+                <span class="pc-eyebrow">{{ $t('topbar.plex') }}</span>
                 <div class="pop-row">
-                    <span class="pop-label">Server</span>
+                    <span class="pop-label">{{ $t('topbar.server') }}</span>
                     <span class="pc-chip-mono">{{ plexHost }}</span>
                 </div>
                 <div class="pop-row">
-                    <span class="pop-label">Account</span>
-                    <span class="pop-value">{{ plexStore.userName || '—' }}</span>
+                    <span class="pop-label">{{ $t('topbar.account') }}</span>
+                    <span class="pop-value">{{ plexStore.userName || $t('common.none') }}</span>
                 </div>
                 <div class="pop-row">
-                    <span class="pop-label">Last sync</span>
+                    <span class="pop-label">{{ $t('topbar.lastSync') }}</span>
                     <span class="pop-value">{{ plexStore.lastConnectedRelative }}</span>
                 </div>
                 <div class="pop-actions">
-                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="reconnectPlex">Reconnect</button>
+                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="reconnectPlex">{{ $t('common.reconnect') }}</button>
                 </div>
             </div>
         </Popover>
@@ -267,17 +269,17 @@ onBeforeUnmount(() => {
         <!-- Discord node popover -->
         <Popover ref="discordPopover">
             <div class="node-popover">
-                <span class="pc-eyebrow">Discord</span>
+                <span class="pc-eyebrow">{{ $t('topbar.discord') }}</span>
                 <div class="pop-row">
-                    <span class="pop-label">Presence</span>
+                    <span class="pop-label">{{ $t('topbar.presence') }}</span>
                     <span class="pop-value">{{ discordPresenceState }}</span>
                 </div>
                 <div class="pop-row">
-                    <span class="pop-label">Last sync</span>
+                    <span class="pop-label">{{ $t('topbar.lastSync') }}</span>
                     <span class="pop-value">{{ discordStore.lastConnectedRelative }}</span>
                 </div>
                 <div class="pop-actions">
-                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="reconnectDiscord">Reconnect</button>
+                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="reconnectDiscord">{{ $t('common.reconnect') }}</button>
                 </div>
             </div>
         </Popover>

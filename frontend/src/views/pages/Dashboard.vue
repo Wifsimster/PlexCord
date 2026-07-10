@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import ConnectionTile from '@/components/ConnectionTile.vue';
 import DiscordSpecimen from '@/components/DiscordSpecimen.vue';
 import { usePlayback } from '@/composables/usePlayback';
@@ -16,6 +17,7 @@ import { GetPlexConnectionStatus, GetPlexToken, GetPollingInterval, GetPresenceF
 
 // Playback event lifecycle initialized once here via the refcounted
 // composable (F35); the shell holds its own subscription for the headline.
+const { t } = useI18n();
 const { currentTrack, isPlaying, isPaused, hasActiveSession, formattedPosition, formattedDuration } = usePlayback();
 const presenceStore = usePresenceStore();
 
@@ -79,10 +81,10 @@ onBeforeUnmount(() => {
 
 // ---- Presence panel header chip ---------------------------------------------
 const chip = computed(() => {
-    if (presenceStore.paused) return { kind: 'paused-presence', label: 'Paused by you', severity: 'warn' };
-    if (isPlaying.value) return { kind: 'live', label: 'Live', severity: 'success' };
-    if (isPaused.value) return { kind: 'paused-track', label: 'Paused', severity: 'warn' };
-    return { kind: 'idle', label: 'Idle', severity: 'muted' };
+    if (presenceStore.paused) return { kind: 'paused-presence', label: t('dashboard.chipPausedByYou'), severity: 'warn' };
+    if (isPlaying.value) return { kind: 'live', label: t('dashboard.chipLive'), severity: 'success' };
+    if (isPaused.value) return { kind: 'paused-track', label: t('dashboard.chipPaused'), severity: 'warn' };
+    return { kind: 'idle', label: t('dashboard.chipIdle'), severity: 'muted' };
 });
 
 const resumePresence = () => {
@@ -101,10 +103,10 @@ const lines = computed(() =>
 );
 
 const facts = computed(() => [
-    { label: 'details', value: lines.value.details || '—' },
-    { label: 'state', value: lines.value.state || '—' },
-    { label: 'player', value: currentTrack.value?.playerName || '—' },
-    { label: 'session', value: `${formattedPosition.value} / ${formattedDuration.value}` }
+    { label: t('dashboard.factDetails'), value: lines.value.details || '—' },
+    { label: t('dashboard.factState'), value: lines.value.state || '—' },
+    { label: t('dashboard.factPlayer'), value: currentTrack.value?.playerName || '—' },
+    { label: t('dashboard.factSession'), value: `${formattedPosition.value} / ${formattedDuration.value}` }
 ]);
 
 // ---- Ambient artwork backdrop (§4.1) ----------------------------------------
@@ -113,17 +115,17 @@ const ambientPaused = computed(() => presenceStore.paused || !isPlaying.value);
 
 // ---- Captions ----------------------------------------------------------------
 const modKey = /mac/i.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl';
-const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ? '' : 'Exactly what your Discord profile shows.'));
+const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ? '' : t('dashboard.specimenCaption')));
 </script>
 
 <template>
     <div class="dashboard">
         <!-- ---- Presence panel (§5.2 left) ---- -->
-        <section class="pc-panel presence-panel pc-panel-enter" aria-label="Presence">
+        <section class="pc-panel presence-panel pc-panel-enter" :aria-label="$t('dashboard.presence')">
             <header class="panel-header">
-                <h2 class="pc-eyebrow">Presence</h2>
+                <h2 class="pc-eyebrow">{{ $t('dashboard.presence') }}</h2>
                 <Transition name="pc-state" mode="out-in">
-                    <button v-if="chip.kind === 'paused-presence'" :key="chip.kind" type="button" class="pc-badge pc-badge--warn state-chip state-chip--button" title="Resume presence" @click="resumePresence">
+                    <button v-if="chip.kind === 'paused-presence'" :key="chip.kind" type="button" class="pc-badge pc-badge--warn state-chip state-chip--button" :title="$t('dashboard.resumePresence')" @click="resumePresence">
                         <i class="pi pi-pause state-chip-glyph" aria-hidden="true"></i>
                         {{ chip.label }}
                     </button>
@@ -136,7 +138,7 @@ const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ?
                 </Transition>
             </header>
 
-            <DiscordSpecimen class="presence-specimen" :track="currentTrack" :formats="formats" :paused="presenceStore.paused" :loading="!ready" idle-title="Nothing playing on Plex" :caption="specimenCaption">
+            <DiscordSpecimen class="presence-specimen" :track="currentTrack" :formats="formats" :paused="presenceStore.paused" :loading="!ready" :idle-title="$t('dashboard.idleTitle')" :caption="specimenCaption">
                 <template #backdrop>
                     <!-- §4.1 ambient artwork backdrop — Dashboard-only; keyed img
                          + non-out-in fade = M10 crossfade on track change,
@@ -146,7 +148,7 @@ const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ?
                     </Transition>
                 </template>
                 <template #idle-caption>
-                    <p class="idle-sub">Play something in Plexamp or any Plex player and it appears here — and on Discord — within ~{{ pollingInterval }}s.</p>
+                    <p class="idle-sub">{{ $t('dashboard.idleSub', { seconds: pollingInterval }) }}</p>
                 </template>
             </DiscordSpecimen>
 
@@ -160,9 +162,9 @@ const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ?
         </section>
 
         <!-- ---- Connections panel (§5.2 right) ---- -->
-        <section class="pc-panel connections-panel pc-panel-enter pc-panel-enter--2" aria-label="Connections">
+        <section class="pc-panel connections-panel pc-panel-enter pc-panel-enter--2" :aria-label="$t('dashboard.connections')">
             <header class="panel-header">
-                <h2 class="pc-eyebrow">Connections</h2>
+                <h2 class="pc-eyebrow">{{ $t('dashboard.connections') }}</h2>
             </header>
 
             <div class="tiles">
@@ -171,12 +173,12 @@ const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ?
 
                 <!-- Setup-skipped resume tile (F22) -->
                 <router-link v-if="resumeTarget" :to="resumeTarget" class="resume-tile">
-                    <span class="resume-text">Setup incomplete</span>
-                    <span class="resume-link">Resume setup →</span>
+                    <span class="resume-text">{{ $t('dashboard.setupIncomplete') }}</span>
+                    <span class="resume-link">{{ $t('dashboard.resumeSetup') }}</span>
                 </router-link>
             </div>
 
-            <p class="poll-caption">Polling every {{ pollingInterval }}s · {{ modKey }}+P to pause</p>
+            <p class="poll-caption">{{ $t('dashboard.pollCaption', { seconds: pollingInterval, modKey }) }}</p>
         </section>
     </div>
 </template>

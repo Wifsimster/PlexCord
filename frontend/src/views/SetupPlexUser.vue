@@ -1,10 +1,12 @@
 <script setup>
 import { ref, computed, inject, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useSetupStore } from '@/stores/setup';
 import { GetPlexUsers, SavePlexUserSelection } from '../../wailsjs/go/main/App';
 import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
+const { t } = useI18n();
 const router = useRouter();
 const setupStore = useSetupStore();
 const wizard = inject('setupWizard', null);
@@ -48,7 +50,7 @@ const scheduleAutoAdvance = () => {
 // Fetch users from the Plex server
 const fetchUsers = async () => {
     if (!setupStore.plexServerUrl) {
-        error.value = 'No server URL configured. Please go back and select a server.';
+        error.value = t('user.errNoServer');
         return;
     }
 
@@ -79,7 +81,7 @@ const fetchUsers = async () => {
     } catch (err) {
         console.error('Failed to fetch Plex users:', err);
 
-        let errorMessage = 'Failed to load users from Plex server';
+        let errorMessage = t('user.errLoad');
         if (err && typeof err === 'string') {
             errorMessage = err;
         } else if (err && err.message) {
@@ -129,31 +131,31 @@ onUnmounted(() => {
 
 <template>
     <div>
-        <h1 class="setup-title">Select a user</h1>
-        <p class="setup-lede">Choose which Plex user account to monitor for playback activity.</p>
+        <h1 class="setup-title">{{ $t('user.title') }}</h1>
+        <p class="setup-lede">{{ $t('user.lede') }}</p>
 
         <div class="setup-panels">
             <!-- Loading: skeleton cards (M20) -->
-            <div v-if="isLoading" class="user-grid" aria-label="Loading users">
+            <div v-if="isLoading" class="user-grid" :aria-label="$t('user.loadingAria')">
                 <div v-for="i in 4" :key="i" class="pc-skeleton user-skeleton"></div>
             </div>
 
             <!-- Error: inline danger panel + Retry / Back -->
             <section v-else-if="error" class="pc-panel user-error" role="alert">
-                <p class="user-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> Couldn't load users</p>
+                <p class="user-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> {{ $t('user.couldntLoadTitle') }}</p>
                 <p class="user-error-text">{{ error }}</p>
                 <div class="user-error-actions">
-                    <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="fetchUsers">Retry</button>
-                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="goBack">Back</button>
+                    <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="fetchUsers">{{ $t('common.retry') }}</button>
+                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="goBack">{{ $t('common.back') }}</button>
                 </div>
             </section>
 
             <!-- No users found -->
             <section v-else-if="users.length === 0" class="pc-panel user-error">
-                <p class="user-error-title user-error-title--warn"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> No users found</p>
-                <p class="user-error-text">No user accounts were found on this Plex server. This may happen if the server is configured for admin-only access.</p>
+                <p class="user-error-title user-error-title--warn"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ $t('user.noUsersTitle') }}</p>
+                <p class="user-error-text">{{ $t('user.noUsersText') }}</p>
                 <div class="user-error-actions">
-                    <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="fetchUsers">Retry</button>
+                    <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="fetchUsers">{{ $t('common.retry') }}</button>
                 </div>
             </section>
 
@@ -162,25 +164,25 @@ onUnmounted(() => {
                 <p class="user-done-title">
                     <DrawnCheck :size="14" />
                     <span
-                        >Monitoring <strong>{{ selectedUser.name || `User ${selectedUser.id}` }}</strong></span
+                        >{{ $t('user.monitoring') }} <strong>{{ selectedUser.name || $t('user.fallbackName', { id: selectedUser.id }) }}</strong></span
                     >
                 </p>
                 <p class="user-done-caption">
-                    Only one user on this server<template v-if="autoAdvancePending">
-                        — continuing…
-                        <a href="#" class="user-stay" @click.prevent="cancelAutoAdvance">Stay</a>
+                    {{ $t('user.onlyOneUser') }}<template v-if="autoAdvancePending">
+                        — {{ $t('user.continuing') }}
+                        <a href="#" class="user-stay" @click.prevent="cancelAutoAdvance">{{ $t('user.stay') }}</a>
                     </template>
                 </p>
             </section>
 
             <!-- Multiple users: select-card grid (the selected card IS the confirmation) -->
-            <div v-else class="user-grid" role="listbox" aria-label="Plex users">
+            <div v-else class="user-grid" role="listbox" :aria-label="$t('user.usersAria')">
                 <button v-for="user in users" :key="user.id" type="button" class="user-card" :class="{ 'user-card--selected': selectedUser?.id === user.id }" role="option" :aria-selected="selectedUser?.id === user.id" @click="selectUser(user)">
                     <span class="user-avatar">
                         <img v-if="user.thumb" :src="user.thumb" alt="" class="user-avatar-img" />
                         <i v-else class="pi pi-user" aria-hidden="true"></i>
                     </span>
-                    <span class="user-name">{{ user.name || `User ${user.id}` }}</span>
+                    <span class="user-name">{{ user.name || $t('user.fallbackName', { id: user.id }) }}</span>
                     <DrawnCheck v-if="selectedUser?.id === user.id" :size="14" class="user-check" />
                 </button>
             </div>

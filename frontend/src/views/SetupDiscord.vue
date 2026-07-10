@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed, inject, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useSetupStore } from '@/stores/setup';
 import { ConnectDiscord, IsDiscordConnected, GetDefaultDiscordClientID, GetDiscordClientID, SaveDiscordClientID, ValidateDiscordClientID, TestDiscordPresence } from '../../wailsjs/go/main/App';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
 import InputText from 'primevue/inputtext';
 import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
+const { t } = useI18n();
 const setupStore = useSetupStore();
 const wizard = inject('setupWizard', null);
 
@@ -60,7 +62,7 @@ const validateClientId = async () => {
         return true;
     } catch (error) {
         isClientIdValid.value = false;
-        clientIdError.value = error?.message || 'Invalid Client ID format';
+        clientIdError.value = error?.message || t('discord.errInvalidFormat');
         return false;
     }
 };
@@ -91,7 +93,7 @@ const saveCustomClientId = async () => {
         return true;
     } catch (error) {
         console.error('Failed to save Discord client ID:', error);
-        clientIdError.value = error?.message || 'Failed to save Client ID';
+        clientIdError.value = error?.message || t('discord.errSaveClientId');
         return false;
     }
 };
@@ -123,7 +125,7 @@ const connectToDiscord = async () => {
             connectionError.value = '';
             setupStore.setDiscordConnected(true);
         } else {
-            throw new Error('Connection verification failed');
+            throw new Error(t('discord.errVerify'));
         }
     } catch (error) {
         console.error('Discord connection failed:', error);
@@ -131,7 +133,7 @@ const connectToDiscord = async () => {
         setupStore.setDiscordConnected(false);
 
         // Parse error message for user-friendly display
-        let errorMessage = 'Failed to connect to Discord';
+        let errorMessage = t('discord.errConnect');
         if (error && typeof error === 'string') {
             errorMessage = error;
         } else if (error && error.message) {
@@ -139,9 +141,9 @@ const connectToDiscord = async () => {
         }
 
         if (errorMessage.includes('not running')) {
-            connectionError.value = 'Discord is not running. Start Discord, then try again.';
+            connectionError.value = t('discord.errNotRunning');
         } else if (errorMessage.includes('invalid') || errorMessage.includes('Client ID')) {
-            connectionError.value = 'Invalid Discord Client ID. Check your configuration below.';
+            connectionError.value = t('discord.errInvalidClientId');
         } else {
             connectionError.value = errorMessage;
         }
@@ -174,7 +176,7 @@ const testPresence = async () => {
         }, 1600);
     } catch (error) {
         console.error('Test presence failed:', error);
-        testError.value = error?.message || 'Failed to send test presence';
+        testError.value = error?.message || t('discord.errTest');
     } finally {
         isTesting.value = false;
     }
@@ -229,57 +231,57 @@ onUnmounted(() => {
 
 <template>
     <div>
-        <h1 class="setup-title">Connect to Discord</h1>
-        <p class="setup-lede">PlexCord will show your Plex music activity on your Discord profile using Rich Presence.</p>
+        <h1 class="setup-title">{{ $t('discord.title') }}</h1>
+        <p class="setup-lede">{{ $t('discord.lede') }}</p>
 
         <div class="setup-panels">
             <!-- Connection panel -->
             <section class="pc-panel">
-                <span class="pc-eyebrow">Discord Rich Presence</span>
+                <span class="pc-eyebrow">{{ $t('discord.richPresence') }}</span>
 
                 <Transition name="pc-state" mode="out-in">
                     <!-- initial -->
                     <div v-if="connectionState === 'initial'" key="initial" class="discord-initial">
-                        <p class="discord-notice">Discord must be running on this computer.</p>
-                        <button type="button" class="pc-btn pc-btn--primary pc-btn--lg" :disabled="!isClientIdValid" @click="connectToDiscord">Connect to Discord</button>
+                        <p class="discord-notice">{{ $t('discord.mustBeRunning') }}</p>
+                        <button type="button" class="pc-btn pc-btn--primary pc-btn--lg" :disabled="!isClientIdValid" @click="connectToDiscord">{{ $t('discord.connect') }}</button>
                     </div>
 
                     <!-- connecting -->
                     <div v-else-if="connectionState === 'connecting'" key="connecting" class="discord-connecting">
                         <i class="pi pi-spin pi-spinner discord-spinner" aria-hidden="true"></i>
-                        <span>Connecting to Discord…</span>
+                        <span>{{ $t('discord.connecting') }}</span>
                     </div>
 
                     <!-- connected -->
                     <div v-else-if="connectionState === 'connected'" key="connected" class="discord-done">
                         <p class="discord-done-title">
                             <DrawnCheck :size="14" />
-                            <span>Connected to Discord</span>
+                            <span>{{ $t('discord.connected') }}</span>
                         </p>
-                        <p class="discord-done-caption">Your profile will update when you play music on Plex.</p>
+                        <p class="discord-done-caption">{{ $t('discord.connectedCaption') }}</p>
                         <div class="discord-done-actions">
                             <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" :disabled="isTesting" @click="testPresence">
                                 <i v-if="isTesting" class="pi pi-spin pi-spinner discord-spinner" aria-hidden="true"></i>
-                                Send test presence
+                                {{ $t('discord.sendTest') }}
                             </button>
                             <Transition name="pc-fade">
-                                <span v-if="testSent" class="discord-test-ok pc-fade-ok"><i class="pi pi-check" aria-hidden="true"></i> Sent — check your Discord profile</span>
+                                <span v-if="testSent" class="discord-test-ok pc-fade-ok"><i class="pi pi-check" aria-hidden="true"></i> {{ $t('discord.testSent') }}</span>
                             </Transition>
                             <span v-if="testError" class="discord-test-error" role="alert">{{ testError }}</span>
                         </div>
                         <p class="discord-reconnect">
-                            Connection trouble?
-                            <a href="#" @click.prevent="retryConnection">Reconnect</a>
+                            {{ $t('discord.connectionTrouble') }}
+                            <a href="#" @click.prevent="retryConnection">{{ $t('common.reconnect') }}</a>
                         </p>
                     </div>
 
                     <!-- error -->
                     <div v-else key="error" class="discord-error" role="alert">
-                        <p class="discord-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> Connection failed</p>
+                        <p class="discord-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> {{ $t('discord.connectionFailed') }}</p>
                         <p class="discord-error-text">{{ connectionError }}</p>
                         <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" :disabled="isConnecting" @click="retryConnection">
                             <i v-if="isConnecting" class="pi pi-spin pi-spinner discord-spinner" aria-hidden="true"></i>
-                            Retry
+                            {{ $t('common.retry') }}
                         </button>
                     </div>
                 </Transition>
@@ -288,21 +290,21 @@ onUnmounted(() => {
             <!-- Advanced: custom Client ID (persistent value — F31) -->
             <section class="pc-panel">
                 <button type="button" class="advanced-toggle" :aria-expanded="showAdvanced" @click="toggleAdvanced">
-                    <span class="pc-eyebrow">Advanced</span>
-                    <span v-if="hasCustomClientId" class="pc-badge pc-badge--accent">Custom ID</span>
+                    <span class="pc-eyebrow">{{ $t('discord.advanced') }}</span>
+                    <span v-if="hasCustomClientId" class="pc-badge pc-badge--accent">{{ $t('discord.customId') }}</span>
                     <i class="pi advanced-chevron" :class="showAdvanced ? 'pi-chevron-up' : 'pi-chevron-down'" aria-hidden="true"></i>
                 </button>
 
                 <div class="pc-collapse" :class="{ 'pc-collapse--open': showAdvanced }">
                     <div>
                         <div class="advanced-body">
-                            <label class="advanced-label" for="custom-client-id">Custom Discord application Client ID</label>
-                            <p class="advanced-caption">Use your own Discord application for custom branding or testing. Leave empty to use the default PlexCord application.</p>
+                            <label class="advanced-label" for="custom-client-id">{{ $t('discord.customClientIdLabel') }}</label>
+                            <p class="advanced-caption">{{ $t('discord.customClientIdCaption') }}</p>
                             <InputText
                                 id="custom-client-id"
                                 v-model="customClientId"
                                 class="advanced-input"
-                                placeholder="17–20 digit application ID"
+                                :placeholder="$t('discord.clientIdPlaceholder')"
                                 :invalid="!isClientIdValid"
                                 aria-describedby="client-id-feedback"
                                 @input="handleClientIdChange"
@@ -310,11 +312,11 @@ onUnmounted(() => {
                             />
                             <small v-if="clientIdError" id="client-id-feedback" class="advanced-feedback advanced-feedback--danger" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ clientIdError }}</small>
                             <small v-else id="client-id-feedback" class="advanced-feedback">
-                                Default: <span class="pc-chip-mono">{{ defaultClientId }}</span>
+                                {{ $t('discord.default') }} <span class="pc-chip-mono">{{ defaultClientId }}</span>
                             </small>
 
                             <p class="advanced-instructions-link">
-                                <a href="#" @click.prevent="showInstructions = !showInstructions">How to create a Discord application</a>
+                                <a href="#" @click.prevent="showInstructions = !showInstructions">{{ $t('discord.howToCreate') }}</a>
                             </p>
 
                             <div class="pc-collapse" :class="{ 'pc-collapse--open': showInstructions }">
@@ -322,15 +324,15 @@ onUnmounted(() => {
                                     <div class="advanced-instructions">
                                         <ol class="advanced-steps">
                                             <li>
-                                                Open the
-                                                <a href="#" @click.prevent="openDeveloperPortal">Discord Developer Portal</a>
+                                                {{ $t('discord.stepOpen') }}
+                                                <a href="#" @click.prevent="openDeveloperPortal">{{ $t('discord.developerPortal') }}</a>
                                             </li>
-                                            <li>Click "New Application" and give it a name</li>
-                                            <li>Copy the "Application ID" from the General Information page</li>
-                                            <li>Paste it in the field above</li>
-                                            <li>(Optional) Upload custom images under Rich Presence Art Assets</li>
+                                            <li>{{ $t('discord.stepNewApp') }}</li>
+                                            <li>{{ $t('discord.stepCopyId') }}</li>
+                                            <li>{{ $t('discord.stepPaste') }}</li>
+                                            <li>{{ $t('discord.stepUpload') }}</li>
                                         </ol>
-                                        <p class="advanced-note">Custom applications require additional setup. Most users should use the default PlexCord application.</p>
+                                        <p class="advanced-note">{{ $t('discord.customNote') }}</p>
                                     </div>
                                 </div>
                             </div>

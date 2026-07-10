@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 import { GetPlexConnectionStatus, GetConnectionHistory, GetPlexRetryState, RetryPlexConnection, GetErrorInfo } from '../../wailsjs/go/main/App';
 import { formatRelativeTime } from '../utils/timeUtils';
+import { t } from '@/i18n';
 
 /**
  * Plex Connection Store
@@ -46,11 +47,11 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
          * Note: Uses function form to access other getters via `this`
          */
         statusLabel() {
-            if (this.connected && this.polling) return 'Connected';
-            if (this.loading) return 'Connecting...';
-            if (this.isRetrying) return 'Retrying...';
-            if (this.inErrorState) return 'Disconnected';
-            return 'Not Connected';
+            if (this.connected && this.polling) return t('connectionStore.statusConnected');
+            if (this.loading) return t('connectionStore.statusConnecting');
+            if (this.isRetrying) return t('connectionStore.statusRetrying');
+            if (this.inErrorState) return t('connectionStore.statusDisconnected');
+            return t('connectionStore.statusNotConnected');
         }
     },
 
@@ -162,9 +163,9 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
                 this.inErrorState = true;
                 this.error = {
                     code: 'PLEX_RETRY_FAILED',
-                    title: 'Reconnect Failed',
-                    description: error?.message || 'Unable to reconnect to Plex.',
-                    suggestion: 'Check your Plex server and user settings, then try again.',
+                    title: t('connectionStore.reconnectFailedTitle'),
+                    description: error?.message || t('connectionStore.reconnectFailedPlex'),
+                    suggestion: t('connectionStore.reconnectFailedSuggestion'),
                     retryable: true
                 };
                 throw error;
@@ -182,9 +183,9 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             } catch (err) {
                 this.error = {
                     code: errorCode,
-                    title: 'Connection Error',
-                    description: 'Failed to connect to Plex',
-                    suggestion: 'Please check your connection and try again.',
+                    title: t('connectionStore.errorTitle'),
+                    description: t('connectionStore.errorPlex'),
+                    suggestion: t('connectionStore.errorSuggestion'),
                     retryable: true
                 };
             }

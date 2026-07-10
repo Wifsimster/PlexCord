@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, provide } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useSetupStore } from '@/stores/setup';
 import { SavePlexToken, SkipSetup } from '../../wailsjs/go/main/App';
 import { useToast } from 'primevue/usetoast';
@@ -8,6 +9,7 @@ import BrandMark from '@/components/BrandMark.vue';
 import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
 const toast = useToast();
+const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const setupStore = useSetupStore();
@@ -19,11 +21,11 @@ const savedStep = setupStore.currentStep;
 
 // Rail steps (spec §5.4) — the signal path being assembled, left to right.
 const steps = [
-    { label: 'Welcome', route: '/setup/welcome' },
-    { label: 'Plex Server', route: '/setup/plex', brand: 'plex' },
-    { label: 'Select User', route: '/setup/user' },
-    { label: 'Discord', route: '/setup/discord', brand: 'discord' },
-    { label: 'Done', route: '/setup/complete' }
+    { labelKey: 'wizard.stepWelcome', route: '/setup/welcome' },
+    { labelKey: 'wizard.stepPlex', route: '/setup/plex', brand: 'plex' },
+    { labelKey: 'wizard.stepUser', route: '/setup/user' },
+    { labelKey: 'wizard.stepDiscord', route: '/setup/discord', brand: 'discord' },
+    { labelKey: 'wizard.stepDone', route: '/setup/complete' }
 ];
 const lastIndex = steps.length - 1;
 
@@ -65,7 +67,7 @@ const stepSummary = (index) => {
         case 2:
             return setupStore.selectedPlexUser?.name || '';
         case 3:
-            return setupStore.discordSkipped ? 'Skipped' : setupStore.discordConnected ? 'Connected' : '';
+            return setupStore.discordSkipped ? t('wizard.summarySkipped') : setupStore.discordConnected ? t('wizard.summaryConnected') : '';
         default:
             return '';
     }
@@ -120,19 +122,19 @@ const goToPreviousStep = () => {
 const gate = computed(() => {
     switch (activeIndex.value) {
         case 0:
-            return { enabled: true, label: 'Get started', reason: '' };
+            return { enabled: true, label: t('wizard.getStarted'), reason: '' };
         case 1:
             return {
                 enabled: setupStore.isPlexStepValid && setupStore.isConnectionValidated,
-                label: 'Continue',
-                reason: 'Validate your server to continue'
+                label: t('wizard.continue'),
+                reason: t('wizard.reasonValidate')
             };
         case 2:
-            return { enabled: setupStore.isUserSelected, label: 'Continue', reason: 'Select a user to continue' };
+            return { enabled: setupStore.isUserSelected, label: t('wizard.continue'), reason: t('wizard.reasonSelectUser') };
         case 3:
-            return { enabled: setupStore.isDiscordStepSatisfied, label: 'Continue', reason: 'Connect Discord to continue' };
+            return { enabled: setupStore.isDiscordStepSatisfied, label: t('wizard.continue'), reason: t('wizard.reasonConnectDiscord') };
         default:
-            return { enabled: !setupStore.isFinishing, label: 'Finish setup', reason: '' };
+            return { enabled: !setupStore.isFinishing, label: t('wizard.finishSetup'), reason: '' };
     }
 });
 
@@ -214,8 +216,8 @@ const skipSetup = async () => {
         console.error('Failed to skip setup:', error);
         toast.add({
             severity: 'error',
-            summary: 'Skip failed',
-            detail: error?.message || 'Failed to skip setup. Please try again.',
+            summary: t('wizard.skipFailed'),
+            detail: error?.message || t('wizard.skipFailedDetail'),
             life: 8000
         });
     } finally {
@@ -274,10 +276,10 @@ onBeforeUnmount(() => {
         <!-- Left rail: the signal path being assembled (§5.4) -->
         <aside class="wizard-rail">
             <div class="rail-header">
-                <BrandMark suffix="Setup" />
+                <BrandMark :suffix="$t('wizard.suffix')" />
             </div>
 
-            <nav ref="railList" class="rail-steps" aria-label="Setup steps">
+            <nav ref="railList" class="rail-steps" :aria-label="$t('wizard.stepsAria')">
                 <div class="rail-progress" :style="{ height: progressHeight + 'px' }" aria-hidden="true"></div>
                 <button
                     v-for="(step, i) in steps"
@@ -288,7 +290,7 @@ onBeforeUnmount(() => {
                     :aria-current="i === activeIndex ? 'step' : undefined"
                     :aria-disabled="!canNavigateTo(i) || undefined"
                     :tabindex="canNavigateTo(i) ? 0 : -1"
-                    v-tooltip.right="canNavigateTo(i) ? null : 'Complete the current step first'"
+                    v-tooltip.right="canNavigateTo(i) ? null : $t('wizard.lockedTooltip')"
                     @click="onRailClick(i)"
                 >
                     <span class="rail-glyph">
@@ -297,7 +299,7 @@ onBeforeUnmount(() => {
                         <span v-if="step.brand" class="rail-tick" :class="`rail-tick--${step.brand}`" aria-hidden="true"></span>
                     </span>
                     <span class="rail-texts">
-                        <span class="rail-label">{{ step.label }}</span>
+                        <span class="rail-label">{{ $t(step.labelKey) }}</span>
                         <span v-if="stepSummary(i)" class="rail-summary">{{ stepSummary(i) }}</span>
                     </span>
                 </button>
@@ -305,8 +307,8 @@ onBeforeUnmount(() => {
 
             <div class="rail-foot">
                 <a v-if="showSkipLink" href="#" class="rail-skip" :class="{ 'rail-skip--busy': isSkipping }" @click.prevent="skipSetup">
-                    <span v-if="isSkipping">Skipping…</span>
-                    <span v-else>Skip setup →</span>
+                    <span v-if="isSkipping">{{ $t('wizard.skipping') }}</span>
+                    <span v-else>{{ $t('wizard.skip') }}</span>
                 </a>
             </div>
         </aside>
@@ -322,12 +324,12 @@ onBeforeUnmount(() => {
             </main>
 
             <footer class="wizard-footer">
-                <button type="button" class="pc-btn pc-btn--ghost" :disabled="activeIndex === 0 || setupStore.isFinishing" @click="goToPreviousStep"><i class="pi pi-arrow-left" aria-hidden="true"></i> Back</button>
+                <button type="button" class="pc-btn pc-btn--ghost" :disabled="activeIndex === 0 || setupStore.isFinishing" @click="goToPreviousStep"><i class="pi pi-arrow-left" aria-hidden="true"></i> {{ $t('wizard.back') }}</button>
 
                 <span class="wizard-footer-gap"></span>
 
                 <span v-if="!gate.enabled && gate.reason" class="wizard-gate-reason" role="status">{{ gate.reason }}</span>
-                <a v-if="showDiscordEscape" href="#" class="wizard-escape-link" @click.prevent="continueWithoutDiscord">Continue without Discord →</a>
+                <a v-if="showDiscordEscape" href="#" class="wizard-escape-link" @click.prevent="continueWithoutDiscord">{{ $t('wizard.continueWithoutDiscord') }}</a>
 
                 <button ref="continueButton" type="button" class="pc-btn pc-btn--primary pc-btn--lg wizard-continue" :disabled="!gate.enabled" @click="continueAction">
                     <i v-if="setupStore.isFinishing && isLastStep" class="pi pi-spin pi-spinner" aria-hidden="true"></i>
