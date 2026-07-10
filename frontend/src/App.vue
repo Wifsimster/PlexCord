@@ -1,11 +1,6 @@
 <script setup>
-import { onMounted } from 'vue';
+import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
-
-onMounted(() => {
-    // Initialize dark mode
-    document.documentElement.classList.add('dark');
-});
 </script>
 
 <template>
@@ -15,6 +10,8 @@ onMounted(() => {
          render `<Toast />` without importing it, which silently fell
          back to a no-op native element. -->
     <Toast />
+    <!-- Global ConfirmDialog host for useConfirm() (destructive confirms). -->
+    <ConfirmDialog />
 </template>
 
 <style scoped></style>

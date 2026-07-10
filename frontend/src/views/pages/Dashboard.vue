@@ -1,128 +1,342 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import DiscordPreview from '@/components/setup/DiscordPreview.vue';
-import ConnectionStatus from '@/components/ConnectionStatus.vue';
-import ErrorBanner from '@/components/ErrorBanner.vue';
-import NowPlaying from '@/components/NowPlaying.vue';
-import Button from 'primevue/button';
-import { GetVersion, IsPresencePaused, TogglePresencePause } from '../../../wailsjs/go/main/App';
-import { useConnectionStatus } from '@/composables/useConnectionStatus';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import ConnectionTile from '@/components/ConnectionTile.vue';
+import DiscordSpecimen from '@/components/DiscordSpecimen.vue';
+import { usePlayback } from '@/composables/usePlayback';
+import { usePresenceStore } from '@/stores/presence';
+import { renderPresenceLines } from '@/utils/presenceFormat';
+import { GetPlexConnectionStatus, GetPlexToken, GetPollingInterval, GetPresenceFormat, GetServers } from '../../../wailsjs/go/main/App';
 
-const { errors, plex, discord } = useConnectionStatus();
+/**
+ * Dashboard (spec §5.2) — the signal path expanded. One glance answers
+ * live / showing / broken; paused is honest everywhere; a failure appears
+ * in exactly one place (its connection tile + topbar node). No page h1 —
+ * the topbar headline is the header (F8). No manual refresh (F7).
+ */
 
-// Version info
-const version = ref('');
+// Playback event lifecycle initialized once here via the refcounted
+// composable (F35); the shell holds its own subscription for the headline.
+const { currentTrack, isPlaying, isPaused, hasActiveSession, formattedPosition, formattedDuration } = usePlayback();
+const presenceStore = usePresenceStore();
 
-// Presence pause state
-const presencePaused = ref(false);
+// ---- Loading (M20 skeleton, minimum 400ms to avoid flash) ------------------
+const ready = ref(false);
+let readyTimer = null;
+
+// ---- Live settings the panel narrates ---------------------------------------
+const formats = ref(null); // { detailsFormat, stateFormat }
+const pollingInterval = ref(5);
+
+// ---- Setup-incomplete resume tile (F22) -------------------------------------
+// The backend cannot report "skipped" directly (CheckSetupComplete() is true
+// for skipped setups so the router even allows this page) — derive the first
+// unfinished wizard step from the persisted configuration instead.
+const resumeTarget = ref('');
+
+const deriveSetupResume = async () => {
+    try {
+        const token = await GetPlexToken();
+        if (!token) {
+            resumeTarget.value = '/setup/plex';
+            return;
+        }
+        const status = await GetPlexConnectionStatus();
+        let hasServer = !!status?.serverUrl;
+        if (!hasServer) {
+            const servers = await GetServers();
+            hasServer = Array.isArray(servers) && servers.length > 0;
+        }
+        if (!hasServer) {
+            resumeTarget.value = '/setup/plex';
+            return;
+        }
+        resumeTarget.value = status?.userId ? '' : '/setup/user';
+    } catch (error) {
+        console.error('Failed to derive setup progress:', error);
+        resumeTarget.value = '';
+    }
+};
 
 onMounted(async () => {
+    const start = performance.now();
     try {
-        const versionInfo = await GetVersion();
-        version.value = versionInfo.version;
-        presencePaused.value = await IsPresencePaused();
+        const [presenceFormats, interval] = await Promise.all([GetPresenceFormat(), GetPollingInterval()]);
+        formats.value = presenceFormats;
+        if (interval > 0) pollingInterval.value = interval;
     } catch (error) {
-        console.error('Failed to get version:', error);
+        console.error('Failed to load presence settings:', error);
     }
+    deriveSetupResume();
+    const remaining = Math.max(0, 400 - (performance.now() - start));
+    readyTimer = setTimeout(() => {
+        ready.value = true;
+    }, remaining);
 });
 
-const togglePresencePause = async () => {
-    try {
-        presencePaused.value = await TogglePresencePause();
-    } catch (error) {
-        console.error('Failed to toggle presence pause:', error);
-    }
+onBeforeUnmount(() => {
+    if (readyTimer) clearTimeout(readyTimer);
+});
+
+// ---- Presence panel header chip ---------------------------------------------
+const chip = computed(() => {
+    if (presenceStore.paused) return { kind: 'paused-presence', label: 'Paused by you', severity: 'warn' };
+    if (isPlaying.value) return { kind: 'live', label: 'Live', severity: 'success' };
+    if (isPaused.value) return { kind: 'paused-track', label: 'Paused', severity: 'warn' };
+    return { kind: 'idle', label: 'Idle', severity: 'muted' };
+});
+
+const resumePresence = () => {
+    if (presenceStore.paused) presenceStore.toggle();
 };
 
-// Error banner handling
-const handleDismissError = (source) => {
-    if (source === 'plex') {
-        plex.error.value = null;
-    } else {
-        discord.error.value = null;
-    }
-};
+// ---- Fact strip: what the relay is literally transmitting --------------------
+const lines = computed(() =>
+    renderPresenceLines(
+        {
+            details: formats.value?.detailsFormat ?? '',
+            state: formats.value?.stateFormat ?? ''
+        },
+        currentTrack.value
+    )
+);
 
-const handleRetry = (source) => {
-    if (source === 'plex') {
-        plex.retry();
-    } else {
-        discord.retry();
-    }
-};
+const facts = computed(() => [
+    { label: 'details', value: lines.value.details || '—' },
+    { label: 'state', value: lines.value.state || '—' },
+    { label: 'player', value: currentTrack.value?.playerName || '—' },
+    { label: 'session', value: `${formattedPosition.value} / ${formattedDuration.value}` }
+]);
+
+// ---- Ambient artwork backdrop (§4.1) ----------------------------------------
+// Breathing while live, frozen while paused (either kind), gone when idle.
+const ambientPaused = computed(() => presenceStore.paused || !isPlaying.value);
+
+// ---- Captions ----------------------------------------------------------------
+const modKey = /mac/i.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl';
+const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ? '' : 'Exactly what your Discord profile shows.'));
 </script>
 
 <template>
-    <div class="min-h-screen bg-surface-50 dark:bg-surface-950 p-6 md:p-8">
-        <div class="max-w-7xl mx-auto">
-            <!-- Header -->
-            <div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h1 class="text-3xl font-bold text-surface-900 dark:text-surface-0 tracking-tight">Dashboard</h1>
-                    <p class="text-surface-500 dark:text-surface-400 mt-1">Manage your PlexCord integration</p>
+    <div class="dashboard">
+        <!-- ---- Presence panel (§5.2 left) ---- -->
+        <section class="pc-panel presence-panel pc-panel-enter" aria-label="Presence">
+            <header class="panel-header">
+                <h2 class="pc-eyebrow">Presence</h2>
+                <Transition name="pc-state" mode="out-in">
+                    <button v-if="chip.kind === 'paused-presence'" :key="chip.kind" type="button" class="pc-badge pc-badge--warn state-chip state-chip--button" title="Resume presence" @click="resumePresence">
+                        <i class="pi pi-pause state-chip-glyph" aria-hidden="true"></i>
+                        {{ chip.label }}
+                    </button>
+                    <span v-else :key="chip.kind" class="pc-badge state-chip" :class="{ 'pc-badge--success': chip.severity === 'success', 'pc-badge--warn': chip.severity === 'warn' }">
+                        <span v-if="chip.kind === 'live'" class="pc-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+                        <i v-else-if="chip.kind === 'paused-track'" class="pi pi-pause state-chip-glyph" aria-hidden="true"></i>
+                        <span v-else class="state-chip-glyph" aria-hidden="true">–</span>
+                        {{ chip.label }}
+                    </span>
+                </Transition>
+            </header>
+
+            <DiscordSpecimen class="presence-specimen" :track="currentTrack" :formats="formats" :paused="presenceStore.paused" :loading="!ready" idle-title="Nothing playing on Plex" :caption="specimenCaption">
+                <template #backdrop>
+                    <!-- §4.1 ambient artwork backdrop — Dashboard-only; keyed img
+                         + non-out-in fade = M10 crossfade on track change,
+                         320ms unmount fade when idle (M22). -->
+                    <Transition name="pc-fade-slow">
+                        <img v-if="ready && currentTrack?.thumbUrl" :key="currentTrack.thumbUrl" :src="currentTrack.thumbUrl" class="pc-ambient" :class="{ 'pc-ambient--paused': ambientPaused }" alt="" aria-hidden="true" />
+                    </Transition>
+                </template>
+                <template #idle-caption>
+                    <p class="idle-sub">Play something in Plexamp or any Plex player and it appears here — and on Discord — within ~{{ pollingInterval }}s.</p>
+                </template>
+            </DiscordSpecimen>
+
+            <!-- Mono fact strip: the relay's literal transmission -->
+            <dl v-if="ready && hasActiveSession" class="fact-strip" :class="{ 'fact-strip--dim': presenceStore.paused }">
+                <div v-for="fact in facts" :key="fact.label" class="fact">
+                    <dt class="fact-label">{{ fact.label }}</dt>
+                    <dd class="fact-value">{{ fact.value }}</dd>
                 </div>
-                <div class="flex items-center gap-3">
-                    <Button
-                        :icon="presencePaused ? 'pi pi-play' : 'pi pi-pause'"
-                        :severity="presencePaused ? 'warn' : 'secondary'"
-                        :label="presencePaused ? 'Resume Presence' : 'Pause Presence'"
-                        size="small"
-                        outlined
-                        @click="togglePresencePause"
-                    />
-                    <div v-if="version" class="text-sm text-surface-400 dark:text-surface-500 font-mono">v{{ version }}</div>
-                </div>
+            </dl>
+        </section>
+
+        <!-- ---- Connections panel (§5.2 right) ---- -->
+        <section class="pc-panel connections-panel pc-panel-enter pc-panel-enter--2" aria-label="Connections">
+            <header class="panel-header">
+                <h2 class="pc-eyebrow">Connections</h2>
+            </header>
+
+            <div class="tiles">
+                <ConnectionTile source="plex" />
+                <ConnectionTile source="discord" />
+
+                <!-- Setup-skipped resume tile (F22) -->
+                <router-link v-if="resumeTarget" :to="resumeTarget" class="resume-tile">
+                    <span class="resume-text">Setup incomplete</span>
+                    <span class="resume-link">Resume setup →</span>
+                </router-link>
             </div>
 
-            <!-- Error Banners -->
-            <div v-if="errors.length > 0" class="mb-8 space-y-4">
-                <ErrorBanner
-                    v-for="error in errors"
-                    :key="error.source"
-                    :error-info="error"
-                    :retry-state="error.source === 'plex' ? plex.retryState : discord.retryState"
-                    :source="error.source"
-                    :is-retrying="error.source === 'plex' ? plex.isRetrying : discord.isRetrying"
-                    @dismiss="handleDismissError(error.source)"
-                    @retry="handleRetry(error.source)"
-                />
-            </div>
-
-            <!-- Now Playing -->
-            <div class="mb-8">
-                <div class="bg-surface-0 dark:bg-surface-900 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 p-6">
-                    <NowPlaying />
-                </div>
-            </div>
-
-            <!-- Main Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                <!-- Left Column: Live Preview (5 columns) -->
-                <div class="lg:col-span-5 flex flex-col">
-                    <div class="bg-surface-0 dark:bg-surface-900 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 flex-grow">
-                        <div class="flex items-center gap-3 mb-6">
-                            <div class="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-500">
-                                <i class="pi pi-eye text-xl"></i>
-                            </div>
-                            <div>
-                                <h2 class="text-lg font-bold text-surface-900 dark:text-surface-0">Live Preview</h2>
-                                <p class="text-sm text-surface-500 dark:text-surface-400">What others see on Discord</p>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-center py-8">
-                            <DiscordPreview />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right Column: Status & Controls (7 columns) -->
-                <div class="lg:col-span-7 flex flex-col">
-                    <div class="bg-surface-0 dark:bg-surface-900 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 h-full">
-                        <ConnectionStatus />
-                    </div>
-                </div>
-            </div>
-        </div>
+            <p class="poll-caption">Polling every {{ pollingInterval }}s · {{ modKey }}+P to pause</p>
+        </section>
     </div>
 </template>
+
+<style scoped>
+/* Content grid (§5.2): max 1200px centered; ≥lg 7fr/5fr, below single
+   column with Presence first. The shell provides page padding/canvas. */
+.dashboard {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--pc-space-panel-gap);
+    align-items: start;
+}
+@media (min-width: 992px) {
+    .dashboard {
+        grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    }
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.panel-header .pc-eyebrow {
+    margin: 0;
+}
+
+/* ---- Presence panel ---- */
+.presence-panel {
+    padding: 24px; /* §5.2: 24px for the Presence panel */
+}
+.presence-specimen {
+    max-width: 460px;
+    margin: 0 auto;
+}
+.idle-sub {
+    margin: 0;
+    max-width: 300px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+
+/* Header playback-state chip */
+.state-chip {
+    gap: 6px;
+}
+.state-chip-glyph {
+    font-size: 10px;
+    line-height: 1;
+}
+.state-chip--button {
+    cursor: pointer;
+}
+.state-chip .pc-eq {
+    height: 9px;
+}
+
+/* Mono fact strip: 2×2, 32px rows, 12.5px muted labels / 13px mono values */
+.fact-strip {
+    margin: 16px auto 0;
+    max-width: 460px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
+    transition: opacity var(--pc-dur-2) var(--pc-ease-out);
+}
+.fact-strip--dim {
+    opacity: 0.5;
+}
+.fact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 32px;
+    border-top: 1px solid var(--pc-border-subtle);
+}
+.fact:nth-child(-n + 2) {
+    border-top: none;
+}
+.fact-label {
+    margin: 0;
+    flex: none;
+    width: 52px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.fact-value {
+    margin: 0;
+    min-width: 0;
+    font-family: var(--pc-font-mono);
+    font-size: var(--pc-text-mono);
+    color: var(--pc-text-secondary);
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+@media (max-width: 560px) {
+    .fact-strip {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .fact:nth-child(2) {
+        border-top: 1px solid var(--pc-border-subtle);
+    }
+}
+
+/* ---- Connections panel ---- */
+.tiles {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+/* Below lg the panels stack — let the two tiles sit side-by-side ≥ md */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .tiles {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.resume-tile {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    padding: 8px 16px;
+    background: var(--pc-raised);
+    border-radius: var(--pc-radius-md);
+    text-decoration: none;
+    transition: background-color var(--pc-dur-1) var(--pc-ease-out);
+}
+.dark .resume-tile:hover {
+    background: var(--pc-surface-700);
+}
+:root:not(.dark) .resume-tile:hover {
+    background: var(--pc-surface-200);
+}
+.resume-text {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+}
+.resume-link {
+    font-size: var(--pc-text-caption);
+    font-weight: 500;
+    color: var(--pc-accent);
+    white-space: nowrap;
+}
+.resume-tile:hover .resume-link {
+    color: var(--pc-accent-hover);
+}
+
+.poll-caption {
+    margin: 12px 0 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+</style>

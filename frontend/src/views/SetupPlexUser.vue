@@ -1,26 +1,51 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, computed, inject, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSetupStore } from '@/stores/setup';
 import { GetPlexUsers, SavePlexUserSelection } from '../../wailsjs/go/main/App';
-import Button from 'primevue/button';
-import ProgressSpinner from 'primevue/progressspinner';
-import Message from 'primevue/message';
-import UserCard from '@/components/UserCard.vue';
+import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
 const router = useRouter();
 const setupStore = useSetupStore();
+const wizard = inject('setupWizard', null);
 
 // Loading and error state
 const isLoading = ref(false);
 const error = ref('');
 const autoSelected = ref(false);
 
-// Computed properties
+// Auto-advance (F27): a short beat with a `Stay` link; disabled entirely
+// under prefers-reduced-motion (Continue is enabled and focused instead).
+const prefersReducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const autoAdvancePending = ref(false);
+let autoAdvanceTimer = null;
+
 const users = computed(() => setupStore.plexUsers);
 const selectedUser = computed(() => setupStore.selectedPlexUser);
 
-// Fetch users from Plex server
+const cancelAutoAdvance = () => {
+    if (autoAdvanceTimer) {
+        clearTimeout(autoAdvanceTimer);
+        autoAdvanceTimer = null;
+    }
+    autoAdvancePending.value = false;
+};
+
+const scheduleAutoAdvance = () => {
+    if (prefersReducedMotion || !wizard) {
+        // No auto-advance for reduced-motion/AT users — focus Continue instead
+        wizard?.focusContinue();
+        return;
+    }
+    autoAdvancePending.value = true;
+    autoAdvanceTimer = setTimeout(() => {
+        autoAdvanceTimer = null;
+        autoAdvancePending.value = false;
+        wizard.next();
+    }, 800);
+};
+
+// Fetch users from the Plex server
 const fetchUsers = async () => {
     if (!setupStore.plexServerUrl) {
         error.value = 'No server URL configured. Please go back and select a server.';
@@ -33,10 +58,10 @@ const fetchUsers = async () => {
 
     try {
         const fetchedUsers = await GetPlexUsers(setupStore.plexServerUrl);
-        setupStore.setPlexUsers(fetchedUsers);
+        setupStore.setPlexUsers(fetchedUsers || []);
 
-        // Auto-select if only one user (AC3)
-        if (fetchedUsers.length === 1) {
+        // Exactly one user: auto-select + auto-advance (F27/F28)
+        if (fetchedUsers && fetchedUsers.length === 1) {
             setupStore.selectPlexUser(fetchedUsers[0]);
             autoSelected.value = true;
 
@@ -46,13 +71,14 @@ const fetchUsers = async () => {
             } catch (saveErr) {
                 console.error('Failed to save auto-selected user to config:', saveErr);
             }
+
+            scheduleAutoAdvance();
         }
 
         error.value = '';
     } catch (err) {
         console.error('Failed to fetch Plex users:', err);
 
-        // Extract user-friendly error message
         let errorMessage = 'Failed to load users from Plex server';
         if (err && typeof err === 'string') {
             errorMessage = err;
@@ -69,131 +95,211 @@ const fetchUsers = async () => {
 
 // Select a user and persist to config
 const selectUser = async (user) => {
+    cancelAutoAdvance();
     setupStore.selectPlexUser(user);
-    autoSelected.value = false; // Clear auto-select message if user manually selects
+    autoSelected.value = false;
 
     // Persist selection to Go config for application restart persistence
     try {
         await SavePlexUserSelection(user.id, user.name);
     } catch (err) {
         console.error('Failed to save user selection to config:', err);
-        // Don't show error to user - localStorage persistence still works
+        // Don't surface — localStorage persistence still works
     }
 };
 
-// Navigation helper for error state
 const goBack = () => {
     router.push('/setup/plex');
 };
 
-// Fetch users on mount if not already loaded
 onMounted(() => {
-    setupStore.loadState();
-
-    // If we already have users and a selection, don't refetch
+    // If we already have users and a selection, don't refetch (and never
+    // auto-advance a restored selection — only a fresh auto-select does)
     if (users.value.length === 0 || !selectedUser.value) {
         fetchUsers();
     } else if (users.value.length === 1 && selectedUser.value) {
-        // Restore auto-selected state
         autoSelected.value = true;
     }
+});
+
+onUnmounted(() => {
+    cancelAutoAdvance();
 });
 </script>
 
 <template>
-    <div class="max-w-5xl mx-auto p-4 md:p-8">
-        <div class="text-center mb-8">
-            <h2 class="text-3xl font-bold mb-2 text-surface-900 dark:text-surface-0">Select User Account</h2>
-            <p class="text-lg text-surface-600 dark:text-surface-400">Choose which Plex user account to monitor for playback activity</p>
-        </div>
+    <div>
+        <h1 class="setup-title">Select a user</h1>
+        <p class="setup-lede">Choose which Plex user account to monitor for playback activity.</p>
 
-        <div class="min-h-[300px]">
-            <!-- Loading State -->
-            <div v-if="isLoading" class="flex flex-col items-center justify-center py-12">
-                <ProgressSpinner style="width: 50px; height: 50px" strokeWidth="4" fill="transparent" animationDuration="1s" />
-                <p class="text-surface-600 dark:text-surface-400 mt-4">Loading users...</p>
+        <div class="setup-panels">
+            <!-- Loading: skeleton cards (M20) -->
+            <div v-if="isLoading" class="user-grid" aria-label="Loading users">
+                <div v-for="i in 4" :key="i" class="pc-skeleton user-skeleton"></div>
             </div>
 
-            <!-- Error State -->
-            <div v-else-if="error" class="text-center max-w-2xl mx-auto">
-                <Message severity="error" :closable="false" class="w-full mb-6">
-                    <template #icon>
-                        <i class="pi pi-times-circle text-2xl"></i>
+            <!-- Error: inline danger panel + Retry / Back -->
+            <section v-else-if="error" class="pc-panel user-error" role="alert">
+                <p class="user-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> Couldn't load users</p>
+                <p class="user-error-text">{{ error }}</p>
+                <div class="user-error-actions">
+                    <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="fetchUsers">Retry</button>
+                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="goBack">Back</button>
+                </div>
+            </section>
+
+            <!-- No users found -->
+            <section v-else-if="users.length === 0" class="pc-panel user-error">
+                <p class="user-error-title user-error-title--warn"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> No users found</p>
+                <p class="user-error-text">No user accounts were found on this Plex server. This may happen if the server is configured for admin-only access.</p>
+                <div class="user-error-actions">
+                    <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="fetchUsers">Retry</button>
+                </div>
+            </section>
+
+            <!-- Exactly one user: done-panel (F27) -->
+            <section v-else-if="users.length === 1 && selectedUser" class="pc-panel user-done">
+                <p class="user-done-title">
+                    <DrawnCheck :size="14" />
+                    <span
+                        >Monitoring <strong>{{ selectedUser.name || `User ${selectedUser.id}` }}</strong></span
+                    >
+                </p>
+                <p class="user-done-caption">
+                    Only one user on this server<template v-if="autoAdvancePending">
+                        — continuing…
+                        <a href="#" class="user-stay" @click.prevent="cancelAutoAdvance">Stay</a>
                     </template>
-                    <div class="w-full text-left ml-2">
-                        <h4 class="font-semibold mb-1 text-lg">Failed to Load Users</h4>
-                        <p class="text-sm opacity-90">{{ error }}</p>
-                    </div>
-                </Message>
-                <div class="flex justify-center gap-3">
-                    <Button label="Retry" icon="pi pi-refresh" @click="fetchUsers" severity="danger" />
-                    <Button label="Go Back" icon="pi pi-arrow-left" @click="goBack" severity="secondary" outlined />
-                </div>
-            </div>
+                </p>
+            </section>
 
-            <!-- No Users Found -->
-            <div v-else-if="users.length === 0 && !isLoading" class="text-center max-w-2xl mx-auto">
-                <Message severity="warn" :closable="false" class="w-full mb-6">
-                    <template #icon>
-                        <i class="pi pi-info-circle text-2xl"></i>
-                    </template>
-                    <div class="w-full text-left ml-2">
-                        <h4 class="font-semibold mb-1 text-lg">No Users Found</h4>
-                        <p class="text-sm opacity-90">No user accounts were found on this Plex server. This may happen if the server is configured for admin-only access.</p>
-                    </div>
-                </Message>
-                <div class="flex justify-center mt-4">
-                    <Button label="Retry" icon="pi pi-refresh" @click="fetchUsers" severity="secondary" />
-                </div>
-            </div>
-
-            <!-- User List -->
-            <div v-else class="flex flex-col">
-                <!-- Auto-select info message -->
-                <div v-if="autoSelected" class="mb-6 flex justify-center">
-                    <Message severity="info" :closable="false" class="w-full max-w-2xl">
-                        <div class="flex items-center gap-2">
-                            <i class="pi pi-check-circle text-xl"></i>
-                            <span>Only one user found - automatically selected</span>
-                        </div>
-                    </Message>
-                </div>
-
-                <!-- User Grid -->
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                    <UserCard v-for="user in users" :key="user.id" :user="user" :selected="selectedUser?.id === user.id" @select="selectUser" />
-                </div>
-
-                <!-- Selection confirmation -->
-                <div v-if="selectedUser && !autoSelected" class="text-center mt-8 animate-fadein">
-                    <Message severity="success" :closable="false" class="inline-flex max-w-2xl">
-                        <div class="flex items-center gap-3 px-2">
-                            <i class="pi pi-user text-xl bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 p-2 rounded-full"></i>
-                            <div class="text-left">
-                                <span class="block text-sm text-surface-600 dark:text-surface-400">Currently monitoring:</span>
-                                <strong class="text-lg">{{ selectedUser.name || `User ${selectedUser.id}` }}</strong>
-                            </div>
-                        </div>
-                    </Message>
-                </div>
+            <!-- Multiple users: select-card grid (the selected card IS the confirmation) -->
+            <div v-else class="user-grid" role="listbox" aria-label="Plex users">
+                <button v-for="user in users" :key="user.id" type="button" class="user-card" :class="{ 'user-card--selected': selectedUser?.id === user.id }" role="option" :aria-selected="selectedUser?.id === user.id" @click="selectUser(user)">
+                    <span class="user-avatar">
+                        <img v-if="user.thumb" :src="user.thumb" alt="" class="user-avatar-img" />
+                        <i v-else class="pi pi-user" aria-hidden="true"></i>
+                    </span>
+                    <span class="user-name">{{ user.name || `User ${user.id}` }}</span>
+                    <DrawnCheck v-if="selectedUser?.id === user.id" :size="14" class="user-check" />
+                </button>
             </div>
         </div>
     </div>
 </template>
 
 <style scoped>
-.animate-fadein {
-    animation: fadein 0.3s ease-out;
+/* ---- Grid + skeletons ---- */
+.user-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+.user-skeleton {
+    height: 96px;
+    border-radius: var(--pc-radius-md);
 }
 
-@keyframes fadein {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+/* ---- Select cards ---- */
+.user-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 12px;
+    background: var(--pc-raised);
+    border: 1px solid var(--pc-border);
+    border-radius: var(--pc-radius-md);
+    cursor: pointer;
+    color: var(--pc-text);
+    transition:
+        border-color var(--pc-dur-2) var(--pc-ease-out),
+        background-color var(--pc-dur-2) var(--pc-ease-out);
+}
+.user-card:hover {
+    border-color: var(--pc-border-strong);
+}
+.user-card--selected {
+    border-color: var(--pc-accent);
+    background: var(--pc-accent-dim);
+}
+.user-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--pc-radius-full);
+    overflow: hidden;
+    background: var(--pc-surface-700);
+    color: var(--pc-text-muted);
+}
+:root:not(.dark) .user-avatar {
+    background: var(--pc-surface-200);
+}
+.user-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.user-name {
+    font-size: var(--pc-text-body);
+    font-weight: 500;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.user-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+/* ---- Single-user done panel ---- */
+.user-done-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    font-size: var(--pc-text-body);
+    color: var(--pc-text);
+}
+.user-done-caption {
+    margin: 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.user-stay {
+    color: var(--pc-accent);
+    text-decoration: none;
+}
+.user-stay:hover {
+    text-decoration: underline;
+}
+
+/* ---- Error / empty panels ---- */
+.user-error-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 4px;
+    font-size: var(--pc-text-body);
+    font-weight: 600;
+    color: var(--pc-danger);
+}
+.user-error-title--warn {
+    color: var(--pc-warn);
+}
+.user-error-text {
+    margin: 0 0 12px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+    overflow-wrap: anywhere;
+}
+.user-error-actions {
+    display: flex;
+    gap: 8px;
 }
 </style>

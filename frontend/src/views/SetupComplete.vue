@@ -1,106 +1,157 @@
 <script setup>
-import { onMounted } from 'vue';
-import DiscordPreview from '@/components/setup/DiscordPreview.vue';
-import { StartSessionPolling, ConnectDiscord, IsDiscordConnected } from '../../wailsjs/go/main/App';
+import { ref, onMounted } from 'vue';
+import { useSetupStore } from '@/stores/setup';
+import { usePlayback } from '@/composables/usePlayback';
+import { GetPresenceFormat } from '../../wailsjs/go/main/App';
+import DiscordSpecimen from '@/components/DiscordSpecimen.vue';
+import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
-// Note: The "Finish Setup" button is handled by SetupWizard.vue
-// This component displays the completion content with live preview
+// Step 5 — Complete (spec §5.4 / F32). Pure summary view: all side effects
+// (Discord connect if needed → StartSessionPolling → CompleteSetup) run in
+// the wizard footer's Finish action (setupStore.finishSetup) — NOT here.
+const setupStore = useSetupStore();
+const { currentTrack, isPaused } = usePlayback();
 
-// Start polling and ensure Discord is connected when component mounts
+const formats = ref(null);
+
 onMounted(async () => {
     try {
-        // Ensure Discord is connected for live preview
-        const isConnected = await IsDiscordConnected();
-        if (!isConnected) {
-            console.log('Discord not connected, connecting now...');
-            await ConnectDiscord('');
-        }
-
-        await StartSessionPolling();
-        console.log('Session polling started for preview');
+        formats.value = await GetPresenceFormat();
     } catch (error) {
-        // Silently handle error - polling might already be running
-        console.log('Setup complete initialization:', error);
+        console.error('Failed to load presence format:', error);
     }
 });
 </script>
 
 <template>
-    <div class="max-w-4xl mx-auto">
-        <div class="py-4">
-            <!-- Success Header -->
-            <div class="text-center mb-8">
-                <div class="mb-6 animate-scaleIn inline-block">
-                    <i class="pi pi-check-circle text-6xl text-green-500"></i>
-                </div>
-                <h2 class="text-3xl font-bold mb-3 text-surface-900 dark:text-surface-0">You're All Set!</h2>
-                <p class="text-lg text-surface-600 dark:text-surface-400">PlexCord is ready to display your Plex music activity on Discord.</p>
-            </div>
+    <div>
+        <div class="complete-hero">
+            <DrawnCheck :size="40" circle />
+            <h1 class="setup-title complete-title">Setup complete.</h1>
+            <p class="setup-lede complete-lede">PlexCord is ready to relay your Plex music activity to Discord.</p>
+        </div>
 
-            <!-- Discord Preview Section -->
-            <div class="mb-8 max-w-lg mx-auto">
-                <h3 class="text-lg font-semibold mb-4 text-center text-surface-900 dark:text-surface-0">Discord Status Preview</h3>
-                <div class="bg-surface-100 dark:bg-surface-800 p-6 rounded-xl shadow-inner">
-                    <DiscordPreview />
-                </div>
-            </div>
+        <div class="setup-panels">
+            <!-- Finish failure (F32): surfaced here, never swallowed -->
+            <section v-if="setupStore.finishError" class="pc-panel complete-error" role="alert">
+                <p class="complete-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> Couldn't finish setup</p>
+                <p class="complete-error-text">{{ setupStore.finishError }}</p>
+                <p class="complete-error-suggestion">Fix the issue, then press Finish setup again.</p>
+            </section>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- What's Next Section -->
-                <div class="bg-surface-50 dark:bg-surface-800/50 p-6 rounded-xl border border-surface-200 dark:border-surface-700">
-                    <h3 class="text-lg font-semibold mb-4 text-surface-900 dark:text-surface-0">What happens next?</h3>
-                    <ul class="space-y-4">
-                        <li class="flex items-start gap-3">
-                            <div class="mt-1 bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full text-green-600 dark:text-green-400">
-                                <i class="pi pi-check text-xs font-bold"></i>
-                            </div>
-                            <span class="text-surface-700 dark:text-surface-300">Your Discord status will automatically update when you play music on Plex</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <div class="mt-1 bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full text-green-600 dark:text-green-400">
-                                <i class="pi pi-check text-xs font-bold"></i>
-                            </div>
-                            <span class="text-surface-700 dark:text-surface-300">PlexCord will run in the background and minimize to the system tray</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <div class="mt-1 bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full text-green-600 dark:text-green-400">
-                                <i class="pi pi-check text-xs font-bold"></i>
-                            </div>
-                            <span class="text-surface-700 dark:text-surface-300">You can change settings anytime from the dashboard</span>
-                        </li>
-                    </ul>
-                </div>
+            <!-- Discord skipped (F29) -->
+            <section v-if="setupStore.discordSkipped && !setupStore.discordConnected" class="pc-panel complete-warn">
+                <p class="complete-warn-text"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> Discord not connected — presence won't publish until you connect it in Settings.</p>
+            </section>
 
-                <!-- Tip Section -->
-                <div class="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-xl border border-blue-100 dark:border-blue-800/30 flex flex-col justify-center">
-                    <div class="flex items-start gap-4">
-                        <i class="pi pi-info-circle text-2xl text-blue-500 mt-1"></i>
-                        <div>
-                            <span class="font-bold text-blue-700 dark:text-blue-300 block mb-2">Pro Tip</span>
-                            <span class="text-surface-700 dark:text-surface-300 leading-relaxed">
-                                Start playing music on Plex now to see the live preview update above! It's the best way to verify everything is working correctly before you finish.
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Live specimen: exactly what Discord will show -->
+            <section class="pc-panel">
+                <span class="pc-eyebrow complete-eyebrow">Your Discord presence</span>
+                <DiscordSpecimen :track="currentTrack" :formats="formats" :paused="isPaused" idle-title="Play something on Plex to see it live" />
+            </section>
+
+            <!-- What happens next -->
+            <section class="pc-panel">
+                <span class="pc-eyebrow complete-eyebrow">What happens next</span>
+                <ul class="next-list">
+                    <li class="next-row">
+                        <i class="pi pi-check next-glyph" aria-hidden="true"></i>
+                        <span>Your Discord status updates automatically when you play music on Plex</span>
+                    </li>
+                    <li class="next-row">
+                        <i class="pi pi-check next-glyph" aria-hidden="true"></i>
+                        <span>PlexCord runs in the background and minimizes to the system tray</span>
+                    </li>
+                    <li class="next-row">
+                        <i class="pi pi-check next-glyph" aria-hidden="true"></i>
+                        <span>You can change settings anytime from the dashboard</span>
+                    </li>
+                </ul>
+            </section>
         </div>
     </div>
 </template>
 
 <style scoped>
-.animate-scaleIn {
-    animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+.complete-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: var(--pc-space-section);
+}
+.complete-title {
+    margin: 0;
+}
+.complete-lede {
+    margin: 0;
+}
+.complete-eyebrow {
+    display: block;
+    margin-bottom: 12px;
 }
 
-@keyframes scaleIn {
-    from {
-        transform: scale(0);
-        opacity: 0;
-    }
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
+/* ---- Failure panel ---- */
+.complete-error {
+    border-color: color-mix(in srgb, var(--pc-danger) 40%, transparent);
+    background: var(--pc-danger-dim);
+}
+.complete-error-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 4px;
+    font-size: var(--pc-text-body);
+    font-weight: 600;
+    color: var(--pc-danger);
+}
+.complete-error-text {
+    margin: 0 0 4px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+    overflow-wrap: anywhere;
+}
+.complete-error-suggestion {
+    margin: 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+
+/* ---- Discord-skipped warn panel ---- */
+.complete-warn {
+    border-color: color-mix(in srgb, var(--pc-warn) 40%, transparent);
+    background: var(--pc-warn-dim);
+}
+.complete-warn-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-warn);
+}
+
+/* ---- What happens next ---- */
+.next-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.next-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 12px 0;
+    font-size: var(--pc-text-body);
+    color: var(--pc-text-secondary);
+}
+.next-row + .next-row {
+    border-top: 1px solid var(--pc-border-subtle);
+}
+.next-glyph {
+    font-size: 14px;
+    color: var(--pc-success);
+    flex: none;
 }
 </style>

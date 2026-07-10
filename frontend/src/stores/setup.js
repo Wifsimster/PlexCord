@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { SavePlexToken, IsDiscordConnected, ConnectDiscord, StartSessionPolling, CompleteSetup } from '../../wailsjs/go/main/App';
 
 /**
  * Setup Wizard Store
@@ -26,7 +27,14 @@ export const useSetupStore = defineStore('setup', {
         selectedPlexUser: null,
 
         // Discord configuration
-        discordClientId: ''
+        discordClientId: '',
+        discordConnected: false,
+        discordSkipped: false,
+
+        // Finish action (spec §5.4 step 5 / F32) — side effects run once,
+        // behind these flags; failures surface on the Complete step.
+        isFinishing: false,
+        finishError: ''
     }),
 
     getters: {
@@ -94,6 +102,27 @@ export const useSetupStore = defineStore('setup', {
          */
         isUserSelected: (state) => {
             return state.selectedPlexUser !== null;
+        },
+
+        /**
+         * Check if the Discord step gate is satisfied (connected or
+         * explicitly skipped via the escape hatch — F29)
+         * @returns {boolean}
+         */
+        isDiscordStepSatisfied: (state) => {
+            return state.discordConnected || state.discordSkipped;
+        },
+
+        /**
+         * Mono host summary of the accumulated Plex result for the wizard
+         * rail (spec §5.4), e.g. 'plex.local:32400'
+         * @returns {string}
+         */
+        plexServerSummary: (state) => {
+            if (!state.plexServerUrl) {
+                return '';
+            }
+            return state.plexServerUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
         }
     },
 
@@ -242,6 +271,76 @@ export const useSetupStore = defineStore('setup', {
         },
 
         /**
+         * Record the Discord connection state reached during the wizard
+         * @param {boolean} connected
+         */
+        setDiscordConnected(connected) {
+            this.discordConnected = connected;
+            if (connected) {
+                this.discordSkipped = false;
+            }
+            this.saveState();
+        },
+
+        /**
+         * Record that the user chose "Continue without Discord" (F29);
+         * the flag is surfaced as a warn panel on the Complete step.
+         * @param {boolean} skipped
+         */
+        setDiscordSkipped(skipped) {
+            this.discordSkipped = skipped;
+            this.saveState();
+        },
+
+        /**
+         * Finish setup (spec §5.4 step 5 / F32): connect Discord if needed →
+         * StartSessionPolling → CompleteSetup. Side effects live here (not in
+         * onMounted), idempotent behind the isFinishing/setupComplete flags;
+         * failures are surfaced via finishError on the Complete step.
+         * @returns {Promise<boolean>} true when setup completed
+         */
+        async finishSetup() {
+            if (this.isFinishing) {
+                return false;
+            }
+            if (this.setupComplete) {
+                return true;
+            }
+
+            this.isFinishing = true;
+            this.finishError = '';
+
+            try {
+                // Save Plex token to OS keychain
+                if (this.plexToken) {
+                    await SavePlexToken(this.plexToken);
+                }
+
+                // Connect Discord if needed (unless explicitly skipped)
+                if (!this.discordSkipped) {
+                    const connected = await IsDiscordConnected();
+                    if (!connected) {
+                        await ConnectDiscord('');
+                    }
+                    this.discordConnected = true;
+                }
+
+                // Start polling, then persist completion (also starts backend services)
+                await StartSessionPolling();
+                await CompleteSetup();
+
+                this.completeSetup();
+                return true;
+            } catch (error) {
+                console.error('Failed to complete setup:', error);
+                this.finishError = typeof error === 'string' ? error : error?.message || 'Failed to complete setup. Please try again.';
+                return false;
+            } finally {
+                this.isFinishing = false;
+            }
+        },
+
+        /**
          * Save wizard state to localStorage
          */
         saveState() {
@@ -259,7 +358,9 @@ export const useSetupStore = defineStore('setup', {
                 validationResult: this.validationResult,
                 plexUsers: this.plexUsers,
                 selectedPlexUser: this.selectedPlexUser,
-                discordClientId: this.discordClientId
+                discordClientId: this.discordClientId,
+                discordConnected: this.discordConnected,
+                discordSkipped: this.discordSkipped
             };
             localStorage.setItem('plexcord-setup-wizard', JSON.stringify(state));
         },
@@ -286,6 +387,8 @@ export const useSetupStore = defineStore('setup', {
                     this.plexUsers = state.plexUsers || [];
                     this.selectedPlexUser = state.selectedPlexUser || null;
                     this.discordClientId = state.discordClientId || '';
+                    this.discordConnected = state.discordConnected || false;
+                    this.discordSkipped = state.discordSkipped || false;
                 } catch (error) {
                     console.error('Failed to load setup wizard state:', error);
                 }
@@ -320,6 +423,10 @@ export const useSetupStore = defineStore('setup', {
             this.plexUsers = [];
             this.selectedPlexUser = null;
             this.discordClientId = '';
+            this.discordConnected = false;
+            this.discordSkipped = false;
+            this.isFinishing = false;
+            this.finishError = '';
             localStorage.removeItem('plexcord-setup-wizard');
         }
     }

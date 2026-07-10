@@ -1,18 +1,17 @@
 <script setup>
-import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
+import { ref, watch, computed, inject, onMounted, onUnmounted } from 'vue';
 import { useSetupStore } from '@/stores/setup';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
 import { DiscoverPlexServers, ValidatePlexConnection, SavePlexToken, SaveServerURL, StartPlexPINAuth, CheckPlexPINAuth } from '../../wailsjs/go/main/App';
+import { validatePlexServerUrl, PLEX_URL_PLACEHOLDER } from '@/utils/plexUrl';
 import InputText from 'primevue/inputtext';
-import Button from 'primevue/button';
-import ProgressSpinner from 'primevue/progressspinner';
-import Message from 'primevue/message';
-import ServerCard from '@/components/ServerCard.vue';
+import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
 const setupStore = useSetupStore();
+const wizard = inject('setupWizard', null);
 
-// PIN authentication state
-const authStep = ref('initial'); // 'initial', 'waiting', 'success', 'error'
+// ---- PIN authentication state machine (kept — spec §5.4 step 2.1) ------
+const authStep = ref(setupStore.isPlexStepValid ? 'success' : 'initial'); // 'initial' | 'loading' | 'waiting' | 'success' | 'error'
 const pinCode = ref('');
 const pinID = ref(null);
 const authURL = ref('');
@@ -21,49 +20,32 @@ const checkInterval = ref(null);
 const pinPollFailures = ref(0);
 const MAX_PIN_POLL_FAILURES = 5;
 
-// Server discovery state
+// ---- Server discovery state ---------------------------------------------
 const isDiscovering = ref(false);
 const discoveryError = ref('');
-const hasDiscovered = ref(false);
+const hasDiscovered = ref(setupStore.discoveredServers.length > 0);
 
-// Manual server entry state
+// ---- Manual server entry state ------------------------------------------
 const showManualEntry = ref(setupStore.isManualEntry);
 const manualServerUrl = ref(setupStore.isManualEntry ? setupStore.plexServerUrl : '');
 const manualEntryError = ref('');
-const isManualUrlValid = ref(false);
+const isManualUrlValid = ref(setupStore.isManualEntry && validatePlexServerUrl(setupStore.plexServerUrl).valid);
 
-// Validation state
+// ---- Validation state ----------------------------------------------------
 const isValidating = ref(false);
 const validationError = ref('');
 const validationAttempted = ref(false);
 
-// Computed: Check if server URL is available for validation
-const hasServerUrl = computed(() => {
-    return setupStore.plexServerUrl && setupStore.plexServerUrl.trim().length > 0;
+const signedIn = computed(() => authStep.value === 'success' || setupStore.isPlexStepValid);
+const hasServerUrl = computed(() => setupStore.plexServerUrl && setupStore.plexServerUrl.trim().length > 0);
+const canValidate = computed(() => setupStore.isPlexStepValid && hasServerUrl.value);
+
+const libraryLabel = computed(() => {
+    const count = setupStore.validationResult?.libraryCount ?? 0;
+    return `${count} ${count === 1 ? 'library' : 'libraries'}`;
 });
 
-// Tooltip content
-const discoveryTooltip = `Auto-discovery finds Plex servers on your LOCAL network only.
-
-✓ Works for: Localhost servers, LAN servers with native installation
-✗ Won't work for: Docker containers (bridge mode), remote servers, different subnets, blocked by firewall
-
-If discovery fails, use "Enter Manually" instead.`;
-
-const manualEntryTooltip = `Use manual entry when:
-
-• Plex is in Docker container (e.g., http://192.168.0.237:32400)
-• Remote/cloud server (e.g., https://plex.example.com:32400)
-• Server on different subnet/VLAN
-• Firewall blocks auto-discovery
-• Localhost server (e.g., http://localhost:32400)`;
-
-// Computed: Check if ready to validate (has token and server URL)
-const canValidate = computed(() => {
-    return setupStore.isPlexStepValid && hasServerUrl.value;
-});
-
-// Start PIN authentication
+// ---- PIN auth ------------------------------------------------------------
 const startPINAuth = async () => {
     authError.value = '';
     authStep.value = 'loading';
@@ -88,7 +70,6 @@ const startPINAuth = async () => {
     }
 };
 
-// Check PIN status
 const stopPinPolling = () => {
     if (checkInterval.value) {
         clearInterval(checkInterval.value);
@@ -124,7 +105,6 @@ const checkPINStatus = async () => {
     }
 };
 
-// Cancel PIN auth
 const cancelPINAuth = () => {
     stopPinPolling();
     authStep.value = 'initial';
@@ -134,110 +114,38 @@ const cancelPINAuth = () => {
     authError.value = '';
 };
 
-// Cleanup on unmount
-onUnmounted(() => {
-    stopPinPolling();
-});
-
-// Discover Plex servers
+// ---- Discovery (auto-runs on auth success — F23) -------------------------
 const discoverServers = async () => {
     isDiscovering.value = true;
     discoveryError.value = '';
-    hasDiscovered.value = false;
 
     try {
         const servers = await DiscoverPlexServers();
-        setupStore.setDiscoveredServers(servers);
+        setupStore.setDiscoveredServers(servers || []);
         hasDiscovered.value = true;
     } catch (error) {
         console.error('Failed to discover servers:', error);
-        discoveryError.value = 'Failed to discover servers. Please try again or enter manually.';
+        discoveryError.value = 'Discovery failed. Try again, or enter your server address manually.';
         setupStore.setDiscoveredServers([]);
+        hasDiscovered.value = true;
     } finally {
         isDiscovering.value = false;
     }
 };
 
-// Handle server selection
-const handleServerSelected = (server) => {
-    setupStore.selectServer(server);
-};
-
-// Enter server manually
-const enterManually = () => {
-    // Switch to manual entry mode
-    showManualEntry.value = true;
-    setupStore.toggleManualEntry(true);
-    hasDiscovered.value = false;
-    manualEntryError.value = '';
-};
-
-// Switch back to discovery
-const useDiscoveryInstead = () => {
-    showManualEntry.value = false;
-    setupStore.toggleManualEntry(false);
-    manualServerUrl.value = '';
-    manualEntryError.value = '';
-    isManualUrlValid.value = false;
-};
-
-// Validate Plex server URL format
-const validatePlexServerUrl = (url) => {
-    if (!url || url.trim().length === 0) {
-        return { valid: false, error: 'Server URL is required' };
-    }
-
-    const trimmedUrl = url.trim();
-
-    // Check for protocol
-    if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
-        return { valid: false, error: 'URL must start with http:// or https://' };
-    }
-
-    // Parse URL to validate structure
-    try {
-        const urlObj = new URL(trimmedUrl);
-
-        // Validate port if present
-        if (urlObj.port) {
-            const portNum = parseInt(urlObj.port, 10);
-            if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-                return { valid: false, error: 'Port must be between 1 and 65535' };
-            }
+watch(
+    signedIn,
+    (isSignedIn) => {
+        if (isSignedIn && !showManualEntry.value && !hasDiscovered.value && !isDiscovering.value && !setupStore.isConnectionValidated) {
+            discoverServers();
         }
+    },
+    { immediate: true }
+);
 
-        // Validate hostname (IP or domain)
-        if (!urlObj.hostname || urlObj.hostname.length === 0) {
-            return { valid: false, error: 'Invalid hostname or IP address' };
-        }
-
-        return { valid: true, error: '' };
-    } catch (e) {
-        return { valid: false, error: 'Invalid URL format' };
-    }
-};
-
-// Handle manual URL input change
-const handleManualUrlChange = () => {
-    const validation = validatePlexServerUrl(manualServerUrl.value);
-    isManualUrlValid.value = validation.valid;
-    manualEntryError.value = validation.error;
-
-    if (validation.valid) {
-        setupStore.setManualServerUrl(manualServerUrl.value.trim());
-    }
-};
-
-// Handle manual URL blur (validate on blur)
-const handleManualUrlBlur = () => {
-    if (manualServerUrl.value.trim().length > 0) {
-        handleManualUrlChange();
-    }
-};
-
-// Validate Plex connection
+// ---- Validation (auto-runs on selection — F23) ---------------------------
 const validateConnection = async () => {
-    if (!canValidate.value) {
+    if (!canValidate.value || isValidating.value) {
         return;
     }
 
@@ -247,13 +155,11 @@ const validateConnection = async () => {
     setupStore.clearValidation();
 
     try {
-        // First save the token to keychain if not already saved
+        // Save the token to keychain first
         await SavePlexToken(setupStore.plexToken);
 
         // Validate the connection
         const result = await ValidatePlexConnection(setupStore.plexServerUrl);
-
-        // If no error was thrown, validation was successful
         setupStore.setValidationResult(result);
         validationError.value = '';
 
@@ -262,7 +168,6 @@ const validateConnection = async () => {
     } catch (error) {
         console.error('Connection validation failed:', error);
 
-        // Extract user-friendly error message
         let errorMessage = 'Failed to connect to Plex server';
         if (error && typeof error === 'string') {
             errorMessage = error;
@@ -277,17 +182,84 @@ const validateConnection = async () => {
     }
 };
 
-// Retry validation
+const serverUrlOf = (server) => `http://${server.address}:${server.port}`;
+
+const isSelected = (server) => !showManualEntry.value && setupStore.selectedServer?.id === server.id;
+
+// Selecting a server auto-validates it (spec §5.4 step 2.3)
+const selectServer = async (server) => {
+    if (isSelected(server) && setupStore.isConnectionValidated) {
+        return;
+    }
+    setupStore.selectServer(server);
+    await validateConnection();
+};
+
+const serverDotClass = (server) => {
+    if (!isSelected(server)) {
+        return 'pc-dot--idle';
+    }
+    if (setupStore.isConnectionValidated) {
+        return 'pc-dot--success';
+    }
+    if (validationError.value) {
+        return 'pc-dot--danger';
+    }
+    return 'pc-dot--idle';
+};
+
+// ---- Manual entry --------------------------------------------------------
+const enterManually = () => {
+    showManualEntry.value = true;
+    setupStore.toggleManualEntry(true);
+    manualEntryError.value = '';
+};
+
+const useDiscoveryInstead = () => {
+    showManualEntry.value = false;
+    setupStore.toggleManualEntry(false);
+    manualServerUrl.value = '';
+    manualEntryError.value = '';
+    isManualUrlValid.value = false;
+    if (!hasDiscovered.value && !isDiscovering.value) {
+        discoverServers();
+    }
+};
+
+const handleManualUrlChange = () => {
+    const validation = validatePlexServerUrl(manualServerUrl.value);
+    isManualUrlValid.value = validation.valid;
+    manualEntryError.value = validation.error;
+
+    if (validation.valid) {
+        setupStore.setManualServerUrl(manualServerUrl.value.trim());
+    }
+};
+
+const handleManualUrlBlur = () => {
+    if (manualServerUrl.value.trim().length > 0) {
+        handleManualUrlChange();
+    }
+};
+
+// Valid manual URL + Enter auto-validates (spec §5.4 step 2.3)
+const submitManualUrl = () => {
+    handleManualUrlChange();
+    if (isManualUrlValid.value) {
+        validateConnection();
+    }
+};
+
 const retryValidation = () => {
     validationError.value = '';
     validateConnection();
 };
 
-// Watch for server URL changes to clear validation
+// ---- Clear stale validation when inputs change ---------------------------
 watch(
     () => setupStore.plexServerUrl,
     (newUrl, oldUrl) => {
-        if (newUrl !== oldUrl && validationAttempted.value) {
+        if (newUrl !== oldUrl && validationAttempted.value && !isValidating.value) {
             setupStore.clearValidation();
             validationAttempted.value = false;
             validationError.value = '';
@@ -295,11 +267,10 @@ watch(
     }
 );
 
-// Watch for token changes to clear validation
 watch(
     () => setupStore.plexToken,
     (newToken, oldToken) => {
-        if (newToken !== oldToken && validationAttempted.value) {
+        if (newToken !== oldToken && validationAttempted.value && !isValidating.value) {
             setupStore.clearValidation();
             validationAttempted.value = false;
             validationError.value = '';
@@ -307,322 +278,431 @@ watch(
     }
 );
 
-// Restore validation state on mount
+// ---- Wizard integration ---------------------------------------------------
+// Enter submits this step's primary action while sign-in is pending (§5.4)
+const primaryAction = () => {
+    if (authStep.value === 'initial' || authStep.value === 'error') {
+        startPINAuth();
+        return true;
+    }
+    return false;
+};
+
 onMounted(() => {
     if (setupStore.isConnectionValidated && setupStore.validationResult) {
         validationAttempted.value = true;
     }
+    wizard?.registerPrimary(primaryAction);
+});
+
+onUnmounted(() => {
+    stopPinPolling();
+    wizard?.unregisterPrimary(primaryAction);
 });
 </script>
 
 <template>
-    <div class="max-w-4xl mx-auto">
-        <div class="py-8">
-            <h2 class="text-3xl font-bold mb-4 text-surface-900 dark:text-surface-0">Connect to Your Plex Account</h2>
-            <p class="text-lg mb-6 text-surface-600 dark:text-surface-400">Authenticate with Plex using a secure PIN code - no password required!</p>
+    <div>
+        <h1 class="setup-title">Connect to your Plex account</h1>
+        <p class="setup-lede">Sign in with a secure PIN code, then pick the server PlexCord should watch.</p>
 
-            <!-- PIN Authentication Section -->
-            <div class="mb-6" :class="{ 'min-h-50': authStep !== 'success' }">
-                <!-- Initial State: Show Connect Button -->
-                <div v-if="authStep === 'initial'" class="animate-fadein">
-                    <div class="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-surface-300 dark:border-surface-600 rounded-lg">
-                        <i class="pi pi-lock text-6xl text-primary-500"></i>
-                        <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0">Secure Authentication</h3>
-                        <p class="text-center text-surface-600 dark:text-surface-400">Click below to generate a PIN code, then authorize PlexCord in your browser.</p>
-                        <Button label="Connect with Plex" icon="pi pi-sign-in" @click="startPINAuth" size="large" class="mt-2" />
+        <div class="setup-panels">
+            <!-- Sign-in panel -->
+            <section class="pc-panel">
+                <span class="pc-eyebrow">Plex account</span>
+                <Transition name="pc-state" mode="out-in">
+                    <!-- initial / loading -->
+                    <div v-if="authStep === 'initial' || authStep === 'loading'" key="initial" class="auth-initial">
+                        <button type="button" class="pc-btn pc-btn--primary pc-btn--lg auth-signin" :disabled="authStep === 'loading'" @click="startPINAuth">
+                            <i v-if="authStep === 'loading'" class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+                            Sign in with Plex
+                        </button>
+                        <span class="auth-caption">Opens plex.tv in your browser</span>
                     </div>
-                </div>
 
-                <!-- Loading State -->
-                <div v-if="authStep === 'loading'" class="animate-fadein">
-                    <div class="flex flex-col items-center gap-4 p-8">
-                        <ProgressSpinner style="width: 50px; height: 50px" />
-                        <p class="text-surface-600 dark:text-surface-400">Generating PIN code...</p>
-                    </div>
-                </div>
-
-                <!-- Waiting for Authorization -->
-                <div v-if="authStep === 'waiting'" class="animate-fadein">
-                    <div class="flex flex-col items-center gap-4 p-8 bg-surface-100 dark:bg-surface-800 rounded-lg">
-                        <div class="flex items-center gap-4">
-                            <ProgressSpinner style="width: 30px; height: 30px" />
-                            <div>
-                                <h3 class="text-2xl font-bold mb-2 text-surface-900 dark:text-surface-0">Waiting for authorization...</h3>
-                                <p class="text-surface-600 dark:text-surface-400">A browser window has been opened. Please authorize PlexCord.</p>
-                            </div>
-                        </div>
-
-                        <div class="text-center py-4">
-                            <div class="text-sm text-surface-600 dark:text-surface-400 mb-2">Your PIN Code:</div>
-                            <div class="text-3xl font-bold text-primary-500 font-mono break-all select-all px-4">{{ pinCode }}</div>
-                            <div class="text-sm text-surface-600 dark:text-surface-400 mt-2">Enter this code at plex.tv/link</div>
-                        </div>
-
-                        <div class="flex gap-3 mt-4">
-                            <Button label="Open Browser Again" icon="pi pi-external-link" @click="BrowserOpenURL(authURL)" outlined />
-                            <Button label="Cancel" icon="pi pi-times" @click="cancelPINAuth" severity="secondary" outlined />
+                    <!-- waiting for authorization -->
+                    <div v-else-if="authStep === 'waiting'" key="waiting" class="auth-waiting">
+                        <span class="auth-pin" aria-label="Your Plex PIN code">{{ pinCode }}</span>
+                        <span class="auth-caption"><i class="pi pi-spin pi-spinner auth-spinner" aria-hidden="true"></i> Enter this code at plex.tv/link</span>
+                        <div class="auth-actions">
+                            <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="BrowserOpenURL(authURL)">Open browser again</button>
+                            <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="cancelPINAuth">Cancel</button>
                         </div>
                     </div>
+
+                    <!-- signed in (collapsed row) -->
+                    <div v-else-if="authStep === 'success'" key="success" class="auth-done">
+                        <DrawnCheck :size="14" />
+                        <span>Signed in with Plex</span>
+                    </div>
+
+                    <!-- error -->
+                    <div v-else key="error" class="auth-error" role="alert">
+                        <p class="auth-error-text"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ authError }}</p>
+                        <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="startPINAuth">Try again</button>
+                    </div>
+                </Transition>
+            </section>
+
+            <!-- Server panel (appears once signed in; discovery auto-runs) -->
+            <section v-if="signedIn" class="pc-panel">
+                <div class="server-head">
+                    <span class="pc-eyebrow">Plex server</span>
+                    <button v-if="!showManualEntry && hasDiscovered && !isDiscovering" type="button" class="server-head-link" @click="discoverServers">Search again</button>
                 </div>
 
-                <!-- Success State -->
-                <div v-if="authStep === 'success'" class="animate-fadein">
-                    <Message severity="success" :closable="false">
-                        <div class="flex items-center gap-3">
-                            <i class="pi pi-check-circle text-3xl"></i>
-                            <div>
-                                <div class="font-semibold text-lg">Successfully authenticated!</div>
-                                <div class="text-sm">You can now discover your Plex servers below.</div>
-                            </div>
-                        </div>
-                    </Message>
-                </div>
+                <!-- Discovery mode -->
+                <template v-if="!showManualEntry">
+                    <!-- skeleton rows while discovering (M20) -->
+                    <div v-if="isDiscovering" class="server-skeletons" aria-label="Searching for Plex servers">
+                        <div class="pc-skeleton server-skeleton"></div>
+                        <div class="pc-skeleton server-skeleton"></div>
+                        <div class="pc-skeleton server-skeleton"></div>
+                    </div>
 
-                <!-- Error State -->
-                <div v-if="authStep === 'error'" class="animate-fadein">
-                    <Message severity="error" :closable="false">
-                        <div class="flex flex-col gap-3">
-                            <div class="flex items-center gap-3">
-                                <i class="pi pi-exclamation-circle text-2xl"></i>
-                                <div class="font-semibold text-lg">Authentication failed</div>
-                            </div>
-                            <div class="text-sm">{{ authError }}</div>
-                            <Button label="Try Again" icon="pi pi-refresh" @click="startPINAuth" size="small" class="w-fit" />
-                        </div>
-                    </Message>
-                </div>
-            </div>
+                    <!-- discovery error -->
+                    <div v-else-if="discoveryError" class="server-note" role="alert">
+                        <p class="server-note-text server-note-text--danger"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ discoveryError }}</p>
+                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="discoverServers">Search again</button>
+                    </div>
 
-            <!-- Server Discovery Section -->
-            <div class="mt-8 pt-8 border-t border-surface-200 dark:border-surface-700">
-                <div class="mb-6">
-                    <h3 class="text-xl font-semibold mb-2 text-surface-900 dark:text-surface-0">{{ showManualEntry ? 'Enter Server Manually' : 'Discover Plex Servers' }}</h3>
-                    <p class="text-sm text-surface-600 dark:text-surface-400">
-                        {{ showManualEntry ? 'Enter your Plex server URL directly' : 'Automatically find Plex servers on your local network' }}
+                    <!-- selectable server rows -->
+                    <ul v-else-if="setupStore.discoveredServers.length > 0" class="server-list">
+                        <li v-for="server in setupStore.discoveredServers" :key="server.id">
+                            <button
+                                type="button"
+                                class="server-row"
+                                :class="{ 'server-row--selected': isSelected(server), 'server-row--invalid': isSelected(server) && validationError }"
+                                :aria-pressed="isSelected(server)"
+                                @click="selectServer(server)"
+                            >
+                                <span class="pc-dot" :class="serverDotClass(server)" aria-hidden="true"></span>
+                                <span class="server-name">{{ server.name }}</span>
+                                <span class="pc-chip-mono server-url">{{ serverUrlOf(server) }}</span>
+                                <span class="pc-badge">{{ server.isLocal ? 'Local' : 'Remote' }}</span>
+                                <i v-if="isSelected(server) && isValidating" class="pi pi-spin pi-spinner server-spinner" aria-hidden="true"></i>
+                                <DrawnCheck v-else-if="isSelected(server) && setupStore.isConnectionValidated" :size="14" />
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- no servers found -->
+                    <div v-else-if="hasDiscovered" class="server-note">
+                        <p class="server-note-text">No Plex servers found on your local network. Make sure your server is running, or enter its address manually below.</p>
+                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="discoverServers">Search again</button>
+                    </div>
+
+                    <!-- persistent manual-entry hint (F25) -->
+                    <p class="server-hint">
+                        Docker or remote server?
+                        <a href="#" @click.prevent="enterManually">Enter its address manually</a>
                     </p>
-                </div>
+                </template>
 
-                <!-- Manual Entry Form -->
-                <div v-if="showManualEntry" class="space-y-4">
-                    <div class="flex flex-col gap-2">
-                        <label for="manual-server-url" class="block text-sm font-medium text-surface-700 dark:text-surface-200">
-                            Plex Server URL
-                            <span class="text-red-500">*</span>
-                        </label>
+                <!-- Manual entry mode -->
+                <template v-else>
+                    <div class="manual-entry">
+                        <label class="manual-label" for="manual-server-url">Server address</label>
                         <InputText
                             id="manual-server-url"
                             v-model="manualServerUrl"
-                            @blur="handleManualUrlBlur"
+                            class="manual-input"
+                            :placeholder="PLEX_URL_PLACEHOLDER"
+                            :invalid="!!manualEntryError && manualServerUrl.trim().length > 0"
+                            aria-describedby="manual-url-feedback"
                             @input="handleManualUrlChange"
-                            placeholder="e.g., http://192.168.1.100:32400"
-                            class="w-full"
-                            :class="{ 'p-invalid': manualEntryError && manualServerUrl.trim().length > 0 }"
+                            @blur="handleManualUrlBlur"
+                            @keydown.enter.prevent="submitManualUrl"
                         />
-
-                        <!-- Validation Error -->
-                        <small v-if="manualEntryError && manualServerUrl.trim().length > 0" class="flex items-center text-red-500">
-                            <i class="pi pi-exclamation-circle mr-1"></i>
+                        <small v-if="manualEntryError && manualServerUrl.trim().length > 0" id="manual-url-feedback" class="manual-feedback manual-feedback--danger" role="alert">
+                            <i class="pi pi-exclamation-circle" aria-hidden="true"></i>
                             {{ manualEntryError }}
                         </small>
-
-                        <!-- Success Message -->
-                        <small v-if="isManualUrlValid && !manualEntryError" class="flex items-center text-green-600 dark:text-green-400">
-                            <i class="pi pi-check-circle mr-1"></i>
-                            Valid URL format
+                        <small v-else-if="isManualUrlValid" id="manual-url-feedback" class="manual-feedback manual-feedback--success">
+                            <i class="pi pi-check-circle" aria-hidden="true"></i>
+                            Valid format — press Enter to test the connection
                         </small>
-
-                        <!-- Helper Text -->
-                        <div class="mt-4 p-4 bg-surface-50 dark:bg-surface-800 rounded-lg text-sm text-surface-600 dark:text-surface-400">
-                            <p class="mb-2 font-medium">
-                                <i class="pi pi-info-circle mr-1"></i>
-                                Examples of valid URLs:
-                            </p>
-                            <ul class="list-disc list-inside ml-2 space-y-1 mb-3">
-                                <li class="font-mono text-xs">http://192.168.1.100:32400</li>
-                                <li class="font-mono text-xs">http://plex.local:32400</li>
-                                <li class="font-mono text-xs">https://plex.example.com:32400</li>
-                            </ul>
-                            <p>
-                                <i class="pi pi-lightbulb mr-1 text-yellow-500"></i>
-                                <strong>Tip:</strong> The default Plex port is <code class="bg-surface-200 dark:bg-surface-700 px-1 rounded">32400</code>. Use HTTPS for remote connections.
-                            </p>
-                        </div>
+                        <small v-else id="manual-url-feedback" class="manual-feedback">The default Plex port is 32400. Use https for remote connections.</small>
                     </div>
 
-                    <!-- Action Buttons -->
-                    <div class="pt-2">
-                        <Button label="Use Discovery Instead" icon="pi pi-search" @click="useDiscoveryInstead" severity="secondary" outlined class="w-full" />
-                    </div>
+                    <p class="server-hint">
+                        On your local network?
+                        <a href="#" @click.prevent="useDiscoveryInstead">Use auto-discovery instead</a>
+                    </p>
+                </template>
+
+                <!-- Validation outcome -->
+                <div v-if="isValidating && showManualEntry" class="validate-pending">
+                    <i class="pi pi-spin pi-spinner server-spinner" aria-hidden="true"></i>
+                    <span>Testing connection…</span>
                 </div>
 
-                <!-- Discovery UI (shown when NOT in manual entry mode) -->
-                <div v-if="!showManualEntry">
-                    <!-- Discover Button with Tooltip -->
-                    <div class="flex items-center gap-2">
-                        <Button v-if="!hasDiscovered && !isDiscovering" label="Discover Servers" icon="pi pi-search" @click="discoverServers" :disabled="!setupStore.isPlexStepValid" class="w-full" />
-                        <i v-if="!hasDiscovered && !isDiscovering" class="pi pi-question-circle text-surface-600 dark:text-surface-400 cursor-help text-xl" v-tooltip.right="discoveryTooltip"></i>
-                    </div>
-
-                    <!-- Always show "Enter Manually" option with Tooltip -->
-                    <div class="flex items-center gap-2 mt-3">
-                        <Button v-if="!hasDiscovered && !isDiscovering" label="Enter Manually" icon="pi pi-pencil" @click="enterManually" severity="info" outlined class="w-full" />
-                        <i v-if="!hasDiscovered && !isDiscovering" class="pi pi-question-circle text-surface-600 dark:text-surface-400 cursor-help text-xl" v-tooltip.right="manualEntryTooltip"></i>
-                    </div>
-
-                    <!-- Loading State -->
-                    <div v-if="isDiscovering" class="flex flex-col items-center justify-center py-8">
-                        <ProgressSpinner style="width: 50px; height: 50px" strokeWidth="4" fill="transparent" animationDuration="1s" />
-                        <p class="text-surface-600 dark:text-surface-400 mt-3">Searching for Plex servers on your network...</p>
-                    </div>
-
-                    <!-- Discovery Error -->
-                    <div v-if="discoveryError" class="mt-4 text-red-500 flex items-center justify-center">
-                        <i class="pi pi-exclamation-triangle mr-2"></i>
-                        <span>{{ discoveryError }}</span>
-                    </div>
-
-                    <!-- Discovered Servers -->
-                    <div v-if="hasDiscovered && setupStore.discoveredServers.length > 0" class="mt-6">
-                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-4">Found {{ setupStore.discoveredServers.length }} server(s). Select one to continue:</p>
-                        <div class="space-y-3">
-                            <ServerCard v-for="server in setupStore.discoveredServers" :key="server.id" :server="server" :is-selected="setupStore.selectedServer?.id === server.id" @server-selected="handleServerSelected" />
-                        </div>
-                        <div class="mt-6">
-                            <Button label="Search Again" icon="pi pi-refresh" @click="discoverServers" severity="secondary" outlined class="w-full sm:w-auto" />
-                        </div>
-                    </div>
-
-                    <!-- No Servers Found -->
-                    <div v-if="hasDiscovered && setupStore.discoveredServers.length === 0" class="mt-4 p-6 bg-surface-50 dark:bg-surface-800 rounded-lg text-center">
-                        <i class="pi pi-info-circle text-3xl mb-3 text-blue-500"></i>
-                        <h4 class="font-semibold mb-2 text-surface-900 dark:text-surface-0">No Servers Found</h4>
-                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-4">We couldn't find any Plex servers on your local network. Make sure your Plex Media Server is running and connected to the same network.</p>
-                        <div class="flex flex-col sm:flex-row gap-3 justify-center">
-                            <Button label="Search Again" icon="pi pi-refresh" @click="discoverServers" severity="secondary" outlined />
-                            <Button label="Enter Manually" icon="pi pi-pencil" @click="enterManually" severity="info" outlined />
-                        </div>
-                    </div>
-
-                    <!-- Helper Text -->
-                    <small v-if="!setupStore.isPlexStepValid && !hasDiscovered" class="flex items-center justify-center mt-4 text-surface-500">
-                        <i class="pi pi-info-circle mr-1"></i>
-                        Enter your Plex token above to enable server discovery
-                    </small>
-                </div>
-            </div>
-
-            <!-- Connection Validation Section -->
-            <div v-if="hasServerUrl" class="bg-surface-50 dark:bg-surface-800 p-6 rounded-lg border border-surface-200 dark:border-surface-700 mt-8 animate-fadein">
-                <div class="mb-6">
-                    <h3 class="text-xl font-semibold mb-2 text-surface-900 dark:text-surface-0">Verify Connection</h3>
-                    <p class="text-sm text-surface-600 dark:text-surface-400">Test the connection to your Plex server before continuing</p>
+                <div v-if="setupStore.isConnectionValidated && setupStore.validationResult" class="validate-ok">
+                    <DrawnCheck :size="14" />
+                    <span>
+                        Reachable — {{ libraryLabel }}
+                        <template v-if="setupStore.validationResult.serverName"
+                            >on <strong>{{ setupStore.validationResult.serverName }}</strong></template
+                        >
+                    </span>
                 </div>
 
-                <!-- Validation Button (shown when not validated and not validating) -->
-                <div v-if="!setupStore.isConnectionValidated && !isValidating && !validationError">
-                    <Button label="Validate Connection" icon="pi pi-check-circle" @click="validateConnection" :disabled="!canValidate" class="w-full" />
-                    <small class="flex items-center justify-center mt-3 text-surface-500">
-                        <i class="pi pi-info-circle mr-1"></i>
-                        This will verify your token and server are working correctly
-                    </small>
-                </div>
-
-                <!-- Validation Loading State -->
-                <div v-if="isValidating" class="flex flex-col items-center justify-center py-4">
-                    <ProgressSpinner style="width: 50px; height: 50px" strokeWidth="4" fill="transparent" animationDuration="1s" />
-                    <p class="text-surface-600 dark:text-surface-400 mt-3">Validating connection...</p>
-                </div>
-
-                <!-- Validation Success -->
-                <div v-if="setupStore.isConnectionValidated && setupStore.validationResult" class="animate-fadein">
-                    <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
-                        <div class="flex items-center gap-4 mb-6">
-                            <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center shrink-0">
-                                <i class="pi pi-check text-2xl text-green-600 dark:text-green-400"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-xl font-bold text-green-900 dark:text-green-100">Successfully Connected</h4>
-                                <p class="text-green-700 dark:text-green-300">
-                                    Connected to <span class="font-semibold">{{ setupStore.validationResult.serverName || 'Plex Media Server' }}</span>
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div class="bg-white dark:bg-surface-800 p-4 rounded-lg border border-surface-200 dark:border-surface-700 flex items-center gap-3 shadow-sm">
-                                <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-700 flex items-center justify-center shrink-0">
-                                    <i class="pi pi-server text-lg text-primary-500"></i>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-surface-500 uppercase font-bold tracking-wider">Version</div>
-                                    <div class="font-mono text-sm font-medium text-surface-900 dark:text-surface-0">{{ setupStore.validationResult.serverVersion || 'Unknown' }}</div>
-                                </div>
-                            </div>
-
-                            <div class="bg-white dark:bg-surface-800 p-4 rounded-lg border border-surface-200 dark:border-surface-700 flex items-center gap-3 shadow-sm">
-                                <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-700 flex items-center justify-center shrink-0">
-                                    <i class="pi pi-folder text-lg text-primary-500"></i>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-surface-500 uppercase font-bold tracking-wider">Content</div>
-                                    <div class="font-mono text-sm font-medium text-surface-900 dark:text-surface-0">{{ setupStore.validationResult.libraryCount }} Libraries</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-6 flex justify-center sm:justify-end">
-                            <Button label="Re-validate Connection" icon="pi pi-refresh" @click="retryValidation" severity="success" text size="small" />
+                <!-- Validation failure detail (M17) -->
+                <div class="pc-collapse" :class="{ 'pc-collapse--open': validationError && !isValidating }">
+                    <div>
+                        <div class="validate-error" role="alert">
+                            <p class="validate-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> Couldn't reach this server</p>
+                            <p class="validate-error-text">{{ validationError }}</p>
+                            <p class="validate-error-suggestion">Check that your Plex server is running and reachable from this computer.</p>
+                            <button type="button" class="pc-btn pc-btn--ghost-danger pc-btn--sm" @click="retryValidation">Retry</button>
                         </div>
                     </div>
                 </div>
-
-                <!-- Validation Error -->
-                <div v-if="validationError && !isValidating" class="animate-fadein">
-                    <Message severity="error" :closable="false" class="w-full">
-                        <template #icon>
-                            <i class="pi pi-times-circle text-2xl"></i>
-                        </template>
-                        <div class="w-full">
-                            <h4 class="font-semibold mb-2">Connection Failed</h4>
-                            <p class="text-sm">{{ validationError }}</p>
-                        </div>
-                    </Message>
-                    <div class="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
-                        <Button label="Retry" icon="pi pi-refresh" @click="retryValidation" severity="danger" />
-                        <Button
-                            label="Modify Settings"
-                            icon="pi pi-pencil"
-                            @click="
-                                showManualEntry = true;
-                                setupStore.toggleManualEntry(true);
-                            "
-                            severity="secondary"
-                            outlined
-                        />
-                    </div>
-                    <small class="flex items-center justify-center mt-3 text-surface-600 dark:text-surface-400">
-                        <i class="pi pi-lightbulb mr-1 text-yellow-500"></i>
-                        Check that your Plex server is running and the token is correct
-                    </small>
-                </div>
-            </div>
+            </section>
         </div>
     </div>
 </template>
 
 <style scoped>
-.animate-fadein {
-    animation: fadein 0.3s ease-in;
+/* ---- Sign-in panel ---- */
+.auth-initial {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+.auth-caption {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.auth-waiting {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 12px;
+}
+.auth-pin {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: var(--pc-radius-sm);
+    background: var(--pc-raised);
+    font-family: var(--pc-font-mono);
+    font-size: 28px;
+    letter-spacing: 0.12em;
+    color: var(--pc-text);
+    user-select: all;
+}
+.auth-spinner,
+.server-spinner {
+    font-size: 12px;
+}
+.auth-actions {
+    display: flex;
+    gap: 8px;
+}
+.auth-done {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: var(--pc-text-body);
+    color: var(--pc-text);
+}
+.auth-error {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 12px;
+}
+.auth-error-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: var(--pc-text-body);
+    color: var(--pc-danger);
 }
 
-@keyframes fadein {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+/* ---- Server panel ---- */
+.server-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.server-head-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+    cursor: pointer;
+}
+.server-head-link:hover {
+    color: var(--pc-accent);
+}
+.server-skeletons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.server-skeleton {
+    height: 44px;
+    border-radius: var(--pc-radius-md);
+}
+.server-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.server-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    background: var(--pc-raised);
+    border: 1px solid var(--pc-border);
+    border-radius: var(--pc-radius-md);
+    text-align: left;
+    cursor: pointer;
+    color: var(--pc-text);
+    transition:
+        border-color var(--pc-dur-1) var(--pc-ease-out),
+        background-color var(--pc-dur-1) var(--pc-ease-out);
+}
+.server-row:hover {
+    border-color: var(--pc-border-strong);
+}
+.server-row--selected {
+    border-color: var(--pc-accent);
+    background: var(--pc-accent-dim);
+}
+.server-row--invalid {
+    border-color: var(--pc-danger);
+    background: var(--pc-danger-dim);
+}
+.server-name {
+    font-size: var(--pc-text-body);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.server-url {
+    margin-left: auto;
+}
+.server-note {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    background: var(--pc-raised);
+    border-radius: var(--pc-radius-md);
+}
+.server-note-text {
+    margin: 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+}
+.server-note-text--danger {
+    color: var(--pc-danger);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.server-hint {
+    margin: 12px 0 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.server-hint a {
+    color: var(--pc-accent);
+    text-decoration: none;
+}
+.server-hint a:hover {
+    text-decoration: underline;
+}
+
+/* ---- Manual entry ---- */
+.manual-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.manual-label {
+    font-size: var(--pc-text-caption);
+    font-weight: 500;
+    color: var(--pc-text-secondary);
+}
+.manual-input {
+    width: 100%;
+    font-family: var(--pc-font-mono);
+    font-size: var(--pc-text-mono);
+}
+.manual-feedback {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.manual-feedback--danger {
+    color: var(--pc-danger);
+}
+.manual-feedback--success {
+    color: var(--pc-success);
+}
+
+/* ---- Validation outcome ---- */
+.validate-pending {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+}
+.validate-ok {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: var(--pc-text-body);
+    color: var(--pc-text);
+}
+.validate-error {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--pc-danger) 40%, transparent);
+    border-radius: var(--pc-radius-md);
+    background: var(--pc-danger-dim);
+}
+.validate-error-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 4px;
+    font-size: var(--pc-text-body);
+    font-weight: 600;
+    color: var(--pc-danger);
+}
+.validate-error-text {
+    margin: 0 0 4px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+    overflow-wrap: anywhere;
+}
+.validate-error-suggestion {
+    margin: 0 0 10px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
 }
 </style>

@@ -1,157 +1,200 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, provide } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useSetupStore } from '@/stores/setup';
-import { SavePlexToken, CompleteSetup, SkipSetup } from '../../wailsjs/go/main/App';
+import { SavePlexToken, SkipSetup } from '../../wailsjs/go/main/App';
 import { useToast } from 'primevue/usetoast';
-import Stepper from 'primevue/stepper';
-import StepList from 'primevue/steplist';
-import Step from 'primevue/step';
-import StepPanels from 'primevue/steppanels';
-import StepPanel from 'primevue/steppanel';
-import Button from 'primevue/button';
+import BrandMark from '@/components/BrandMark.vue';
+import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
 const toast = useToast();
-
 const router = useRouter();
 const route = useRoute();
 const setupStore = useSetupStore();
 
-// Step definitions with numeric values (1-based as per PrimeVue best practices)
-const steps = ref([
-    { label: 'Welcome', value: 1, route: '/setup/welcome' },
-    { label: 'Plex Server', value: 2, route: '/setup/plex' },
-    { label: 'Select User', value: 3, route: '/setup/user' },
-    { label: 'Discord', value: 4, route: '/setup/discord' },
-    { label: 'Complete', value: 5, route: '/setup/complete' }
-]);
+// Restore persisted wizard progress before any step view mounts (child
+// setup/onMounted hooks run before the parent's onMounted).
+setupStore.loadState();
+const savedStep = setupStore.currentStep;
 
-// Current active step value based on route (1-based)
-const activeStepValue = computed(() => {
-    const currentPath = route.path;
-    const step = steps.value.find((s) => s.route === currentPath);
-    return step ? step.value : 1;
+// Rail steps (spec §5.4) — the signal path being assembled, left to right.
+const steps = [
+    { label: 'Welcome', route: '/setup/welcome' },
+    { label: 'Plex Server', route: '/setup/plex', brand: 'plex' },
+    { label: 'Select User', route: '/setup/user' },
+    { label: 'Discord', route: '/setup/discord', brand: 'discord' },
+    { label: 'Done', route: '/setup/complete' }
+];
+const lastIndex = steps.length - 1;
+
+const activeIndex = computed(() => {
+    const idx = steps.findIndex((s) => s.route === route.path);
+    return idx === -1 ? 0 : idx;
 });
 
-// Sync active step with store (convert from 1-based to 0-based for store)
-watch(activeStepValue, (newStepValue) => {
-    const storeIndex = newStepValue - 1;
-    if (storeIndex !== setupStore.currentStep) {
-        setupStore.currentStep = storeIndex;
+// Keep the store's step index in sync with the route (route wins).
+watch(
+    activeIndex,
+    (idx) => {
+        if (idx !== setupStore.currentStep) {
+            setupStore.currentStep = idx;
+        }
+    },
+    { immediate: true }
+);
+
+// ---- M8: direction-aware step transition -------------------------------
+const stepTransition = ref('pc-step-next');
+watch(activeIndex, (next, prev) => {
+    stepTransition.value = next >= prev ? 'pc-step-next' : 'pc-step-prev';
+});
+
+// ---- Rail state ---------------------------------------------------------
+const isStepDone = (index) => index !== activeIndex.value && (index < activeIndex.value || setupStore.isStepCompleted(index));
+
+const canNavigateTo = (index) => index <= activeIndex.value || setupStore.isStepCompleted(index);
+
+// One-line mono summary of the accumulated result for done steps (§5.4).
+const stepSummary = (index) => {
+    if (!isStepDone(index)) {
+        return '';
     }
-});
+    switch (index) {
+        case 1:
+            return setupStore.plexServerSummary;
+        case 2:
+            return setupStore.selectedPlexUser?.name || '';
+        case 3:
+            return setupStore.discordSkipped ? 'Skipped' : setupStore.discordConnected ? 'Connected' : '';
+        default:
+            return '';
+    }
+};
 
-// Navigation methods
+// 2px accent progress line runs down the rail's left edge to the current
+// step; its height animates --pc-dur-3 --pc-ease-inout (M8 rail marker).
+const railList = ref(null);
+const progressHeight = ref(0);
+const updateProgress = async () => {
+    await nextTick();
+    const el = railList.value?.querySelector('[aria-current="step"]');
+    if (el) {
+        progressHeight.value = el.offsetTop + el.offsetHeight;
+    }
+};
+watch([activeIndex, () => steps.map((s, i) => stepSummary(i)).join('|')], updateProgress);
+
+const onRailClick = (index) => {
+    if (index === activeIndex.value || !canNavigateTo(index)) {
+        return;
+    }
+    setupStore.goToStep(index);
+    router.push(steps[index].route);
+};
+
+// ---- Navigation ---------------------------------------------------------
 const goToNextStep = () => {
+    if (activeIndex.value >= lastIndex) {
+        return;
+    }
     setupStore.nextStep();
-    const nextRoute = steps.value[setupStore.currentStep]?.route;
+    const nextRoute = steps[setupStore.currentStep]?.route;
     if (nextRoute) {
         router.push(nextRoute);
     }
 };
 
 const goToPreviousStep = () => {
+    if (activeIndex.value <= 0) {
+        return;
+    }
     setupStore.previousStep();
-    const prevRoute = steps.value[setupStore.currentStep]?.route;
+    const prevRoute = steps[setupStore.currentStep]?.route;
     if (prevRoute) {
         router.push(prevRoute);
     }
 };
 
-// Navigate using step value (1-based)
-const activateStep = (stepValue) => {
-    const stepIndex = stepValue - 1;
-    if (stepIndex >= 0 && stepIndex < steps.value.length) {
-        setupStore.goToStep(stepIndex);
-        const targetRoute = steps.value[stepIndex]?.route;
-        if (targetRoute) {
-            router.push(targetRoute);
-        }
+// ---- Footer gate (F18): Continue is always rendered, disabled when gated,
+// with an inline caption stating the reason. -------------------------------
+const gate = computed(() => {
+    switch (activeIndex.value) {
+        case 0:
+            return { enabled: true, label: 'Get started', reason: '' };
+        case 1:
+            return {
+                enabled: setupStore.isPlexStepValid && setupStore.isConnectionValidated,
+                label: 'Continue',
+                reason: 'Validate your server to continue'
+            };
+        case 2:
+            return { enabled: setupStore.isUserSelected, label: 'Continue', reason: 'Select a user to continue' };
+        case 3:
+            return { enabled: setupStore.isDiscordStepSatisfied, label: 'Continue', reason: 'Connect Discord to continue' };
+        default:
+            return { enabled: !setupStore.isFinishing, label: 'Finish setup', reason: '' };
     }
+});
+
+const isLastStep = computed(() => activeIndex.value === lastIndex);
+
+// Escape hatch (F29): shown beside the gate caption on the Discord step.
+const showDiscordEscape = computed(() => activeIndex.value === 3 && !gate.value.enabled);
+
+const continueWithoutDiscord = () => {
+    setupStore.setDiscordSkipped(true);
+    goToNextStep();
 };
 
-// Handle step change from stepper clicks
-const onStepChange = (newStepValue) => {
-    activateStep(newStepValue);
-};
-
-// Show/hide buttons based on current step (use 0-based store index)
-const currentStoreStep = computed(() => setupStore.currentStep);
-
-const showBackButton = computed(() => {
-    return setupStore.canGoBack && currentStoreStep.value !== steps.value.length - 1;
-});
-
-const showNextButton = computed(() => {
-    if (currentStoreStep.value >= steps.value.length - 1) {
-        return false; // Last step doesn't have Next button
-    }
-
-    // Check if we're on the Plex step (store index 1) and validate connection
-    if (currentStoreStep.value === 1) {
-        return setupStore.isPlexStepValid && setupStore.isConnectionValidated;
-    }
-
-    // Check if we're on the User step (store index 2) and validate user selection
-    if (currentStoreStep.value === 2) {
-        return setupStore.isUserSelected;
-    }
-
-    return setupStore.canGoNext;
-});
-
-const showFinishButton = computed(() => {
-    return currentStoreStep.value === steps.value.length - 1;
-});
-
-const isFinishing = ref(false);
-
+// ---- Finish (spec §5.4 step 5 / F32): side effects live in the store's
+// finishSetup action; failures render as a danger panel on the Complete step.
 const finishSetup = async () => {
-    isFinishing.value = true;
-
-    try {
-        // Save Plex token to OS keychain
-        if (setupStore.plexToken) {
-            await SavePlexToken(setupStore.plexToken);
-        }
-
-        // Mark setup as complete in backend (persists to config.json and starts polling)
-        await CompleteSetup();
-
-        // Also update frontend store state
-        setupStore.completeSetup();
-
-        // Navigate to dashboard
+    const ok = await setupStore.finishSetup();
+    if (ok) {
         router.push('/');
-
-        toast.add({
-            severity: 'success',
-            summary: 'Setup Complete',
-            detail: 'PlexCord has been configured successfully',
-            life: 3000
-        });
-    } catch (error) {
-        console.error('Failed to complete setup:', error);
-        toast.add({
-            severity: 'error',
-            summary: 'Setup Failed',
-            detail: error?.message || 'Failed to complete setup. Please try again.',
-            life: 5000
-        });
-    } finally {
-        isFinishing.value = false;
     }
 };
 
-// Skip setup functionality
-const showSkipLink = computed(() => {
-    // Show skip link on all steps except welcome (0) and complete (last)
-    return currentStoreStep.value > 0 && currentStoreStep.value < steps.value.length - 1;
+const continueAction = () => {
+    if (!gate.value.enabled) {
+        return;
+    }
+    if (isLastStep.value) {
+        finishSetup();
+    } else {
+        goToNextStep();
+    }
+};
+
+const continueButton = ref(null);
+const focusContinue = () => {
+    continueButton.value?.focus();
+};
+
+// Steps may register their own primary action (Enter submits it — §5.4).
+const stepPrimary = ref(null);
+provide('setupWizard', {
+    registerPrimary: (fn) => {
+        stepPrimary.value = fn;
+    },
+    unregisterPrimary: (fn) => {
+        if (stepPrimary.value === fn) {
+            stepPrimary.value = null;
+        }
+    },
+    next: goToNextStep,
+    focusContinue
 });
 
+// ---- Skip setup (steps 2–4 only; sets the flag behind the Dashboard
+// resume tile — F22) ------------------------------------------------------
+const showSkipLink = computed(() => activeIndex.value > 0 && activeIndex.value < lastIndex);
 const isSkipping = ref(false);
 
 const skipSetup = async () => {
+    if (isSkipping.value) {
+        return;
+    }
     isSkipping.value = true;
 
     try {
@@ -166,138 +209,340 @@ const skipSetup = async () => {
         // Mark setup as skipped in backend
         await SkipSetup();
 
-        // Navigate to dashboard
         router.push('/');
-
-        toast.add({
-            severity: 'info',
-            summary: 'Setup Skipped',
-            detail: 'You can complete setup later from Settings',
-            life: 4000
-        });
     } catch (error) {
         console.error('Failed to skip setup:', error);
         toast.add({
             severity: 'error',
-            summary: 'Skip Failed',
+            summary: 'Skip failed',
             detail: error?.message || 'Failed to skip setup. Please try again.',
-            life: 5000
+            life: 8000
         });
     } finally {
         isSkipping.value = false;
     }
 };
 
-// Keyboard navigation - respects same validation as UI buttons
+// ---- Keyboard (F17 / §6.7): early-return when an input has focus. -------
 const handleKeydown = (event) => {
-    if (event.key === 'ArrowRight' && showNextButton.value) {
-        goToNextStep();
-    } else if (event.key === 'ArrowLeft' && showBackButton.value) {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+    }
+    if (event.target instanceof Element && event.target.closest('input, textarea, [contenteditable], .p-inputtext')) {
+        return;
+    }
+
+    if (event.key === 'ArrowRight') {
+        // Only advances when Continue is enabled (never finishes setup)
+        if (gate.value.enabled && !isLastStep.value) {
+            goToNextStep();
+        }
+    } else if (event.key === 'ArrowLeft') {
         goToPreviousStep();
+    } else if (event.key === 'Enter') {
+        // A focused button/link already handles Enter natively
+        if (event.target instanceof Element && event.target.closest('button, a, [role="button"]')) {
+            return;
+        }
+        // Submit the current step's primary action, else Continue
+        if (typeof stepPrimary.value === 'function' && stepPrimary.value()) {
+            return;
+        }
+        continueAction();
     }
 };
 
-// Load saved state and setup keyboard listeners on mount
 onMounted(() => {
-    setupStore.loadState();
-    // Navigate to saved step if different from current
-    if (setupStore.currentStep !== currentStoreStep.value) {
-        const savedRoute = steps.value[setupStore.currentStep]?.route;
-        if (savedRoute && savedRoute !== route.path) {
-            router.push(savedRoute);
-        }
+    // Resume at the saved step when landing on the wizard's default route;
+    // a deep-linked step route wins otherwise (the watcher above adopts it).
+    if (route.path === steps[0].route && savedStep > 0 && savedStep <= lastIndex) {
+        setupStore.currentStep = savedStep;
+        router.replace(steps[savedStep].route);
     }
-    // Setup keyboard navigation
+
     window.addEventListener('keydown', handleKeydown);
+    updateProgress();
 });
 
-// Cleanup on unmount
-onUnmounted(() => {
+onBeforeUnmount(() => {
     window.removeEventListener('keydown', handleKeydown);
 });
 </script>
 
 <template>
-    <div class="min-h-screen flex items-center justify-center p-4 md:p-8 bg-surface-50 dark:bg-surface-950">
-        <div class="w-full max-w-5xl shadow-xl rounded-xl overflow-hidden bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-800">
-            <!-- Header -->
-            <div class="px-8 py-6 bg-surface-0 dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800">
-                <div class="flex flex-col md:flex-row items-center justify-center gap-6">
-                    <!-- PlexAmp Logo (Left) -->
-                    <svg class="w-10 h-10 md:w-12 md:h-12 shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <polyline
-                            fill="none"
-                            stroke="#CC7B19"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            points="4.5 24 23.444 24 12.808 9.342 16.883 9.342 27.519 24 16.883 38.658 20.957 38.658 31.594 24 20.957 9.342 25.032 9.342 35.668 24 25.032 38.658 29.107 38.658 39.743 24 43.5 24"
-                        />
-                    </svg>
-
-                    <h1 class="text-3xl md:text-4xl font-bold text-center text-surface-900 dark:text-surface-0">PlexCord</h1>
-
-                    <!-- Discord Logo (Right) -->
-                    <svg class="w-10 h-10 md:w-12 md:h-12 shrink-0" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z"
-                            fill="#5865F2"
-                        />
-                    </svg>
-                </div>
+    <div class="wizard">
+        <!-- Left rail: the signal path being assembled (§5.4) -->
+        <aside class="wizard-rail">
+            <div class="rail-header">
+                <BrandMark suffix="Setup" />
             </div>
 
-            <!-- Content -->
-            <div class="p-0">
-                <Stepper :value="activeStepValue" @update:value="onStepChange" class="w-full">
-                    <!-- Step Headers -->
-                    <StepList class="bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700 px-4 md:px-8">
-                        <Step v-for="step in steps" :key="step.value" :value="step.value">
-                            {{ step.label }}
-                        </Step>
-                    </StepList>
+            <nav ref="railList" class="rail-steps" aria-label="Setup steps">
+                <div class="rail-progress" :style="{ height: progressHeight + 'px' }" aria-hidden="true"></div>
+                <button
+                    v-for="(step, i) in steps"
+                    :key="step.route"
+                    type="button"
+                    class="rail-step"
+                    :class="{ 'rail-step--current': i === activeIndex, 'rail-step--done': isStepDone(i), 'rail-step--locked': !canNavigateTo(i) }"
+                    :aria-current="i === activeIndex ? 'step' : undefined"
+                    :aria-disabled="!canNavigateTo(i) || undefined"
+                    :tabindex="canNavigateTo(i) ? 0 : -1"
+                    v-tooltip.right="canNavigateTo(i) ? null : 'Complete the current step first'"
+                    @click="onRailClick(i)"
+                >
+                    <span class="rail-glyph">
+                        <DrawnCheck v-if="isStepDone(i)" :size="14" />
+                        <span v-else class="rail-dot" :class="i === activeIndex ? 'rail-dot--current' : 'rail-dot--locked'"></span>
+                        <span v-if="step.brand" class="rail-tick" :class="`rail-tick--${step.brand}`" aria-hidden="true"></span>
+                    </span>
+                    <span class="rail-texts">
+                        <span class="rail-label">{{ step.label }}</span>
+                        <span v-if="stepSummary(i)" class="rail-summary">{{ stepSummary(i) }}</span>
+                    </span>
+                </button>
+            </nav>
 
-                    <!-- Step Content Panels -->
-                    <StepPanels>
-                        <StepPanel v-for="step in steps" :key="step.value" :value="step.value">
-                            <!-- Step View Content -->
-                            <div class="min-h-[300px] py-8 px-4 md:px-8">
-                                <router-view />
-                            </div>
-
-                            <!-- Navigation Buttons -->
-                            <div class="flex items-center justify-between mt-8 pt-6 border-t border-surface-200 dark:border-surface-800 px-4 md:px-8 pb-8">
-                                <Button v-if="showBackButton && step.value === activeStepValue" label="Back" icon="pi pi-arrow-left" severity="secondary" @click="goToPreviousStep" />
-                                <span class="grow"></span>
-                                <Button v-if="showNextButton && step.value === activeStepValue" label="Next" icon="pi pi-arrow-right" iconPos="right" @click="goToNextStep" />
-                                <Button v-if="showFinishButton && step.value === activeStepValue" label="Finish Setup" icon="pi pi-check" iconPos="right" @click="finishSetup" :loading="isFinishing" :disabled="isFinishing" />
-                            </div>
-                        </StepPanel>
-                    </StepPanels>
-                </Stepper>
-
-                <!-- Skip Link -->
-                <div v-if="showSkipLink" class="text-center pb-6">
-                    <a href="#" @click.prevent="skipSetup" class="text-surface-500 dark:text-surface-400 hover:text-primary-500 dark:hover:text-primary-400 transition-colors text-sm" :class="{ 'pointer-events-none opacity-50': isSkipping }">
-                        <span v-if="isSkipping"> <i class="pi pi-spin pi-spinner mr-1"></i> Skipping... </span>
-                        <span v-else>Skip setup for now</span>
-                    </a>
-                </div>
+            <div class="rail-foot">
+                <a v-if="showSkipLink" href="#" class="rail-skip" :class="{ 'rail-skip--busy': isSkipping }" @click.prevent="skipSetup">
+                    <span v-if="isSkipping">Skipping…</span>
+                    <span v-else>Skip setup →</span>
+                </a>
             </div>
+        </aside>
+
+        <!-- Right pane: step content + footer bar -->
+        <div class="wizard-main">
+            <main class="wizard-content">
+                <router-view v-slot="{ Component }">
+                    <Transition :name="stepTransition" mode="out-in">
+                        <component :is="Component" class="wizard-step" />
+                    </Transition>
+                </router-view>
+            </main>
+
+            <footer class="wizard-footer">
+                <button type="button" class="pc-btn pc-btn--ghost" :disabled="activeIndex === 0 || setupStore.isFinishing" @click="goToPreviousStep"><i class="pi pi-arrow-left" aria-hidden="true"></i> Back</button>
+
+                <span class="wizard-footer-gap"></span>
+
+                <span v-if="!gate.enabled && gate.reason" class="wizard-gate-reason" role="status">{{ gate.reason }}</span>
+                <a v-if="showDiscordEscape" href="#" class="wizard-escape-link" @click.prevent="continueWithoutDiscord">Continue without Discord →</a>
+
+                <button ref="continueButton" type="button" class="pc-btn pc-btn--primary pc-btn--lg wizard-continue" :disabled="!gate.enabled" @click="continueAction">
+                    <i v-if="setupStore.isFinishing && isLastStep" class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+                    {{ gate.label }}
+                    <i v-if="!isLastStep" class="pi pi-arrow-right" aria-hidden="true"></i>
+                    <i v-else-if="!setupStore.isFinishing" class="pi pi-check" aria-hidden="true"></i>
+                </button>
+            </footer>
         </div>
     </div>
 </template>
 
 <style scoped>
-/* Ensure stepper takes full width */
-:deep(.p-stepper) {
-    width: 100%;
+.wizard {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--pc-bg);
 }
 
-/* Dark mode compatibility and cleanup */
-:deep(.p-stepper),
-:deep(.p-steplist),
-:deep(.p-step) {
+/* ---- Rail ---- */
+.wizard-rail {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--pc-overlay);
+    border-right: 1px solid var(--pc-border);
+    padding: 16px 0 12px;
+}
+.rail-header {
+    padding: 4px 16px 20px;
+}
+.rail-steps {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 12px;
+}
+.rail-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--pc-accent);
+    transition: height var(--pc-dur-3) var(--pc-ease-inout); /* M8 rail marker */
+}
+.rail-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 40px;
+    padding: 10px 8px 10px 20px;
+    background: none;
+    border: none;
+    border-radius: 0 var(--pc-radius-sm) var(--pc-radius-sm) 0;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--pc-dur-1) var(--pc-ease-out);
+}
+.rail-step:hover:not(.rail-step--locked):not(.rail-step--current) {
+    background: var(--pc-raised);
+}
+.rail-step--locked {
+    opacity: 0.4;
+    cursor: default;
+}
+.rail-glyph {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 18px;
+    flex: none;
+}
+.rail-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--pc-radius-full);
+}
+.rail-dot--current {
+    border: 2px solid var(--pc-accent);
     background: transparent;
+}
+.rail-dot--locked {
+    border: 1px solid var(--pc-border-strong);
+    background: transparent;
+}
+/* 6px brand-pigment tick beside the glyph — the only brand color in the
+   wizard chrome (§5.4) */
+.rail-tick {
+    position: absolute;
+    right: -6px;
+    top: 1px;
+    width: 6px;
+    height: 2px;
+    border-radius: 1px;
+}
+.rail-tick--plex {
+    background: var(--pc-plex);
+}
+.rail-tick--discord {
+    background: var(--pc-blurple);
+}
+.rail-texts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.rail-label {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--pc-text-secondary);
+}
+.rail-step--current .rail-label {
+    font-weight: 600;
+    color: var(--pc-text);
+}
+.rail-summary {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    color: var(--pc-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rail-foot {
+    padding: 12px 16px 4px;
+}
+.rail-skip {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+    text-decoration: none;
+    transition: color var(--pc-dur-1) var(--pc-ease-out);
+}
+.rail-skip:hover {
+    color: var(--pc-accent);
+}
+.rail-skip--busy {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+/* ---- Right pane ---- */
+.wizard-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+.wizard-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 40px var(--pc-page-gutter) 32px;
+}
+.wizard-step {
+    max-width: 560px;
+}
+.wizard-footer {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px var(--pc-page-gutter);
+    border-top: 1px solid var(--pc-border);
+}
+.wizard-footer-gap {
+    flex: 1;
+}
+.wizard-gate-reason {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.wizard-escape-link {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+    text-decoration: none;
+}
+.wizard-escape-link:hover {
+    color: var(--pc-accent);
+}
+.wizard-continue {
+    min-width: 128px;
+}
+</style>
+
+<style>
+/* Shared step-content type recipe (§5.4: display heading + caption lede,
+   then panels). Global on purpose — each step view uses these classes. */
+.setup-title {
+    margin: 0 0 8px;
+    font-size: var(--pc-text-display);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--pc-text);
+}
+.setup-lede {
+    margin: 0 0 var(--pc-space-section);
+    font-size: var(--pc-text-body);
+    line-height: 1.5;
+    color: var(--pc-text-secondary);
+}
+.setup-panels {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pc-space-panel-gap);
 }
 </style>
