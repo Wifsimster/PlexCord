@@ -17,6 +17,7 @@ import { useUpdatesStore } from '@/stores/updates';
 import { usePlayback } from '@/composables/usePlayback';
 import { useVersion } from '@/composables/useVersion';
 import { validatePlexServerUrl, PLEX_URL_PLACEHOLDER } from '@/utils/plexUrl';
+import { parseReleaseNotes } from '@/utils/changelogFormat';
 import { setLocale, SUPPORTED_LOCALES } from '@/i18n';
 import {
     GetPollingInterval,
@@ -668,10 +669,7 @@ const updateReady = computed(() => updatesStore.updateReady);
 const installingUpdate = computed(() => updatesStore.installing);
 const showUpdatePanel = computed(() => updatesStore.showUpdatePanel);
 const checkingUpdate = ref(false);
-const truncatedReleaseNotes = computed(() => {
-    const notes = updateInfo.value?.releaseNotes ?? '';
-    return notes.length > 120 ? `${notes.slice(0, 120)}…` : notes;
-});
+const releaseNoteSections = computed(() => parseReleaseNotes(updateInfo.value?.releaseNotes ?? ''));
 
 async function checkForUpdates() {
     if (checkingUpdate.value) return;
@@ -1052,7 +1050,14 @@ async function executeReset() {
                         <div class="update-row-main">
                             <div class="row-text">
                                 <span class="row-label">{{ $t('settings.updateAvailable', { version: updateInfo?.latestVersion }) }}</span>
-                                <p v-if="truncatedReleaseNotes" class="row-caption">{{ truncatedReleaseNotes }}</p>
+                                <div v-if="releaseNoteSections.length" class="release-notes">
+                                    <div v-for="(section, si) in releaseNoteSections" :key="si" class="release-notes-section">
+                                        <span v-if="section.title" class="release-notes-title">{{ section.title }}</span>
+                                        <ul class="release-notes-list">
+                                            <li v-for="(item, ii) in section.items" :key="ii" class="row-caption">{{ item }}</li>
+                                        </ul>
+                                    </div>
+                                </div>
                                 <p v-if="updateReady" class="row-caption row-caption--success">{{ $t('settings.updateInstalled', { version: updateInfo?.latestVersion }) }}</p>
                             </div>
                             <!-- Self-updating platforms install in place; the rest fall back to the release page -->
@@ -1502,12 +1507,32 @@ async function executeReset() {
 }
 .update-row-main {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
 }
 .update-row-main .pc-btn {
     flex: none;
+}
+.release-notes {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.release-notes-title {
+    display: block;
+    font-size: var(--pc-text-caption);
+    font-weight: 600;
+    color: var(--pc-text);
+}
+.release-notes-list {
+    margin: 2px 0 0;
+    padding-left: 18px;
+    list-style: disc;
+}
+.release-notes-list .row-caption {
+    margin: 0;
 }
 .update-progress {
     margin-top: 10px;
