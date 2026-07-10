@@ -1,20 +1,21 @@
 package discord
 
 import (
+	stderrors "errors"
 	"log"
 	"strings"
 	"sync"
 	"time"
 
+	"plexcord/internal/discord/ipc"
 	"plexcord/internal/errors"
-
-	"github.com/hugolgst/rich-go/client"
 )
 
 // PresenceManager handles Discord Rich Presence updates.
 // It manages the connection lifecycle and presence state.
 type PresenceManager struct {
 	presence  *PresenceData
+	conn      *ipc.Client
 	clientID  string
 	mu        sync.RWMutex
 	connected bool
@@ -54,19 +55,25 @@ func (pm *PresenceManager) Connect(clientID string) error {
 	// Disconnect existing connection if client ID changed
 	if pm.connected && pm.clientID != clientID {
 		log.Printf("Discord: Client ID changed, reconnecting...")
-		client.Logout()
+		if pm.conn != nil {
+			if err := pm.conn.Close(); err != nil {
+				log.Printf("Discord: error closing previous IPC connection: %v", err)
+			}
+			pm.conn = nil
+		}
 		pm.connected = false
 	}
 
 	log.Printf("Discord: Attempting to connect with Client ID %s", clientID)
 
-	// Attempt to login to Discord
-	err := client.Login(clientID)
-	if err != nil {
+	// Attempt to login to Discord over the internal IPC client.
+	c := ipc.New()
+	if err := c.Login(clientID); err != nil {
 		log.Printf("Discord: Connection failed: %v", err)
 		return mapDiscordError(err)
 	}
 
+	pm.conn = c
 	pm.clientID = clientID
 	pm.connected = true
 	log.Printf("Discord: Successfully connected")
@@ -88,8 +95,13 @@ func (pm *PresenceManager) Disconnect() error {
 	// Clear presence before logout
 	pm.presence = nil
 
-	// Logout from Discord
-	client.Logout()
+	// Close the IPC connection
+	if pm.conn != nil {
+		if err := pm.conn.Close(); err != nil {
+			log.Printf("Discord: error closing IPC connection: %v", err)
+		}
+		pm.conn = nil
+	}
 	pm.connected = false
 
 	log.Printf("Discord: Disconnected")
@@ -123,7 +135,7 @@ func (pm *PresenceManager) SetPresence(data *PresenceData) error {
 	// Build activity from presence data
 	activity := buildActivity(data)
 
-	err := client.SetActivity(activity)
+	err := pm.conn.SetActivity(activity)
 	if err != nil {
 		log.Printf("Discord: Failed to set presence: %v", err)
 		// Check if connection was lost
@@ -154,7 +166,7 @@ func (pm *PresenceManager) ClearPresence() error {
 	// Send an empty activity to clear the presence display.
 	// This avoids the logout/login cycle that would briefly disconnect us
 	// and risk leaving the manager in an inconsistent state.
-	if err := client.SetActivity(client.Activity{}); err != nil {
+	if err := pm.conn.SetActivity(ipc.Activity{}); err != nil {
 		// If the upstream rejects the empty activity, log but don't disconnect.
 		// The previous presence data will still be showing until the next update.
 		log.Printf("Discord: Failed to clear presence (non-fatal): %v", err)
@@ -173,11 +185,11 @@ func (pm *PresenceManager) GetCurrentPresence() *PresenceData {
 	return pm.presence
 }
 
-// buildActivity creates a rich-go Activity from PresenceData by dispatching
+// buildActivity creates an ipc.Activity from PresenceData by dispatching
 // to the appropriate PresenceBuilder for the data's MediaType. The actual
 // formatting logic lives in builder.go — this function is kept as a thin
 // alias to preserve the old call sites in presence.go.
-func buildActivity(data *PresenceData) client.Activity {
+func buildActivity(data *PresenceData) ipc.Activity {
 	return buildActivityForMediaType(data)
 }
 
@@ -226,7 +238,7 @@ func isValidClientID(clientID string) bool {
 	return true
 }
 
-// mapDiscordError converts rich-go errors to PlexCord error codes.
+// mapDiscordError converts IPC client errors to PlexCord error codes.
 func mapDiscordError(err error) error {
 	if err == nil {
 		return nil
@@ -250,9 +262,15 @@ func mapDiscordError(err error) error {
 }
 
 // isConnectionLostError checks if an error indicates the Discord connection was lost.
+// It prefers the typed *ipc.ClosedError from the internal IPC client and falls
+// back to string matching for transport-level errors (broken pipe, EOF, ...).
 func isConnectionLostError(err error) bool {
 	if err == nil {
 		return false
+	}
+	var closed *ipc.ClosedError
+	if stderrors.As(err, &closed) {
+		return true
 	}
 	errStr := err.Error()
 	return strings.Contains(errStr, "broken pipe") ||
@@ -264,7 +282,9 @@ func isConnectionLostError(err error) bool {
 // It handles the conversion from Plex session data format to Discord presence format.
 // artworkURL is used as the large image if provided; pass empty string to use the default Plex logo.
 // detailsFormat and stateFormat are custom format strings; pass empty strings to use defaults.
-func (pm *PresenceManager) UpdatePresenceFromPlayback(track, artist, album, state string, duration, position int64, artworkURL, player, detailsFormat, stateFormat string) error {
+// activityStyle ("media"/"game") and statusDisplay ("app"/"state"/"details") control the
+// Discord activity type and member-list line; empty strings fall back to defaults.
+func (pm *PresenceManager) UpdatePresenceFromPlayback(track, artist, album, state string, duration, position int64, artworkURL, player, detailsFormat, stateFormat, activityStyle, statusDisplay string) error {
 	startTime := time.Now().Add(-time.Duration(position) * time.Millisecond)
 
 	data := &PresenceData{
@@ -279,6 +299,15 @@ func (pm *PresenceManager) UpdatePresenceFromPlayback(track, artist, album, stat
 		Player:        player,
 		DetailsFormat: detailsFormat,
 		StateFormat:   stateFormat,
+		ActivityStyle: activityStyle,
+		StatusDisplay: statusDisplay,
+	}
+
+	// Compute the end timestamp for the progress bar when the duration is known.
+	// Streams / unknown durations fall back to an elapsed-only timer.
+	if duration > 0 {
+		endTime := startTime.Add(time.Duration(duration) * time.Millisecond)
+		data.EndTime = &endTime
 	}
 
 	return pm.SetPresence(data)

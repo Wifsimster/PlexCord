@@ -9,6 +9,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"plexcord/internal/artwork"
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
 	"plexcord/internal/events"
@@ -36,6 +37,14 @@ type App struct {
 
 	// Discord integration (production type, accessed via DiscordPresence interface)
 	discord DiscordPresence
+
+	// artwork resolves public album-art URLs so covers render on Discord
+	// without leaking the Plex token; accessed via the ArtworkResolver interface.
+	artwork ArtworkResolver
+
+	// artworkGen debounces async artwork re-issues: each session change bumps
+	// it, and a late resolve only re-issues presence if its generation is current.
+	artworkGen atomic.Uint64
 
 	// Plex client factory for constructing clients on demand (per-server).
 	// Using a factory instead of a singleton reflects that the server URL/token
@@ -114,6 +123,7 @@ func NewApp() *App {
 		autostart:    platform.NewAutoStartManager(),
 		plexRetry:    retry.NewManager("Plex"),
 		discordRetry: retry.NewManager("Discord"),
+		artwork:      artwork.NewResolver(artwork.WithUserAgent("PlexCord/" + version.Version)),
 	}
 }
 

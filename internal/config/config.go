@@ -41,6 +41,19 @@ type Config struct {
 	PresenceDetailsFormat string `json:"presenceDetailsFormat"` // Format for Details line, e.g. "{track}"
 	PresenceStateFormat   string `json:"presenceStateFormat"`   // Format for State line, e.g. "by {artist} • {album}"
 
+	// Presence display options
+	// ActivityStyle: "media" (Listening/Watching) or "game" (classic Playing).
+	// StatusDisplay: "app", "state", or "details" — which line shows in the member list.
+	PresenceActivityStyle string `json:"presenceActivityStyle"`
+	PresenceStatusDisplay string `json:"presenceStatusDisplay"`
+
+	// PresenceArtworkLookup enables resolving public album art (iTunes /
+	// MusicBrainz) so covers render on Discord. When disabled, PlexCord never
+	// sends external services the artist/album names and shows the Plex logo.
+	// A pointer distinguishes "unset" (legacy config → default on) from an
+	// explicit false; use ArtworkLookupEnabled() to read it.
+	PresenceArtworkLookup *bool `json:"presenceArtworkLookup,omitempty"`
+
 	// Multi-server support
 	Servers []ServerConfig `json:"servers,omitempty"`
 
@@ -56,6 +69,15 @@ func (c *Config) IsAutoUpdateCheckEnabled() bool {
 	return c.AutoUpdateCheck == nil || *c.AutoUpdateCheck
 }
 
+// boolPtr returns a pointer to b, for optional bool config fields.
+func boolPtr(b bool) *bool { return &b }
+
+// ArtworkLookupEnabled reports whether public artwork lookup is enabled,
+// defaulting to true when the field is unset (legacy configs).
+func (c *Config) ArtworkLookupEnabled() bool {
+	return c.PresenceArtworkLookup == nil || *c.PresenceArtworkLookup
+}
+
 // DefaultConfig returns a configuration with default values.
 // Default PollingInterval is 2 seconds to meet NFR4 requirement:
 // "Discord presence updates shall occur within 2 seconds of playback state change"
@@ -66,6 +88,11 @@ func DefaultConfig() *Config {
 		MinimizeToTray:  true,
 		AutoStart:       false,
 		DiscordClientID: "", // Empty means use default from discord package
+		// Media-style presence (Listening/Watching) with the state line in the
+		// member list is the new default; users can revert to classic Playing.
+		PresenceActivityStyle: "media",
+		PresenceStatusDisplay: "state",
+		PresenceArtworkLookup: boolPtr(true),
 	}
 }
 

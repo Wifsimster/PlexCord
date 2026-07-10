@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+
 	"plexcord/internal/discord"
 	"plexcord/internal/plex"
 )
@@ -40,8 +42,18 @@ type DiscordPresence interface {
 	UpdatePresenceFromPlayback(
 		track, artist, album, state string,
 		duration, position int64,
-		artworkURL, player, detailsFormat, stateFormat string,
+		artworkURL, player, detailsFormat, stateFormat, activityStyle, statusDisplay string,
 	) error
+}
+
+// ArtworkResolver resolves a publicly reachable album-art URL for a track so
+// covers render on Discord without leaking the Plex token. The production
+// implementation is *artwork.Resolver; tests can inject a fake.
+type ArtworkResolver interface {
+	// Cached returns a previously resolved URL without any network request.
+	Cached(artist, album string) (string, bool)
+	// Resolve returns a public HTTPS artwork URL, or "" if none is found.
+	Resolve(ctx context.Context, artist, album string) (string, error)
 }
 
 // TokenStore abstracts credential persistence. The production implementation

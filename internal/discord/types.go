@@ -27,12 +27,32 @@ const (
 	MediaTypePhoto = "photo"
 )
 
+// Activity style constants control the Discord activity type.
+//   - ActivityStyleMedia: music → "Listening to", movie/TV → "Watching".
+//   - ActivityStyleGame:  everything → classic "Playing" (pre-2024 behavior).
+const (
+	ActivityStyleMedia = "media"
+	ActivityStyleGame  = "game"
+)
+
+// Status-display constants control which line Discord surfaces in the member
+// list (status_display_type). Empty leaves it to Discord's default.
+const (
+	StatusDisplayApp     = "app"     // application name (e.g. "PlexCord")
+	StatusDisplayState   = "state"   // the state line (e.g. "by Def Leppard")
+	StatusDisplayDetails = "details" // the details line (e.g. the track name)
+)
+
 // PresenceData represents the information to display in Discord Rich Presence.
 // Different builders use different fields depending on MediaType; unused
 // fields for a given media type are simply ignored.
 type PresenceData struct {
-	// Timestamps for elapsed time display
+	// Timestamps for elapsed time / progress bar display.
+	// StartTime is when playback began (now − position); EndTime is
+	// StartTime + duration and is only set when the duration is known, so
+	// Discord can render a live progress bar.
 	StartTime *time.Time `json:"startTime,omitempty"`
+	EndTime   *time.Time `json:"endTime,omitempty"`
 
 	// MediaType selects which PresenceBuilder will format this data.
 	// Empty string defaults to MediaTypeMusic for backward compatibility.
@@ -61,6 +81,12 @@ type PresenceData struct {
 	// Custom format strings for presence display
 	DetailsFormat string `json:"detailsFormat,omitempty"`
 	StateFormat   string `json:"stateFormat,omitempty"`
+
+	// Presence display options. ActivityStyle selects "media" (Listening/
+	// Watching) vs "game" (classic Playing); StatusDisplay selects which line
+	// Discord shows in the member list. Empty values fall back to defaults.
+	ActivityStyle string `json:"activityStyle,omitempty"`
+	StatusDisplay string `json:"statusDisplay,omitempty"`
 }
 
 // ConnectionEvent represents a Discord connection state change event

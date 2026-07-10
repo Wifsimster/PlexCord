@@ -69,6 +69,8 @@ export function GetPollingInterval():Promise<number>;
 
 export function GetPresenceFormat():Promise<main.PresenceFormatSettings>;
 
+export function GetPresenceOptions():Promise<main.PresenceOptions>;
+
 export function GetResourceStats():Promise<main.ResourceStats>;
 
 export function GetServers():Promise<Array<config.ServerConfig>>;
@@ -128,6 +130,8 @@ export function SetMinimizeToTray(arg1:boolean):Promise<void>;
 export function SetPollingInterval(arg1:number):Promise<void>;
 
 export function SetPresenceFormat(arg1:string,arg2:string):Promise<void>;
+
+export function SetPresenceOptions(arg1:main.PresenceOptions):Promise<void>;
 
 export function SetServerActive(arg1:string,arg2:boolean):Promise<void>;
 

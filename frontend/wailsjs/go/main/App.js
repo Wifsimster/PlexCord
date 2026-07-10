@@ -122,6 +122,10 @@ export function GetPresenceFormat() {
   return window['go']['main']['App']['GetPresenceFormat']();
 }
 
+export function GetPresenceOptions() {
+  return window['go']['main']['App']['GetPresenceOptions']();
+}
+
 export function GetResourceStats() {
   return window['go']['main']['App']['GetResourceStats']();
 }
@@ -240,6 +244,10 @@ export function SetPollingInterval(arg1) {
 
 export function SetPresenceFormat(arg1, arg2) {
   return window['go']['main']['App']['SetPresenceFormat'](arg1, arg2);
+}
+
+export function SetPresenceOptions(arg1) {
+  return window['go']['main']['App']['SetPresenceOptions'](arg1);
 }
 
 export function SetServerActive(arg1, arg2) {

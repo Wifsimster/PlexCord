@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -144,7 +145,7 @@ func (a *App) UpdateDiscordPresence(track, artist, album, state string, duration
 		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
 	}
 
-	return a.discord.UpdatePresenceFromPlayback(track, artist, album, state, duration, position, "", "", a.config.PresenceDetailsFormat, a.config.PresenceStateFormat)
+	return a.discord.UpdatePresenceFromPlayback(track, artist, album, state, duration, position, "", "", a.config.PresenceDetailsFormat, a.config.PresenceStateFormat, a.config.PresenceActivityStyle, a.config.PresenceStatusDisplay)
 }
 
 // ClearDiscordPresence removes the Discord Rich Presence.
@@ -198,6 +199,15 @@ func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
 	a.discordMu.Lock()
 	defer a.discordMu.Unlock()
 
+	// Each session update supersedes any in-flight async artwork resolve.
+	gen := a.artworkGen.Add(1)
+
+	// Never send Discord the tokened Plex ThumbURL (credential leak): resolve a
+	// public URL instead. Use a cached cover synchronously so a known album
+	// shows instantly; otherwise fall back to the Plex logo asset and resolve
+	// the real cover in the background below.
+	artURL := a.cachedSessionArtwork(session)
+
 	// If not connected, try to reconnect (auto-recovery for Discord restart)
 	if !a.discord.IsConnected() {
 		a.tryDiscordReconnect()
@@ -208,21 +218,74 @@ func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
 		log.Printf("Discord: Reconnected - restoring presence")
 	}
 
-	// Update presence with session data, including artwork URL and format strings
-	err := a.discord.UpdatePresenceFromPlayback(
+	if err := a.sendPresenceLocked(session, artURL); err != nil {
+		log.Printf("Warning: Failed to update Discord presence: %v", err)
+	}
+
+	// If we have no cover yet, resolve one off the presence path and re-issue
+	// when it lands (dropped if the session has since changed).
+	if artURL == "" && a.artwork != nil && a.config.ArtworkLookupEnabled() {
+		go a.resolveArtworkAsync(session, gen)
+	}
+}
+
+// cachedSessionArtwork returns a public artwork URL for the session if one is
+// already cached (no network), or "" to use the Plex logo fallback. It never
+// returns the tokened Plex ThumbURL.
+func (a *App) cachedSessionArtwork(session *plex.MusicSession) string {
+	if a.artwork == nil || !a.config.ArtworkLookupEnabled() {
+		return ""
+	}
+	if url, ok := a.artwork.Cached(session.Artist, session.Album); ok {
+		return url
+	}
+	return ""
+}
+
+// sendPresenceLocked issues a presence update for the session with the given
+// public artwork URL. The caller must hold discordMu.
+func (a *App) sendPresenceLocked(session *plex.MusicSession, artURL string) error {
+	return a.discord.UpdatePresenceFromPlayback(
 		session.Track,
 		session.Artist,
 		session.Album,
 		session.State,
 		session.Duration,
 		session.ViewOffset,
-		session.ThumbURL,
+		artURL,
 		session.PlayerName,
 		a.config.PresenceDetailsFormat,
 		a.config.PresenceStateFormat,
+		a.config.PresenceActivityStyle,
+		a.config.PresenceStatusDisplay,
 	)
-	if err != nil {
-		log.Printf("Warning: Failed to update Discord presence: %v", err)
+}
+
+// resolveArtworkAsync resolves a public cover off the presence path and, if the
+// session is still current (generation unchanged) and not paused, re-issues the
+// presence with the cover. Runs in its own goroutine.
+func (a *App) resolveArtworkAsync(session *plex.MusicSession, gen uint64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+
+	url, err := a.artwork.Resolve(ctx, session.Artist, session.Album)
+	if err != nil || url == "" {
+		return
+	}
+	// Drop stale resolves (a newer session update superseded this one) and skip
+	// while manually paused, so we don't resurrect a hidden presence.
+	if a.artworkGen.Load() != gen || a.IsPresencePaused() {
+		return
+	}
+
+	a.discordMu.Lock()
+	defer a.discordMu.Unlock()
+	// Re-check under the lock to avoid racing a concurrent session update.
+	if a.artworkGen.Load() != gen || !a.discord.IsConnected() {
+		return
+	}
+	if err := a.sendPresenceLocked(session, url); err != nil {
+		log.Printf("Warning: Failed to update Discord presence with artwork: %v", err)
 	}
 }
 
@@ -419,5 +482,63 @@ func (a *App) SetPresenceFormat(details, state string) error {
 		return err
 	}
 	log.Printf("Presence format updated: details=%q, state=%q", details, state)
+	return nil
+}
+
+// ============================================================================
+// Presence Display Options (activity style, member-list line, artwork lookup)
+// ============================================================================
+
+// PresenceOptions represents the presence display configuration for the frontend.
+type PresenceOptions struct {
+	ActivityStyle string `json:"activityStyle"` // "media" | "game"
+	StatusDisplay string `json:"statusDisplay"` // "app" | "state" | "details"
+	ArtworkLookup bool   `json:"artworkLookup"`
+}
+
+// GetPresenceOptions returns the current presence display options, normalizing
+// unset values to their defaults so the frontend always has a concrete choice.
+func (a *App) GetPresenceOptions() PresenceOptions {
+	style := a.config.PresenceActivityStyle
+	if style == "" {
+		style = discord.ActivityStyleMedia
+	}
+	display := a.config.PresenceStatusDisplay
+	if display == "" {
+		display = discord.StatusDisplayState
+	}
+	return PresenceOptions{
+		ActivityStyle: style,
+		StatusDisplay: display,
+		ArtworkLookup: a.config.ArtworkLookupEnabled(),
+	}
+}
+
+// SetPresenceOptions updates the presence display options. Invalid values are
+// rejected so a bad frontend value cannot corrupt the presence output. The new
+// options take effect on the next presence update — no reconnect required.
+func (a *App) SetPresenceOptions(opts PresenceOptions) error {
+	switch opts.ActivityStyle {
+	case discord.ActivityStyleMedia, discord.ActivityStyleGame:
+	default:
+		return errors.New(errors.CONFIG_WRITE_FAILED, "invalid activity style: "+opts.ActivityStyle)
+	}
+	switch opts.StatusDisplay {
+	case discord.StatusDisplayApp, discord.StatusDisplayState, discord.StatusDisplayDetails:
+	default:
+		return errors.New(errors.CONFIG_WRITE_FAILED, "invalid status display: "+opts.StatusDisplay)
+	}
+
+	a.config.PresenceActivityStyle = opts.ActivityStyle
+	a.config.PresenceStatusDisplay = opts.StatusDisplay
+	lookup := opts.ArtworkLookup
+	a.config.PresenceArtworkLookup = &lookup
+
+	if err := a.saveConfig(); err != nil {
+		log.Printf("ERROR: Failed to save presence options: %v", err)
+		return err
+	}
+	log.Printf("Presence options updated: style=%s, display=%s, artwork=%v",
+		opts.ActivityStyle, opts.StatusDisplay, opts.ArtworkLookup)
 	return nil
 }
