@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	stderrors "errors"
 	"log"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"plexcord/internal/errors"
 	"plexcord/internal/events"
 	"plexcord/internal/history"
+	"plexcord/internal/updater"
 	"plexcord/internal/version"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -123,19 +125,13 @@ func (a *App) CanSelfUpdate() bool {
 	return version.CanSelfUpdate()
 }
 
-// UpdateProgress describes the state of an in-progress download for the
-// frontend progress bar.
-type UpdateProgress struct {
-	Downloaded int64   `json:"downloaded"`
-	Total      int64   `json:"total"`
-	Percent    float64 `json:"percent"`
-}
-
 // DownloadAndInstallUpdate downloads the latest release for the current
 // platform, verifies its checksum, and replaces the running executable.
-// Download progress is streamed to the frontend via the UpdateDownloadProgress
-// event; on completion an UpdateReady event carries the new version and on
-// failure an UpdateError event carries a message.
+// It shares the updater's single download path with the automatic background
+// checker, so concurrent downloads are impossible. Download progress is
+// streamed to the frontend via the UpdateDownloadProgress event; on
+// completion an UpdateReady event carries the new version and on failure an
+// UpdateError event carries a message.
 //
 // The application must be restarted for the update to take effect — the
 // frontend is responsible for prompting the user to do so.
@@ -144,30 +140,24 @@ func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 		a.bus.Emit(events.UpdateError, version.ErrUpdateNotSupported.Error())
 		return nil, errors.Wrap(version.ErrUpdateNotSupported, errors.UNKNOWN_ERROR, "update not supported")
 	}
+	if a.updater == nil {
+		return nil, errors.New(errors.UNKNOWN_ERROR, "updater is not ready yet")
+	}
 
 	log.Printf("Starting in-app update download...")
 
-	progress := func(downloaded, total int64) {
-		var percent float64
-		if total > 0 {
-			percent = float64(downloaded) / float64(total) * 100
-		}
-		a.bus.Emit(events.UpdateDownloadProgress, UpdateProgress{
-			Downloaded: downloaded,
-			Total:      total,
-			Percent:    percent,
-		})
-	}
-
-	info, err := version.DownloadAndApplyUpdate(a.ctx, progress)
+	info, err := a.updater.StartDownload(a.ctx, false)
 	if err != nil {
+		// A background (or concurrent) download already owns the lock. That is
+		// not a failure — the in-flight download's progress/ready events drive
+		// the UI — so report the current state instead of an error toast.
+		if stderrors.Is(err, updater.ErrDownloadInProgress) {
+			log.Printf("Update download already in progress; joining it")
+			return a.updater.GetStatus().Info, nil
+		}
 		log.Printf("ERROR: Update failed: %v", err)
-		a.bus.Emit(events.UpdateError, err.Error())
 		return nil, errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to install update")
 	}
-
-	log.Printf("Update installed: %s (restart required)", info.LatestVersion)
-	a.bus.Emit(events.UpdateReady, info)
 	return info, nil
 }
 
@@ -175,14 +165,15 @@ func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 // takes effect. It spawns the (now-updated) executable and quits the current
 // process.
 func (a *App) RestartApplication() error {
-	exe, err := os.Executable()
-	if err != nil {
-		return errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to locate executable")
-	}
-	// On Linux AppImage builds, relaunch the real .AppImage rather than the
-	// temporary mount path.
-	if ap := os.Getenv("APPIMAGE"); ap != "" {
-		exe = ap
+	// Use the launch path captured at startup, NOT a fresh os.Executable().
+	// The self-update renames the running binary to ".<name>.old" and moves the
+	// new binary into the original path; resolving the path after that rename
+	// would relaunch the OLD binary (this is exactly what os.Executable() returns
+	// on Windows post-rename). The captured path always points at the original
+	// location, which now holds the updated binary. See version.CaptureLaunchPath.
+	exe := version.LaunchPath()
+	if exe == "" {
+		return errors.New(errors.UNKNOWN_ERROR, "failed to locate executable")
 	}
 
 	// Use context.Background (not a.ctx): a.ctx is cancelled by the

@@ -1,16 +1,16 @@
 export namespace config {
-
+	
 	export class ServerConfig {
 	    name: string;
 	    url: string;
 	    userId: string;
 	    userName: string;
 	    active: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServerConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -43,6 +43,68 @@ export namespace errors {
 	        this.description = source["description"];
 	        this.suggestion = source["suggestion"];
 	        this.retryable = source["retryable"];
+	    }
+	}
+
+}
+
+export namespace history {
+	
+	export class Entry {
+	    track: string;
+	    artist: string;
+	    album: string;
+	    duration: number;
+	    // Go type: time
+	    startedAt: any;
+	    thumbUrl?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.track = source["track"];
+	        this.artist = source["artist"];
+	        this.album = source["album"];
+	        this.duration = source["duration"];
+	        this.startedAt = this.convertValues(source["startedAt"], null);
+	        this.thumbUrl = source["thumbUrl"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Stats {
+	    totalTracks: number;
+	    uniqueArtists: number;
+	    mostPlayedArtist: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Stats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalTracks = source["totalTracks"];
+	        this.uniqueArtists = source["uniqueArtists"];
+	        this.mostPlayedArtist = source["mostPlayedArtist"];
 	    }
 	}
 
@@ -104,6 +166,20 @@ export namespace main {
 	        this.connected = source["connected"];
 	        this.polling = source["polling"];
 	        this.inErrorState = source["inErrorState"];
+	    }
+	}
+	export class PresenceFormatSettings {
+	    detailsFormat: string;
+	    stateFormat: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PresenceFormatSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.detailsFormat = source["detailsFormat"];
+	        this.stateFormat = source["stateFormat"];
 	    }
 	}
 	export class ResourceStats {
@@ -251,6 +327,47 @@ export namespace retry {
 	        this.attemptNumber = source["attemptNumber"];
 	        this.isRetrying = source["isRetrying"];
 	        this.maxIntervalReached = source["maxIntervalReached"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace updater {
+	
+	export class Status {
+	    state: string;
+	    info?: version.UpdateInfo;
+	    progress: number;
+	    auto: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.info = this.convertValues(source["info"], version.UpdateInfo);
+	        this.progress = source["progress"];
+	        this.auto = source["auto"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

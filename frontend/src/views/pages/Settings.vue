@@ -1,8 +1,10 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
+import { storeToRefs } from 'pinia';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import ToggleSwitch from 'primevue/toggleswitch';
@@ -11,10 +13,12 @@ import DiscordSpecimen from '@/components/DiscordSpecimen.vue';
 import SavedIndicator from '@/components/settings/SavedIndicator.vue';
 import { useSetupStore } from '@/stores/setup';
 import { usePresenceStore } from '@/stores/presence';
+import { useUpdatesStore } from '@/stores/updates';
 import { usePlayback } from '@/composables/usePlayback';
 import { useVersion } from '@/composables/useVersion';
 import { validatePlexServerUrl, PLEX_URL_PLACEHOLDER } from '@/utils/plexUrl';
-import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime';
+import { parseReleaseNotes } from '@/utils/changelogFormat';
+import { setLocale, SUPPORTED_LOCALES } from '@/i18n';
 import {
     GetPollingInterval,
     SetPollingInterval,
@@ -22,6 +26,8 @@ import {
     SetAutoStart,
     GetMinimizeToTray,
     SetMinimizeToTray,
+    GetAutoUpdateCheck,
+    SetAutoUpdateCheck,
     GetDiscordClientID,
     GetDefaultDiscordClientID,
     SaveDiscordClientID,
@@ -29,10 +35,6 @@ import {
     ConnectDiscord,
     DisconnectDiscord,
     TestDiscordPresence,
-    CheckForUpdate,
-    CanSelfUpdate,
-    DownloadAndInstallUpdate,
-    RestartApplication,
     OpenReleasesPage,
     OpenReleaseURL,
     ResetApplication,
@@ -52,10 +54,12 @@ import {
 } from '../../../wailsjs/go/main/App';
 
 const router = useRouter();
+const { t, locale } = useI18n();
 const toast = useToast();
 const confirm = useConfirm();
 const setupStore = useSetupStore();
 const presenceStore = usePresenceStore();
+const updatesStore = useUpdatesStore();
 const { currentTrack, hasActiveSession } = usePlayback();
 const { version, commit, buildDate } = useVersion();
 
@@ -78,6 +82,7 @@ const loaded = ref(false);
 const pollingInterval = ref(2);
 const autoStart = ref(false);
 const minimizeToTray = ref(true);
+const autoUpdateCheck = ref(true);
 const hideWhenPaused = ref(false);
 const hideWhenPausedDelay = ref(0);
 const detailsFormat = ref('');
@@ -119,12 +124,21 @@ function toastFailure(summary, error, fallback) {
 
 // ---------------- Rail: scroll-spy + keyboard listbox ----------------
 const sections = [
-    { id: 'section-connection', label: 'Connection' },
-    { id: 'section-presence', label: 'Presence' },
-    { id: 'section-app', label: 'App' },
-    { id: 'section-advanced', label: 'Advanced' },
-    { id: 'section-about', label: 'About' }
+    { id: 'section-connection', labelKey: 'settings.sectionConnection' },
+    { id: 'section-presence', labelKey: 'settings.sectionPresence' },
+    { id: 'section-app', labelKey: 'settings.sectionApp' },
+    { id: 'section-advanced', labelKey: 'settings.sectionAdvanced' },
+    { id: 'section-about', labelKey: 'settings.sectionAbout' }
 ];
+
+// ---------------- Language (spec: display language override) ----------------
+// The active locale is resolved from the environment at startup; this picker
+// lets the user pin a specific language, persisted via setLocale().
+const languageOptions = SUPPORTED_LOCALES.map((code) => ({ code, label: t(`settings.languageNames.${code}`) }));
+const selectedLanguage = computed(() => locale.value);
+function changeLanguage(code) {
+    setLocale(code);
+}
 const activeSectionId = ref(sections[0].id);
 const railFocusIndex = ref(0);
 const activeIndex = computed(() =>
@@ -185,6 +199,7 @@ onMounted(async () => {
         pollingInterval.value = await GetPollingInterval();
         autoStart.value = await GetAutoStart();
         minimizeToTray.value = await GetMinimizeToTray();
+        autoUpdateCheck.value = await GetAutoUpdateCheck();
         discordClientId.value = await GetDiscordClientID();
         defaultClientId.value = await GetDefaultDiscordClientID();
 
@@ -213,14 +228,12 @@ onMounted(async () => {
         } catch {
             hasPlexToken.value = false;
         }
-        try {
-            canSelfUpdate.value = !!(await CanSelfUpdate());
-        } catch {
-            canSelfUpdate.value = false;
-        }
+        // Idempotent: AppLayout initializes it too, but a direct navigation
+        // to /settings should not depend on that ordering.
+        await updatesStore.initialize();
         refreshAllServerHealth();
     } catch (error) {
-        toastFailure('Failed to load settings', error, 'Could not read settings from the backend.');
+        toastFailure(t('settings.toast.loadFailed'), error, t('settings.toast.loadFailedDetail'));
     } finally {
         loaded.value = true;
     }
@@ -241,27 +254,9 @@ onMounted(async () => {
         const el = document.getElementById(s.id);
         if (el) sectionObserver.observe(el);
     });
-
-    // In-app update lifecycle: progress, completion, and failure all arrive
-    // as runtime events emitted by the Go updater.
-    EventsOn('UpdateDownloadProgress', (p) => {
-        updateProgress.value = Math.round(p?.percent ?? 0);
-    });
-    EventsOn('UpdateReady', () => {
-        updateProgress.value = 100;
-        installingUpdate.value = false;
-        updateReady.value = true;
-    });
-    EventsOn('UpdateError', (message) => {
-        installingUpdate.value = false;
-        toastFailure('Update failed', message, 'The update could not be installed.');
-    });
 });
 
 onBeforeUnmount(() => {
-    EventsOff('UpdateDownloadProgress');
-    EventsOff('UpdateReady');
-    EventsOff('UpdateError');
     sectionObserver?.disconnect();
     Object.values(savedTimers).forEach(clearTimeout);
     clearTimeout(pollingTimer);
@@ -291,7 +286,7 @@ async function savePollingInterval() {
         lastSaved.polling = value;
         flashSaved('polling');
     } catch (error) {
-        toastFailure('Failed to save polling interval', error, 'The polling interval could not be saved.');
+        toastFailure(t('settings.toast.pollingFailed'), error, t('settings.toast.pollingFailedDetail'));
     }
 }
 
@@ -300,7 +295,7 @@ async function loadServers() {
     try {
         servers.value = await GetServers();
     } catch (error) {
-        toastFailure('Failed to load servers', error, 'Could not read the server list.');
+        toastFailure(t('settings.toast.loadServersFailed'), error, t('settings.toast.loadServersFailedDetail'));
     }
 }
 
@@ -324,7 +319,7 @@ async function testServer(server) {
         await ValidatePlexConnection(server.url);
         serverHealth[server.url] = { status: 'ok', message: '' };
     } catch (error) {
-        serverHealth[server.url] = { status: 'fail', message: friendlyError(error, 'Server unreachable.') };
+        serverHealth[server.url] = { status: 'fail', message: friendlyError(error, t('settings.toast.serverUnreachable')) };
     }
 }
 
@@ -349,17 +344,17 @@ async function toggleServerActive(server) {
         await SetServerActive(server.url, !server.active);
         await loadServers();
     } catch (error) {
-        toastFailure('Failed to update server', error, 'The server state could not be changed.');
+        toastFailure(t('settings.toast.updateServerFailed'), error, t('settings.toast.updateServerFailedDetail'));
     }
 }
 
 function confirmRemoveServer(server) {
     const isOnlyActive = server.active && servers.value.filter((s) => s.active).length === 1;
     confirm.require({
-        header: 'Remove server?',
-        message: isOnlyActive ? `Remove ${server.name}? This is your only active server — PlexCord will stop publishing presence.` : `Remove ${server.name}? PlexCord will stop publishing presence from this server.`,
-        acceptProps: { label: 'Remove', severity: 'danger' },
-        rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
+        header: t('settings.confirm.removeHeader'),
+        message: isOnlyActive ? t('settings.confirm.removeOnlyActive', { name: server.name }) : t('settings.confirm.removeMessage', { name: server.name }),
+        acceptProps: { label: t('settings.confirm.remove'), severity: 'danger' },
+        rejectProps: { label: t('common.cancel'), severity: 'secondary', text: true },
         accept: () => removeServer(server)
     });
 }
@@ -370,7 +365,7 @@ async function removeServer(server) {
         delete serverHealth[server.url];
         await loadServers();
     } catch (error) {
-        toastFailure('Failed to remove server', error, 'The server could not be removed.');
+        toastFailure(t('settings.toast.removeServerFailed'), error, t('settings.toast.removeServerFailedDetail'));
     }
 }
 
@@ -414,7 +409,7 @@ async function discoverServers() {
     } catch {
         discoveredServers.value = [];
         hasDiscovered.value = false;
-        discoveryError.value = 'Discovery failed. Make sure your Plex server is on the same network, or enter the URL manually.';
+        discoveryError.value = t('settings.discoveryFailed');
     } finally {
         isDiscovering.value = false;
     }
@@ -428,7 +423,7 @@ function isServerAlreadyAdded(server) {
 
 function selectDiscoveredServer(server) {
     if (isServerAlreadyAdded(server)) return;
-    newServerName.value = server.name || 'Plex Server';
+    newServerName.value = server.name || t('settings.defaultServerName');
     newServerURL.value = discoveredServerURL(server);
 }
 
@@ -444,7 +439,7 @@ async function addServer() {
         const added = servers.value.find((s) => s.url === url);
         if (added) testServer(added);
     } catch (error) {
-        addServerError.value = friendlyError(error, 'The server could not be added.');
+        addServerError.value = friendlyError(error, t('settings.toast.addServerFailedDetail'));
     } finally {
         addingServer.value = false;
     }
@@ -475,7 +470,7 @@ async function savePresenceFormat() {
         lastSaved.state = stateFormat.value;
         flashSaved('format');
     } catch (error) {
-        toastFailure('Failed to save presence format', error, 'The presence format could not be saved.');
+        toastFailure(t('settings.toast.formatFailed'), error, t('settings.toast.formatFailedDetail'));
     }
 }
 
@@ -524,7 +519,7 @@ async function updateHideWhenPaused(value) {
         flashSaved('hidePaused');
     } catch (error) {
         hideWhenPaused.value = !value; // revert
-        toastFailure('Failed to save hide-when-paused', error, 'The setting could not be saved.');
+        toastFailure(t('settings.toast.hidePausedFailed'), error, t('settings.toast.hidePausedFailedDetail'));
     } finally {
         hideWhenPausedSaving.value = false;
     }
@@ -549,7 +544,7 @@ async function saveHideWhenPausedDelay() {
         lastSaved.hideDelay = delay;
         flashSaved('hideDelay');
     } catch (error) {
-        toastFailure('Failed to save delay', error, 'The delay could not be saved.');
+        toastFailure(t('settings.toast.delayFailed'), error, t('settings.toast.delayFailedDetail'));
     }
 }
 
@@ -605,7 +600,7 @@ async function updateAutoStart(value) {
         flashSaved('autoStart');
     } catch (error) {
         autoStart.value = !value;
-        toastFailure('Failed to save start on login', error, 'The setting could not be saved.');
+        toastFailure(t('settings.toast.autoStartFailed'), error, t('settings.toast.settingFailedDetail'));
     } finally {
         autoStartSaving.value = false;
     }
@@ -619,9 +614,25 @@ async function updateMinimizeToTray(value) {
         flashSaved('minimizeToTray');
     } catch (error) {
         minimizeToTray.value = !value;
-        toastFailure('Failed to save minimize to tray', error, 'The setting could not be saved.');
+        toastFailure(t('settings.toast.trayFailed'), error, t('settings.toast.settingFailedDetail'));
     } finally {
         minimizeToTraySaving.value = false;
+    }
+}
+
+const autoUpdateCheckSaving = ref(false);
+
+async function updateAutoUpdateCheck(value) {
+    autoUpdateCheckSaving.value = true;
+    autoUpdateCheck.value = value;
+    try {
+        await SetAutoUpdateCheck(value);
+        flashSaved('autoUpdateCheck');
+    } catch (error) {
+        autoUpdateCheck.value = !value;
+        toastFailure(t('settings.toast.autoUpdateFailed'), error, t('settings.toast.autoUpdateFailedDetail'));
+    } finally {
+        autoUpdateCheckSaving.value = false;
     }
 }
 
@@ -658,10 +669,10 @@ async function applyClientId() {
             await ConnectDiscord(id);
             flashSaved('clientId');
         } catch (error) {
-            clientIdWarning.value = friendlyError(error, 'Saved, but Discord did not reconnect — is Discord running?');
+            clientIdWarning.value = friendlyError(error, t('settings.warnReconnect'));
         }
     } catch (error) {
-        clientIdError.value = friendlyError(error, 'Invalid Discord Client ID.');
+        clientIdError.value = friendlyError(error, t('settings.toast.invalidClientId'));
     } finally {
         applyingClientId.value = false;
     }
@@ -684,12 +695,12 @@ async function sendTestPresence() {
     testPresenceResult.value = null;
     try {
         await TestDiscordPresence();
-        testPresenceResult.value = { ok: true, message: 'Sent — check your Discord profile' };
+        testPresenceResult.value = { ok: true, message: t('settings.testSent') };
         testResultTimer = setTimeout(() => {
             testPresenceResult.value = null;
         }, 4000);
     } catch (error) {
-        testPresenceResult.value = { ok: false, message: friendlyError(error, 'Discord is not connected.') };
+        testPresenceResult.value = { ok: false, message: friendlyError(error, t('settings.testNotConnected')) };
         testResultTimer = setTimeout(() => {
             testPresenceResult.value = null;
         }, 8000);
@@ -699,23 +710,27 @@ async function sendTestPresence() {
 }
 
 // ---------------- About: updates + changelog ----------------
+// Update state lives in the updates store: the backend checks and downloads
+// automatically in the background, so the state must survive page navigation
+// (an update downloaded while on the Dashboard still shows "Restart now"
+// here). The store also owns the update runtime event subscriptions.
+const { info: updateInfo, progress: updateProgress, canSelfUpdate } = storeToRefs(updatesStore);
+const updateReady = computed(() => updatesStore.updateReady);
+const installingUpdate = computed(() => updatesStore.installing);
+const showUpdatePanel = computed(() => updatesStore.showUpdatePanel);
 const checkingUpdate = ref(false);
-const updateInfo = ref(null);
-const truncatedReleaseNotes = computed(() => {
-    const notes = updateInfo.value?.releaseNotes ?? '';
-    return notes.length > 120 ? `${notes.slice(0, 120)}…` : notes;
-});
+const releaseNoteSections = computed(() => parseReleaseNotes(updateInfo.value?.releaseNotes ?? ''));
 
 async function checkForUpdates() {
     if (checkingUpdate.value) return;
     checkingUpdate.value = true;
     try {
-        updateInfo.value = await CheckForUpdate();
-        if (!updateInfo.value?.available) {
+        const info = await updatesStore.checkNow();
+        if (!info?.available) {
             flashSaved('upToDate');
         }
     } catch (error) {
-        toastFailure('Update check failed', error, 'Could not reach the release server.');
+        toastFailure(t('settings.toast.updateCheckFailed'), error, t('settings.toast.updateCheckFailedDetail'));
     } finally {
         checkingUpdate.value = false;
     }
@@ -729,33 +744,23 @@ function openUpdatePage() {
     }
 }
 
-// In-app self-update (platforms where the binary can replace itself)
-const canSelfUpdate = ref(false);
-const installingUpdate = ref(false);
-const updateProgress = ref(0);
-const updateReady = ref(false);
-
-// Progress, completion, and failure are surfaced through the
-// UpdateDownloadProgress / UpdateReady / UpdateError events subscribed in
-// onMounted, so the promise here only resets local state on rejection.
+// Progress and completion are surfaced through the store (fed by the
+// UpdateDownloadProgress / UpdateReady events); the rejection carries the
+// failure message.
 async function installUpdate() {
     if (installingUpdate.value) return;
-    installingUpdate.value = true;
-    updateProgress.value = 0;
-    updateReady.value = false;
     try {
-        await DownloadAndInstallUpdate();
-    } catch {
-        // The UpdateError event handler surfaces the message.
-        installingUpdate.value = false;
+        await updatesStore.install();
+    } catch (error) {
+        toastFailure(t('settings.toast.updateFailed'), error, t('settings.toast.updateFailedDetail'));
     }
 }
 
 async function restartApp() {
     try {
-        await RestartApplication();
+        await updatesStore.restart();
     } catch (error) {
-        toastFailure('Failed to restart', error, 'PlexCord could not restart itself — please restart it manually.');
+        toastFailure(t('settings.toast.restartFailed'), error, t('settings.toast.restartFailedDetail'));
     }
 }
 
@@ -768,10 +773,10 @@ const resetting = ref(false);
 
 function confirmReset() {
     confirm.require({
-        header: 'Reset application?',
-        message: 'This removes your Plex token and server configuration, your Discord settings, and all preferences. This cannot be undone.',
-        acceptProps: { label: 'Reset application', severity: 'danger' },
-        rejectProps: { label: 'Cancel', severity: 'secondary', text: true },
+        header: t('settings.confirm.resetHeader'),
+        message: t('settings.confirm.resetMessage'),
+        acceptProps: { label: t('settings.confirm.resetAccept'), severity: 'danger' },
+        rejectProps: { label: t('common.cancel'), severity: 'secondary', text: true },
         accept: executeReset
     });
 }
@@ -781,10 +786,10 @@ async function executeReset() {
     try {
         await ResetApplication();
         setupStore.resetWizard();
-        toast.add({ severity: 'success', summary: 'Reset complete', detail: 'PlexCord has been reset — returning to setup.', life: 3000 });
+        toast.add({ severity: 'success', summary: t('settings.toast.resetComplete'), detail: t('settings.toast.resetCompleteDetail'), life: 3000 });
         router.push('/setup/welcome');
     } catch (error) {
-        toastFailure('Failed to reset application', error, 'The application could not be reset.');
+        toastFailure(t('settings.toast.resetFailed'), error, t('settings.toast.resetFailedDetail'));
     } finally {
         resetting.value = false;
     }
@@ -793,12 +798,12 @@ async function executeReset() {
 
 <template>
     <div class="settings-page">
-        <h1 class="settings-title">Settings</h1>
+        <h1 class="settings-title">{{ $t('settings.title') }}</h1>
 
         <div class="settings-layout">
             <!-- Rail: scroll-spy + keyboard listbox (§5.3) -->
-            <nav class="settings-rail" aria-label="Settings sections">
-                <p class="pc-eyebrow rail-eyebrow" id="settings-rail-label">Settings</p>
+            <nav class="settings-rail" :aria-label="$t('settings.railAria')">
+                <p class="pc-eyebrow rail-eyebrow" id="settings-rail-label">{{ $t('settings.railEyebrow') }}</p>
                 <div class="rail-items" role="listbox" tabindex="0" aria-labelledby="settings-rail-label" :aria-activedescendant="`rail-opt-${sections[railFocusIndex].id}`" @keydown="onRailKeydown" @focus="onRailFocus">
                     <span class="rail-bar" aria-hidden="true" :style="{ transform: `translateY(${activeIndex * 32 + 6}px)` }"></span>
                     <button
@@ -813,7 +818,7 @@ async function executeReset() {
                         :class="{ 'rail-item--active': activeSectionId === section.id, 'rail-item--focused': railFocusIndex === index }"
                         @click="scrollToSection(section.id)"
                     >
-                        {{ section.label }}
+                        {{ $t(section.labelKey) }}
                     </button>
                 </div>
             </nav>
@@ -822,8 +827,8 @@ async function executeReset() {
                 <!-- ============ Connection ============ -->
                 <section id="section-connection" class="pc-panel settings-section" aria-labelledby="hd-connection">
                     <div class="section-head">
-                        <h2 id="hd-connection" class="pc-eyebrow section-eyebrow">Connection</h2>
-                        <button v-if="loaded" type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="openAddServerDialog"><i class="pi pi-plus" aria-hidden="true"></i>Add server</button>
+                        <h2 id="hd-connection" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionConnection') }}</h2>
+                        <button v-if="loaded" type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="openAddServerDialog"><i class="pi pi-plus" aria-hidden="true"></i>{{ $t('settings.addServer') }}</button>
                     </div>
 
                     <div v-if="!loaded" class="skeleton-rows" aria-hidden="true">
@@ -834,7 +839,7 @@ async function executeReset() {
 
                     <template v-else>
                         <div class="server-list">
-                            <p v-if="servers.length === 0" class="row-caption empty-caption">No servers configured — add one to start relaying presence.</p>
+                            <p v-if="servers.length === 0" class="row-caption empty-caption">{{ $t('settings.noServers') }}</p>
                             <div v-for="server in servers" :key="server.url" class="server-row">
                                 <span class="pc-dot" :class="serverDotClass(server)" aria-hidden="true"></span>
                                 <div class="server-main">
@@ -842,23 +847,23 @@ async function executeReset() {
                                         <span class="server-name">{{ server.name }}</span>
                                         <span class="pc-chip-mono server-url">{{ server.url }}</span>
                                     </div>
-                                    <p v-if="server.userName" class="row-caption">Monitoring {{ server.userName }}</p>
-                                    <p v-if="serverHealth[server.url]?.status === 'auth'" class="row-caption row-caption--warn">Needs sign-in — <button type="button" class="pc-link" @click="goToPlexAuth">Authenticate</button></p>
+                                    <p v-if="server.userName" class="row-caption">{{ $t('settings.monitoringUser', { user: server.userName }) }}</p>
+                                    <p v-if="serverHealth[server.url]?.status === 'auth'" class="row-caption row-caption--warn">{{ $t('settings.needsSignIn') }} <button type="button" class="pc-link" @click="goToPlexAuth">{{ $t('settings.authenticate') }}</button></p>
                                     <p v-else-if="serverHealth[server.url]?.status === 'fail'" class="row-caption row-caption--danger" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ serverHealth[server.url].message }}</p>
                                 </div>
                                 <div class="server-actions">
                                     <i v-if="serverHealth[server.url]?.status === 'testing'" class="pi pi-spinner pi-spin inline-spinner" aria-hidden="true"></i>
-                                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" :disabled="serverHealth[server.url]?.status === 'testing'" @click="testServer(server)">Test</button>
-                                    <ToggleSwitch :modelValue="server.active" :aria-label="`${server.name} active`" @update:modelValue="toggleServerActive(server)" />
-                                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--icon icon-danger" :aria-label="`Remove ${server.name}`" @click="confirmRemoveServer(server)"><i class="pi pi-trash" aria-hidden="true"></i></button>
+                                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" :disabled="serverHealth[server.url]?.status === 'testing'" @click="testServer(server)">{{ $t('settings.test') }}</button>
+                                    <ToggleSwitch :modelValue="server.active" :aria-label="$t('settings.serverActiveAria', { name: server.name })" @update:modelValue="toggleServerActive(server)" />
+                                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--icon icon-danger" :aria-label="$t('settings.removeServerAria', { name: server.name })" @click="confirmRemoveServer(server)"><i class="pi pi-trash" aria-hidden="true"></i></button>
                                 </div>
                             </div>
                         </div>
 
                         <div class="setting-row polling-row">
                             <div class="row-text">
-                                <label class="row-label" for="polling-interval">Polling interval</label>
-                                <p class="row-caption">How often PlexCord checks Plex for playback changes · Applies on next poll cycle</p>
+                                <label class="row-label" for="polling-interval">{{ $t('settings.pollingInterval') }}</label>
+                                <p class="row-caption">{{ $t('settings.pollingCaption') }}</p>
                             </div>
                             <div class="row-control">
                                 <SavedIndicator :visible="!!savedFlags.polling" />
@@ -871,7 +876,7 @@ async function executeReset() {
                 <!-- ============ Presence ============ -->
                 <section id="section-presence" class="pc-panel settings-section" aria-labelledby="hd-presence">
                     <div class="section-head">
-                        <h2 id="hd-presence" class="pc-eyebrow section-eyebrow">Presence</h2>
+                        <h2 id="hd-presence" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionPresence') }}</h2>
                         <SavedIndicator :visible="!!savedFlags.format" />
                     </div>
 
@@ -884,7 +889,7 @@ async function executeReset() {
                     <template v-else>
                         <div class="format-fields">
                             <div class="format-field">
-                                <label class="row-label" for="format-details">Details — line 1</label>
+                                <label class="row-label" for="format-details">{{ $t('settings.detailsLine') }}</label>
                                 <InputText
                                     id="format-details"
                                     ref="detailsInputRef"
@@ -898,7 +903,7 @@ async function executeReset() {
                                 />
                             </div>
                             <div class="format-field">
-                                <label class="row-label" for="format-state">State — line 2</label>
+                                <label class="row-label" for="format-state">{{ $t('settings.stateLine') }}</label>
                                 <InputText
                                     id="format-state"
                                     ref="stateInputRef"
@@ -913,11 +918,11 @@ async function executeReset() {
                             </div>
                         </div>
 
-                        <div class="token-row" role="group" aria-label="Insert format token">
+                        <div class="token-row" role="group" :aria-label="$t('settings.insertTokenAria')">
                             <button v-for="token in FORMAT_TOKENS" :key="token" type="button" class="pc-chip-mono token-chip" @mousedown.prevent @click="insertToken(token)">{{ token }}</button>
-                            <button type="button" class="pc-link token-reset" @click="resetFormats">Reset to defaults</button>
+                            <button type="button" class="pc-link token-reset" @click="resetFormats">{{ $t('settings.resetToDefaults') }}</button>
                         </div>
-                        <p class="row-caption">Tokens fill in from the playing track. Click one to insert it at the cursor; empty fields use the default format.</p>
+                        <p class="row-caption">{{ $t('settings.tokenCaption') }}</p>
 
                         <div class="format-specimen">
                             <DiscordSpecimen :track="specimenTrack" :formats="specimenFormats" :sample="specimenIsSample" :paused="specimenPaused" />
@@ -925,8 +930,8 @@ async function executeReset() {
 
                         <div class="setting-row divided-row">
                             <div class="row-text">
-                                <span class="row-label" id="lbl-activity-style">Show as Listening / Watching</span>
-                                <p class="row-caption">Music shows “Listening to”, video “Watching”. Off uses the classic “Playing”.</p>
+                                <span class="row-label" id="lbl-activity-style">{{ $t('settings.activityStyle') }}</span>
+                                <p class="row-caption">{{ $t('settings.activityStyleCaption') }}</p>
                             </div>
                             <div class="row-control">
                                 <SavedIndicator :visible="!!savedFlags.presenceOptions" />
@@ -935,21 +940,21 @@ async function executeReset() {
                         </div>
                         <div v-if="activityStyle === 'media'" class="setting-row sub-row">
                             <div class="row-text">
-                                <label class="row-label" for="status-display">Member-list line</label>
-                                <p class="row-caption">Which line Discord shows next to your name</p>
+                                <label class="row-label" for="status-display">{{ $t('settings.memberListLine') }}</label>
+                                <p class="row-caption">{{ $t('settings.memberListLineCaption') }}</p>
                             </div>
                             <div class="row-control">
                                 <select id="status-display" class="pc-select" :value="statusDisplay" :disabled="presenceOptionsSaving" @change="(e) => updateStatusDisplay(e.target.value)">
-                                    <option value="app">App name (PlexCord)</option>
-                                    <option value="state">Artist / state line</option>
-                                    <option value="details">Track title</option>
+                                    <option value="app">{{ $t('settings.memberListApp') }}</option>
+                                    <option value="state">{{ $t('settings.memberListState') }}</option>
+                                    <option value="details">{{ $t('settings.memberListDetails') }}</option>
                                 </select>
                             </div>
                         </div>
                         <div class="setting-row divided-row">
                             <div class="row-text">
-                                <span class="row-label" id="lbl-artwork-lookup">Fetch album art</span>
-                                <p class="row-caption">Look up public cover art so it shows on Discord. Sends artist &amp; album names to iTunes / MusicBrainz.</p>
+                                <span class="row-label" id="lbl-artwork-lookup">{{ $t('settings.artworkLookup') }}</span>
+                                <p class="row-caption">{{ $t('settings.artworkLookupCaption') }}</p>
                             </div>
                             <div class="row-control">
                                 <ToggleSwitch :modelValue="artworkLookup" :disabled="presenceOptionsSaving" aria-labelledby="lbl-artwork-lookup" @update:modelValue="updateArtworkLookup" />
@@ -958,8 +963,8 @@ async function executeReset() {
 
                         <div class="setting-row divided-row">
                             <div class="row-text">
-                                <span class="row-label" id="lbl-hide-paused">Hide when paused</span>
-                                <p class="row-caption">Clear Discord presence while playback is paused</p>
+                                <span class="row-label" id="lbl-hide-paused">{{ $t('settings.hideWhenPaused') }}</span>
+                                <p class="row-caption">{{ $t('settings.hideWhenPausedCaption') }}</p>
                             </div>
                             <div class="row-control">
                                 <SavedIndicator :visible="!!savedFlags.hidePaused" />
@@ -968,8 +973,8 @@ async function executeReset() {
                         </div>
                         <div v-if="hideWhenPaused" class="setting-row sub-row">
                             <div class="row-text">
-                                <label class="row-label" for="hide-delay">Delay before clearing</label>
-                                <p class="row-caption">0 = immediate</p>
+                                <label class="row-label" for="hide-delay">{{ $t('settings.delayBeforeClearing') }}</label>
+                                <p class="row-caption">{{ $t('settings.delayImmediate') }}</p>
                             </div>
                             <div class="row-control">
                                 <SavedIndicator :visible="!!savedFlags.hideDelay" />
@@ -982,7 +987,7 @@ async function executeReset() {
                 <!-- ============ App ============ -->
                 <section id="section-app" class="pc-panel settings-section" aria-labelledby="hd-app">
                     <div class="section-head">
-                        <h2 id="hd-app" class="pc-eyebrow section-eyebrow">App</h2>
+                        <h2 id="hd-app" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionApp') }}</h2>
                     </div>
 
                     <div v-if="!loaded" class="skeleton-rows" aria-hidden="true">
@@ -993,8 +998,8 @@ async function executeReset() {
                     <template v-else>
                         <div class="setting-row">
                             <div class="row-text">
-                                <span class="row-label" id="lbl-autostart">Start on login</span>
-                                <p class="row-caption">Launch PlexCord automatically when you log in</p>
+                                <span class="row-label" id="lbl-autostart">{{ $t('settings.startOnLogin') }}</span>
+                                <p class="row-caption">{{ $t('settings.startOnLoginCaption') }}</p>
                             </div>
                             <div class="row-control">
                                 <SavedIndicator :visible="!!savedFlags.autoStart" />
@@ -1003,12 +1008,33 @@ async function executeReset() {
                         </div>
                         <div class="setting-row">
                             <div class="row-text">
-                                <span class="row-label" id="lbl-tray">Minimize to tray</span>
-                                <p class="row-caption">Keep running in the system tray when the window is closed</p>
+                                <span class="row-label" id="lbl-tray">{{ $t('settings.minimizeToTray') }}</span>
+                                <p class="row-caption">{{ $t('settings.minimizeToTrayCaption') }}</p>
                             </div>
                             <div class="row-control">
                                 <SavedIndicator :visible="!!savedFlags.minimizeToTray" />
                                 <ToggleSwitch :modelValue="minimizeToTray" :disabled="minimizeToTraySaving" aria-labelledby="lbl-tray" @update:modelValue="updateMinimizeToTray" />
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="row-text">
+                                <span class="row-label" id="lbl-auto-update">{{ $t('settings.autoUpdateCheck') }}</span>
+                                <p class="row-caption">{{ canSelfUpdate ? $t('settings.autoUpdateCheckCaption') : $t('settings.autoUpdateCheckCaptionNotify') }}</p>
+                            </div>
+                            <div class="row-control">
+                                <SavedIndicator :visible="!!savedFlags.autoUpdateCheck" />
+                                <ToggleSwitch :modelValue="autoUpdateCheck" :disabled="autoUpdateCheckSaving" aria-labelledby="lbl-auto-update" @update:modelValue="updateAutoUpdateCheck" />
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="row-text">
+                                <label class="row-label" for="language-select">{{ $t('settings.language') }}</label>
+                                <p class="row-caption">{{ $t('settings.languageCaption') }}</p>
+                            </div>
+                            <div class="row-control">
+                                <select id="language-select" class="language-select" :value="selectedLanguage" @change="changeLanguage($event.target.value)">
+                                    <option v-for="option in languageOptions" :key="option.code" :value="option.code">{{ option.label }}</option>
+                                </select>
                             </div>
                         </div>
                     </template>
@@ -1017,7 +1043,7 @@ async function executeReset() {
                 <!-- ============ Advanced ============ -->
                 <section id="section-advanced" class="pc-panel settings-section" aria-labelledby="hd-advanced">
                     <div class="section-head">
-                        <h2 id="hd-advanced" class="pc-eyebrow section-eyebrow">Advanced</h2>
+                        <h2 id="hd-advanced" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionAdvanced') }}</h2>
                     </div>
 
                     <div v-if="!loaded" class="skeleton-rows" aria-hidden="true">
@@ -1028,12 +1054,12 @@ async function executeReset() {
                     <template v-else>
                         <div class="client-id-block">
                             <div class="client-id-head">
-                                <label class="row-label" for="discord-client-id">Discord Client ID</label>
-                                <span v-if="!isUsingDefaultClientId" class="pc-badge pc-badge--accent">Custom ID</span>
+                                <label class="row-label" for="discord-client-id">{{ $t('settings.discordClientId') }}</label>
+                                <span v-if="!isUsingDefaultClientId" class="pc-badge pc-badge--accent">{{ $t('settings.customIdBadge') }}</span>
                             </div>
                             <p class="row-caption">
-                                {{ isUsingDefaultClientId ? 'Using the default PlexCord application' : 'Using a custom Discord application' }}
-                                <template v-if="!isUsingDefaultClientId"> · <button type="button" class="pc-link" @click="resetClientIdToDefault">Reset to default</button> </template>
+                                {{ isUsingDefaultClientId ? $t('settings.usingDefault') : $t('settings.usingCustom') }}
+                                <template v-if="!isUsingDefaultClientId"> · <button type="button" class="pc-link" @click="resetClientIdToDefault">{{ $t('settings.resetToDefault') }}</button> </template>
                             </p>
                             <div class="client-id-controls">
                                 <InputText
@@ -1048,20 +1074,20 @@ async function executeReset() {
                                     @keyup.enter="applyClientId"
                                 />
                                 <button type="button" class="pc-btn pc-btn--primary" :class="{ 'is-loading': applyingClientId }" :disabled="applyingClientId" @click="applyClientId">
-                                    <span class="btn-label">Apply</span>
+                                    <span class="btn-label">{{ $t('settings.apply') }}</span>
                                     <i v-if="applyingClientId" class="pi pi-spinner pi-spin btn-spinner" aria-hidden="true"></i>
                                 </button>
-                                <SavedIndicator :visible="!!savedFlags.clientId" label="Applied" />
+                                <SavedIndicator :visible="!!savedFlags.clientId" :label="$t('common.applied')" />
                             </div>
-                            <p id="client-id-help" class="row-caption">Applying reconnects Discord.</p>
+                            <p id="client-id-help" class="row-caption">{{ $t('settings.applyReconnects') }}</p>
                             <p v-if="clientIdError" class="row-caption row-caption--danger" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ clientIdError }}</p>
                             <p v-else-if="clientIdWarning" class="row-caption row-caption--warn" role="alert"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ clientIdWarning }}</p>
                         </div>
 
                         <div class="setting-row divided-row">
                             <div class="row-text">
-                                <span class="row-label">Send test presence</span>
-                                <p class="row-caption">Pushes a sample activity to your Discord profile</p>
+                                <span class="row-label">{{ $t('settings.sendTestPresence') }}</span>
+                                <p class="row-caption">{{ $t('settings.sendTestCaption') }}</p>
                             </div>
                             <div class="row-control">
                                 <Transition name="pc-fade">
@@ -1071,7 +1097,7 @@ async function executeReset() {
                                     </span>
                                 </Transition>
                                 <button type="button" class="pc-btn pc-btn--secondary" :class="{ 'is-loading': sendingTestPresence }" :disabled="sendingTestPresence" @click="sendTestPresence">
-                                    <span class="btn-label">Send test presence</span>
+                                    <span class="btn-label">{{ $t('settings.sendTestPresence') }}</span>
                                     <i v-if="sendingTestPresence" class="pi pi-spinner pi-spin btn-spinner" aria-hidden="true"></i>
                                 </button>
                             </div>
@@ -1082,66 +1108,74 @@ async function executeReset() {
                 <!-- ============ About + Danger zone ============ -->
                 <section id="section-about" class="pc-panel settings-section" aria-labelledby="hd-about">
                     <div class="section-head">
-                        <h2 id="hd-about" class="pc-eyebrow section-eyebrow">About</h2>
+                        <h2 id="hd-about" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionAbout') }}</h2>
                     </div>
 
                     <div class="setting-row">
                         <div class="row-text">
-                            <span class="row-label">Version</span>
+                            <span class="row-label">{{ $t('settings.version') }}</span>
                             <p class="row-caption version-chips">
-                                <span class="pc-chip-mono" :title="buildDate ? `Built ${buildDate}` : undefined">v{{ version || '—' }}</span>
+                                <span class="pc-chip-mono" :title="buildDate ? $t('footer.buildDate', { date: buildDate }) : undefined">v{{ version || '—' }}</span>
                                 <span v-if="commit" class="pc-chip-mono">{{ commit }}</span>
                             </p>
                         </div>
                         <div class="row-control">
-                            <SavedIndicator :visible="!!savedFlags.upToDate" label="Up to date" />
+                            <SavedIndicator :visible="!!savedFlags.upToDate" :label="$t('settings.upToDate')" />
                             <button type="button" class="pc-btn pc-btn--secondary" :class="{ 'is-loading': checkingUpdate }" :disabled="checkingUpdate" @click="checkForUpdates">
-                                <span class="btn-label">Check for updates</span>
+                                <span class="btn-label">{{ $t('settings.checkForUpdates') }}</span>
                                 <i v-if="checkingUpdate" class="pi pi-spinner pi-spin btn-spinner" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
 
-                    <div v-if="updateInfo?.available" class="pc-panel--raised update-row">
+                    <!-- Also shown for an already-downloaded update (whose info.available is false) -->
+                    <div v-if="showUpdatePanel" class="pc-panel--raised update-row">
                         <div class="update-row-main">
                             <div class="row-text">
-                                <span class="row-label">Update available — {{ updateInfo.latestVersion }}</span>
-                                <p v-if="truncatedReleaseNotes" class="row-caption">{{ truncatedReleaseNotes }}</p>
-                                <p v-if="updateReady" class="row-caption row-caption--success">Update installed. Restart PlexCord to finish updating to {{ updateInfo.latestVersion }}.</p>
+                                <span class="row-label">{{ $t('settings.updateAvailable', { version: updateInfo?.latestVersion }) }}</span>
+                                <div v-if="releaseNoteSections.length" class="release-notes">
+                                    <div v-for="(section, si) in releaseNoteSections" :key="si" class="release-notes-section">
+                                        <span v-if="section.title" class="release-notes-title">{{ section.title }}</span>
+                                        <ul class="release-notes-list">
+                                            <li v-for="(item, ii) in section.items" :key="ii" class="row-caption">{{ item }}</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <p v-if="updateReady" class="row-caption row-caption--success">{{ $t('settings.updateInstalled', { version: updateInfo?.latestVersion }) }}</p>
                             </div>
                             <!-- Self-updating platforms install in place; the rest fall back to the release page -->
-                            <button v-if="updateReady" type="button" class="pc-btn pc-btn--success" @click="restartApp"><i class="pi pi-refresh" aria-hidden="true"></i>Restart now</button>
+                            <button v-if="updateReady" type="button" class="pc-btn pc-btn--success" @click="restartApp"><i class="pi pi-refresh" aria-hidden="true"></i>{{ $t('settings.restartNow') }}</button>
                             <button v-else-if="canSelfUpdate" type="button" class="pc-btn pc-btn--primary" :class="{ 'is-loading': installingUpdate }" :disabled="installingUpdate" @click="installUpdate">
-                                <span class="btn-label"><i class="pi pi-download" aria-hidden="true"></i>Download &amp; install</span>
+                                <span class="btn-label"><i class="pi pi-download" aria-hidden="true"></i>{{ $t('settings.downloadInstall') }}</span>
                                 <i v-if="installingUpdate" class="pi pi-spinner pi-spin btn-spinner" aria-hidden="true"></i>
                             </button>
-                            <button v-else type="button" class="pc-btn pc-btn--primary" @click="openUpdatePage"><i class="pi pi-download" aria-hidden="true"></i>Download</button>
+                            <button v-else type="button" class="pc-btn pc-btn--primary" @click="openUpdatePage"><i class="pi pi-download" aria-hidden="true"></i>{{ $t('settings.download') }}</button>
                         </div>
                         <div v-if="installingUpdate" class="update-progress">
-                            <div class="update-progress-track" role="progressbar" aria-label="Update download progress" :aria-valuenow="updateProgress" aria-valuemin="0" aria-valuemax="100">
+                            <div class="update-progress-track" role="progressbar" :aria-label="$t('settings.updateProgressAria')" :aria-valuenow="updateProgress" aria-valuemin="0" aria-valuemax="100">
                                 <div class="update-progress-fill" :style="{ width: `${updateProgress}%` }"></div>
                             </div>
-                            <p class="row-caption">Downloading update… {{ updateProgress }}%</p>
+                            <p class="row-caption">{{ $t('settings.downloading', { percent: updateProgress }) }}</p>
                         </div>
                     </div>
 
                     <div class="setting-row">
                         <div class="row-text">
-                            <span class="row-label">Changelog</span>
-                            <p class="row-caption">Release notes and version history</p>
+                            <span class="row-label">{{ $t('settings.changelog') }}</span>
+                            <p class="row-caption">{{ $t('settings.changelogCaption') }}</p>
                         </div>
-                        <button type="button" class="pc-btn pc-btn--ghost" @click="openReleases">View changelog<i class="pi pi-external-link" aria-hidden="true"></i></button>
+                        <button type="button" class="pc-btn pc-btn--ghost" @click="openReleases">{{ $t('settings.viewChangelog') }}<i class="pi pi-external-link" aria-hidden="true"></i></button>
                     </div>
 
                     <div class="danger-zone">
-                        <h3 class="pc-eyebrow danger-eyebrow">Danger zone</h3>
+                        <h3 class="pc-eyebrow danger-eyebrow">{{ $t('settings.dangerZone') }}</h3>
                         <div class="setting-row">
                             <div class="row-text">
-                                <span class="row-label">Reset application</span>
-                                <p class="row-caption">Clears all settings and returns to the setup wizard</p>
+                                <span class="row-label">{{ $t('settings.resetApplication') }}</span>
+                                <p class="row-caption">{{ $t('settings.resetCaption') }}</p>
                             </div>
                             <button type="button" class="pc-btn pc-btn--ghost-danger" :class="{ 'is-loading': resetting }" :disabled="resetting" @click="confirmReset">
-                                <span class="btn-label">Reset application…</span>
+                                <span class="btn-label">{{ $t('settings.resetApplicationEllipsis') }}</span>
                                 <i v-if="resetting" class="pi pi-spinner pi-spin btn-spinner" aria-hidden="true"></i>
                             </button>
                         </div>
@@ -1151,14 +1185,14 @@ async function executeReset() {
         </div>
 
         <!-- Add server dialog -->
-        <Dialog v-model:visible="showAddServerDialog" modal header="Add server" :style="{ width: '420px' }">
+        <Dialog v-model:visible="showAddServerDialog" modal :header="$t('settings.dialogAddServer')" :style="{ width: '420px' }">
             <div class="dialog-body">
                 <!-- Auto-discovery (GDM) -->
                 <div class="dialog-discovery">
                     <button v-if="!isDiscovering" type="button" class="pc-btn pc-btn--secondary discovery-btn" @click="discoverServers">
-                        <i class="pi pi-search" aria-hidden="true"></i>{{ hasDiscovered ? 'Search again' : 'Discover servers on network' }}
+                        <i class="pi pi-search" aria-hidden="true"></i>{{ hasDiscovered ? $t('common.searchAgain') : $t('settings.discoverServers') }}
                     </button>
-                    <p v-else class="row-caption discovery-searching" role="status"><i class="pi pi-spinner pi-spin inline-spinner" aria-hidden="true"></i> Searching for Plex servers on your network…</p>
+                    <p v-else class="row-caption discovery-searching" role="status"><i class="pi pi-spinner pi-spin inline-spinner" aria-hidden="true"></i> {{ $t('settings.searching') }}</p>
 
                     <p v-if="discoveryError" class="row-caption row-caption--danger" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ discoveryError }}</p>
 
@@ -1172,27 +1206,27 @@ async function executeReset() {
                                 :aria-pressed="newServerURL === discoveredServerURL(server)"
                                 @click="selectDiscoveredServer(server)"
                             >
-                                <span class="server-name discovered-name">{{ server.name || 'Plex Server' }}</span>
+                                <span class="server-name discovered-name">{{ server.name || $t('settings.defaultServerName') }}</span>
                                 <span class="pc-chip-mono discovered-url">{{ server.address }}:{{ server.port }}</span>
-                                <span v-if="isServerAlreadyAdded(server)" class="pc-badge">Added</span>
-                                <span v-else class="pc-badge">{{ server.isLocal ? 'Local' : 'Remote' }}</span>
+                                <span v-if="isServerAlreadyAdded(server)" class="pc-badge">{{ $t('settings.added') }}</span>
+                                <span v-else class="pc-badge">{{ server.isLocal ? $t('settings.local') : $t('settings.remote') }}</span>
                             </button>
                         </li>
                     </ul>
 
-                    <p v-if="hasDiscovered && !discoveryError && discoveredServers.length === 0" class="row-caption">No servers found — enter the server details manually below.</p>
+                    <p v-if="hasDiscovered && !discoveryError && discoveredServers.length === 0" class="row-caption">{{ $t('settings.noServersFound') }}</p>
                 </div>
 
                 <div class="dialog-divider" aria-hidden="true">
-                    <span class="pc-eyebrow">or enter manually</span>
+                    <span class="pc-eyebrow">{{ $t('settings.orEnterManually') }}</span>
                 </div>
 
                 <div class="dialog-field">
-                    <label class="row-label" for="new-server-name">Server name</label>
-                    <InputText id="new-server-name" v-model="newServerName" placeholder="My Plex Server" class="dialog-input" autocomplete="off" @keyup.enter="addServer" />
+                    <label class="row-label" for="new-server-name">{{ $t('settings.serverName') }}</label>
+                    <InputText id="new-server-name" v-model="newServerName" :placeholder="$t('settings.serverNamePlaceholder')" class="dialog-input" autocomplete="off" @keyup.enter="addServer" />
                 </div>
                 <div class="dialog-field">
-                    <label class="row-label" for="new-server-url">Server URL</label>
+                    <label class="row-label" for="new-server-url">{{ $t('settings.serverUrl') }}</label>
                     <InputText
                         id="new-server-url"
                         v-model="newServerURL"
@@ -1207,16 +1241,16 @@ async function executeReset() {
                     <p v-if="newServerUrlTouched && !newServerUrlValidation.valid" id="new-server-url-help" class="row-caption row-caption--danger" role="alert">
                         <i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ newServerUrlValidation.error }}
                     </p>
-                    <p v-else-if="newServerUrlValidation.valid" id="new-server-url-help" class="row-caption row-caption--success"><i class="pi pi-check-circle" aria-hidden="true"></i> Valid URL format</p>
-                    <p v-else id="new-server-url-help" class="row-caption">The default Plex port is 32400 · use https for remote servers</p>
+                    <p v-else-if="newServerUrlValidation.valid" id="new-server-url-help" class="row-caption row-caption--success"><i class="pi pi-check-circle" aria-hidden="true"></i> {{ $t('settings.validUrlFormat') }}</p>
+                    <p v-else id="new-server-url-help" class="row-caption">{{ $t('settings.urlHelp') }}</p>
                 </div>
                 <p v-if="addServerError" class="row-caption row-caption--danger" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ addServerError }}</p>
             </div>
             <template #footer>
-                <p v-if="!canAddServer" class="row-caption dialog-gate-caption">Enter a name and a valid URL to add</p>
-                <button type="button" class="pc-btn pc-btn--ghost" @click="showAddServerDialog = false">Cancel</button>
+                <p v-if="!canAddServer" class="row-caption dialog-gate-caption">{{ $t('settings.gateCaption') }}</p>
+                <button type="button" class="pc-btn pc-btn--ghost" @click="showAddServerDialog = false">{{ $t('common.cancel') }}</button>
                 <button type="button" class="pc-btn pc-btn--primary" :class="{ 'is-loading': addingServer }" :disabled="!canAddServer || addingServer" @click="addServer">
-                    <span class="btn-label">Add server</span>
+                    <span class="btn-label">{{ $t('settings.addServer') }}</span>
                     <i v-if="addingServer" class="pi pi-spinner pi-spin btn-spinner" aria-hidden="true"></i>
                 </button>
             </template>
@@ -1570,12 +1604,32 @@ async function executeReset() {
 }
 .update-row-main {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
 }
 .update-row-main .pc-btn {
     flex: none;
+}
+.release-notes {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.release-notes-title {
+    display: block;
+    font-size: var(--pc-text-caption);
+    font-weight: 600;
+    color: var(--pc-text);
+}
+.release-notes-list {
+    margin: 2px 0 0;
+    padding-left: 18px;
+    list-style: disc;
+}
+.release-notes-list .row-caption {
+    margin: 0;
 }
 .update-progress {
     margin-top: 10px;
@@ -1718,6 +1772,25 @@ async function executeReset() {
 /* ---------------- Controls sizing ---------------- */
 .num-input :deep(.p-inputnumber-input) {
     width: 96px;
+}
+
+/* Language picker: native select styled to match the form-field recipe. */
+.language-select {
+    min-width: 140px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: var(--pc-radius-sm);
+    border: 1px solid var(--p-inputtext-border-color, var(--pc-border));
+    background: var(--p-inputtext-background, var(--pc-raised));
+    color: var(--pc-text);
+    font-family: var(--pc-font-ui);
+    font-size: var(--pc-text-body);
+    cursor: pointer;
+}
+.language-select:focus-visible {
+    outline: none;
+    box-shadow: var(--pc-ring-focus);
+    border-color: var(--pc-accent);
 }
 
 /* ---------------- Responsive ---------------- */

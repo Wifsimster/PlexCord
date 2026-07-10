@@ -27,44 +27,44 @@ onMounted(async () => {
     <div>
         <div class="complete-hero">
             <DrawnCheck :size="40" circle />
-            <h1 class="setup-title complete-title">Setup complete.</h1>
-            <p class="setup-lede complete-lede">PlexCord is ready to relay your Plex music activity to Discord.</p>
+            <h1 class="setup-title complete-title">{{ $t('complete.title') }}</h1>
+            <p class="setup-lede complete-lede">{{ $t('complete.lede') }}</p>
         </div>
 
         <div class="setup-panels">
             <!-- Finish failure (F32): surfaced here, never swallowed -->
             <section v-if="setupStore.finishError" class="pc-panel complete-error" role="alert">
-                <p class="complete-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> Couldn't finish setup</p>
+                <p class="complete-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> {{ $t('complete.errTitle') }}</p>
                 <p class="complete-error-text">{{ setupStore.finishError }}</p>
-                <p class="complete-error-suggestion">Fix the issue, then press Finish setup again.</p>
+                <p class="complete-error-suggestion">{{ $t('complete.errSuggestion') }}</p>
             </section>
 
             <!-- Discord skipped (F29) -->
             <section v-if="setupStore.discordSkipped && !setupStore.discordConnected" class="pc-panel complete-warn">
-                <p class="complete-warn-text"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> Discord not connected — presence won't publish until you connect it in Settings.</p>
+                <p class="complete-warn-text"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ $t('complete.discordSkipped') }}</p>
             </section>
 
             <!-- Live specimen: exactly what Discord will show -->
             <section class="pc-panel">
-                <span class="pc-eyebrow complete-eyebrow">Your Discord presence</span>
-                <DiscordSpecimen :track="currentTrack" :formats="formats" :paused="isPaused" idle-title="Play something on Plex to see it live" />
+                <span class="pc-eyebrow complete-eyebrow">{{ $t('complete.yourPresence') }}</span>
+                <DiscordSpecimen :track="currentTrack" :formats="formats" :paused="isPaused" :idle-title="$t('complete.idleTitle')" />
             </section>
 
             <!-- What happens next -->
             <section class="pc-panel">
-                <span class="pc-eyebrow complete-eyebrow">What happens next</span>
+                <span class="pc-eyebrow complete-eyebrow">{{ $t('complete.whatNext') }}</span>
                 <ul class="next-list">
                     <li class="next-row">
                         <i class="pi pi-check next-glyph" aria-hidden="true"></i>
-                        <span>Your Discord status updates automatically when you play music on Plex</span>
+                        <span>{{ $t('complete.next1') }}</span>
                     </li>
                     <li class="next-row">
                         <i class="pi pi-check next-glyph" aria-hidden="true"></i>
-                        <span>PlexCord runs in the background and minimizes to the system tray</span>
+                        <span>{{ $t('complete.next2') }}</span>
                     </li>
                     <li class="next-row">
                         <i class="pi pi-check next-glyph" aria-hidden="true"></i>
-                        <span>You can change settings anytime from the dashboard</span>
+                        <span>{{ $t('complete.next3') }}</span>
                     </li>
                 </ul>
             </section>

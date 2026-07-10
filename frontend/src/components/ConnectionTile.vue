@@ -9,6 +9,7 @@ const collapsedByKey = reactive({});
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import TruncatedText from '@/components/TruncatedText.vue';
 import { usePlexConnectionStore } from '@/stores/plexConnection';
 import { useDiscordConnectionStore } from '@/stores/discordConnection';
@@ -32,6 +33,8 @@ const props = defineProps({
     }
 });
 
+const { t } = useI18n();
+
 const plexStore = usePlexConnectionStore();
 const discordStore = useDiscordConnectionStore();
 const playbackStore = usePlaybackStore();
@@ -45,11 +48,11 @@ const name = isPlex ? 'Plex' : 'Discord';
 const healthy = computed(() => (isPlex ? store.connected && store.polling : store.connected));
 
 const statusLabel = computed(() => {
-    if (store.isRetrying) return 'Retrying';
-    if (store.hasError) return 'Error';
-    if (healthy.value) return 'Connected';
-    if (store.loading) return 'Connecting';
-    return 'Idle';
+    if (store.isRetrying) return t('connectionTile.statusRetrying');
+    if (store.hasError) return t('connectionTile.statusError');
+    if (healthy.value) return t('connectionTile.statusConnected');
+    if (store.loading) return t('connectionTile.statusConnecting');
+    return t('connectionTile.statusIdle');
 });
 
 const statusSeverity = computed(() => {
@@ -76,9 +79,9 @@ const plexHost = computed(() => {
 });
 
 const discordPresence = computed(() => {
-    if (!discordStore.connected) return 'Inactive';
-    if (presenceStore.paused) return 'Hidden (paused)';
-    return playbackStore.hasActiveSession ? 'Active' : 'Inactive';
+    if (!discordStore.connected) return t('presenceState.inactive');
+    if (presenceStore.paused) return t('presenceState.hiddenPaused');
+    return playbackStore.hasActiveSession ? t('presenceState.active') : t('presenceState.inactive');
 });
 
 // 1s ticker: keeps the relative sync label fresh and drives the M18 countdown.
@@ -103,8 +106,8 @@ const errorInfo = computed(() => {
     if (!store.hasError) return null;
     return (
         store.error || {
-            code: store.retryState?.lastErrorCode || 'UNKNOWN',
-            title: 'Connection error',
+            code: store.retryState?.lastErrorCode || t('connectionTile.unknown'),
+            title: t('connectionTile.connectionError'),
             suggestion: store.retryState?.lastError || ''
         }
     );
@@ -194,7 +197,7 @@ const retryNow = () => store.retry();
                     <span :key="statusLabel" class="pc-status-label">{{ statusLabel }}</span>
                 </Transition>
             </span>
-            <button v-if="errorInfo" type="button" class="tile-expand" :aria-expanded="detailOpen" :aria-label="detailOpen ? 'Collapse error details' : 'Expand error details'" @click="toggleDetail">
+            <button v-if="errorInfo" type="button" class="tile-expand" :aria-expanded="detailOpen" :aria-label="detailOpen ? $t('connectionTile.collapseDetails') : $t('connectionTile.expandDetails')" @click="toggleDetail">
                 <i class="pi" :class="detailOpen ? 'pi-chevron-up' : 'pi-chevron-down'" aria-hidden="true"></i>
             </button>
         </header>
@@ -202,22 +205,22 @@ const retryNow = () => store.retry();
         <div class="tile-rows">
             <template v-if="isPlex">
                 <div class="tile-row">
-                    <span class="tile-row-label">account</span>
-                    <TruncatedText as="span" class="tile-row-value" :text="plexStore.userName || '—'" />
+                    <span class="tile-row-label">{{ $t('connectionTile.labelAccount') }}</span>
+                    <TruncatedText as="span" class="tile-row-value" :text="plexStore.userName || $t('common.none')" />
                 </div>
                 <div class="tile-row">
-                    <span class="tile-row-label">server</span>
+                    <span class="tile-row-label">{{ $t('connectionTile.labelServer') }}</span>
                     <TruncatedText as="span" class="pc-chip-mono tile-row-chip" :text="plexHost" />
                 </div>
             </template>
             <template v-else>
                 <div class="tile-row">
-                    <span class="tile-row-label">presence</span>
+                    <span class="tile-row-label">{{ $t('connectionTile.labelPresence') }}</span>
                     <span class="tile-row-value">{{ discordPresence }}</span>
                 </div>
             </template>
             <div class="tile-row">
-                <span class="tile-row-label">sync</span>
+                <span class="tile-row-label">{{ $t('connectionTile.labelSync') }}</span>
                 <span class="tile-row-value">{{ syncLabel }}</span>
             </div>
         </div>
@@ -229,20 +232,20 @@ const retryNow = () => store.retry();
                     <!-- Announce the failure once; the ticking countdown stays
                          outside the live region so it isn't read every second. -->
                     <div role="alert">
-                        <p class="tile-error-title">{{ displayError.title || 'Connection error' }}</p>
+                        <p class="tile-error-title">{{ displayError.title || $t('connectionTile.connectionError') }}</p>
                         <p v-if="displayError.suggestion" class="tile-error-suggestion">{{ displayError.suggestion }}</p>
-                        <span class="pc-chip-mono">{{ displayError.code || 'UNKNOWN' }}</span>
+                        <span class="pc-chip-mono">{{ displayError.code || $t('connectionTile.unknown') }}</span>
                     </div>
                     <div class="tile-error-actions">
                         <span v-if="showCountdown" class="tile-countdown">
-                            Retry #{{ attemptNumber }} in
+                            {{ $t('connectionTile.retryCountdown', { attempt: attemptNumber }) }}
                             <span class="tile-countdown-digits pc-num">
                                 <Transition name="tile-tick" mode="out-in">
                                     <span :key="countdownSeconds">{{ countdownSeconds }}</span>
                                 </Transition> </span
                             ><span class="pc-num">s</span>
                         </span>
-                        <button type="button" class="pc-btn pc-btn--ghost-danger pc-btn--sm" :disabled="store.loading" @click="retryNow">Retry now</button>
+                        <button type="button" class="pc-btn pc-btn--ghost-danger pc-btn--sm" :disabled="store.loading" @click="retryNow">{{ $t('common.retryNow') }}</button>
                     </div>
                 </div>
             </div>
@@ -251,7 +254,7 @@ const retryNow = () => store.retry();
         <!-- Reconnect stays reachable when down without an error object (F5) -->
         <div v-if="!healthy && !errorInfo && !store.loading" class="tile-action">
             <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="retryNow">
-                {{ isPlex ? 'Reconnect' : 'Connect' }}
+                {{ isPlex ? $t('common.reconnect') : $t('common.connect') }}
             </button>
         </div>
     </article>

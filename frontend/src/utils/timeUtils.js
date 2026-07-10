@@ -2,6 +2,7 @@
  * Time Utility Functions
  * Shared utilities for time formatting across the application.
  */
+import { t } from '@/i18n';
 
 /**
  * Format a timestamp as relative time (e.g., "5 minutes ago")
@@ -9,7 +10,7 @@
  * @returns {string} Formatted relative time string
  */
 export function formatRelativeTime(timestamp) {
-    if (!timestamp) return 'Never';
+    if (!timestamp) return t('time.never');
 
     const date = new Date(timestamp);
     const now = new Date();
@@ -19,10 +20,10 @@ export function formatRelativeTime(timestamp) {
     const diffHour = Math.floor(diffMin / 60);
     const diffDay = Math.floor(diffHour / 24);
 
-    if (diffSec < 60) return 'Just now';
-    if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
-    if (diffHour < 24) return `${diffHour} hour${diffHour !== 1 ? 's' : ''} ago`;
-    if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
+    if (diffSec < 60) return t('time.justNow');
+    if (diffMin < 60) return t('time.minutesAgo', { n: diffMin }, diffMin);
+    if (diffHour < 24) return t('time.hoursAgo', { n: diffHour }, diffHour);
+    if (diffDay < 7) return t('time.daysAgo', { n: diffDay }, diffDay);
 
     return date.toLocaleDateString();
 }

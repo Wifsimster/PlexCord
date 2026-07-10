@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 import { GetPlexConnectionStatus, GetConnectionHistory, GetPlexRetryState, RetryPlexConnection, GetErrorInfo } from '../../wailsjs/go/main/App';
 import { formatRelativeTime } from '../utils/timeUtils';
+import { t } from '@/i18n';
 
 /**
  * Plex Connection Store
@@ -46,11 +47,11 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
          * Note: Uses function form to access other getters via `this`
          */
         statusLabel() {
-            if (this.connected && this.polling) return 'Connected';
-            if (this.loading) return 'Connecting...';
-            if (this.isRetrying) return 'Retrying...';
-            if (this.inErrorState) return 'Disconnected';
-            return 'Not Connected';
+            if (this.connected && this.polling) return t('connectionStore.statusConnected');
+            if (this.loading) return t('connectionStore.statusConnecting');
+            if (this.isRetrying) return t('connectionStore.statusRetrying');
+            if (this.inErrorState) return t('connectionStore.statusDisconnected');
+            return t('connectionStore.statusNotConnected');
         }
     },
 
@@ -106,6 +107,10 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
 
             EventsOn('PlexConnectionRestored', () => {
                 this.connected = true;
+                // The poller has resumed, so polling is live again. Without
+                // this the tile stays "Idle" (healthy = connected && polling)
+                // even after a successful recovery.
+                this.polling = true;
                 this.inErrorState = false;
                 this.lastConnected = new Date().toISOString();
                 this.clearError();
@@ -114,6 +119,28 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             EventsOn('PlexRetryState', (state) => {
                 this.retryState = state;
             });
+        },
+
+        /**
+         * Mark the connection as live from observed poll activity.
+         *
+         * A playback event (updated or stopped) can only arrive from a poll
+         * that actually reached Plex, so it is definitive proof the connection
+         * is live and polling. The status flags are otherwise a one-time
+         * snapshot taken at startup (refreshStatus) plus error/restore deltas —
+         * if that snapshot was captured before the backend poller started (a
+         * startup race) and no error ever occurred, the tile would stay "Idle"
+         * with a Reconnect button while music is clearly playing. The playback
+         * store calls this on every playback event to keep the tile honest.
+         */
+        markLivePoll() {
+            if (this.connected && this.polling && !this.inErrorState) {
+                return;
+            }
+            this.connected = true;
+            this.polling = true;
+            this.inErrorState = false;
+            this.clearError();
         },
 
         /**
@@ -162,9 +189,9 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
                 this.inErrorState = true;
                 this.error = {
                     code: 'PLEX_RETRY_FAILED',
-                    title: 'Reconnect Failed',
-                    description: error?.message || 'Unable to reconnect to Plex.',
-                    suggestion: 'Check your Plex server and user settings, then try again.',
+                    title: t('connectionStore.reconnectFailedTitle'),
+                    description: error?.message || t('connectionStore.reconnectFailedPlex'),
+                    suggestion: t('connectionStore.reconnectFailedSuggestion'),
                     retryable: true
                 };
                 throw error;
@@ -182,9 +209,9 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             } catch (err) {
                 this.error = {
                     code: errorCode,
-                    title: 'Connection Error',
-                    description: 'Failed to connect to Plex',
-                    suggestion: 'Please check your connection and try again.',
+                    title: t('connectionStore.errorTitle'),
+                    description: t('connectionStore.errorPlex'),
+                    suggestion: t('connectionStore.errorSuggestion'),
                     retryable: true
                 };
             }

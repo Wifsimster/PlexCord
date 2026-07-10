@@ -17,6 +17,7 @@ import (
 	"plexcord/internal/platform"
 	"plexcord/internal/plex"
 	"plexcord/internal/retry"
+	"plexcord/internal/updater"
 	"plexcord/internal/version"
 )
 
@@ -65,6 +66,9 @@ type App struct {
 	// Retry managers (Story 6.4)
 	plexRetry    *retry.Manager
 	discordRetry *retry.Manager
+
+	// Automatic update checker (constructed in startup — it needs the bus)
+	updater *updater.Updater
 
 	// PIN authentication (maintain same client ID for PIN lifecycle)
 	plexAuth *plex.Authenticator
@@ -129,6 +133,11 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.bus = events.NewWailsBus(ctx)
 
+	// Capture the executable's launch path now, while the running binary still
+	// has its original name. A self-update later renames it in place, so this
+	// pre-update snapshot is what a restart must relaunch to run the new version.
+	version.CaptureLaunchPath()
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -154,6 +163,13 @@ func (a *App) startup(ctx context.Context) {
 
 	// Setup retry callbacks for automatic reconnection
 	a.setupRetryCallbacks()
+
+	// Start the automatic update checker (startup check + periodic re-check).
+	// No-op for dev builds; can be toggled at runtime via SetAutoUpdateCheck.
+	a.updater = updater.New(a.bus, 6*time.Hour)
+	if a.config.IsAutoUpdateCheckEnabled() {
+		a.updater.StartChecker(ctx)
+	}
 
 	// Check if Plex token is available in keychain
 	// The token will be used in later stories for Plex connection
@@ -213,6 +229,11 @@ func (a *App) shutdown(ctx context.Context) {
 	// Stop retry managers first to prevent post-shutdown reconnection attempts
 	a.plexRetry.Stop()
 	a.discordRetry.Stop()
+
+	// Stop the automatic update checker
+	if a.updater != nil {
+		a.updater.StopChecker()
+	}
 
 	// Stop session polling if running
 	a.StopSessionPolling()

@@ -56,6 +56,17 @@ type Config struct {
 
 	// Multi-server support
 	Servers []ServerConfig `json:"servers,omitempty"`
+
+	// AutoUpdateCheck enables the automatic background update checker.
+	// Pointer so the field being absent from existing config files means
+	// enabled (nil == true) rather than false.
+	AutoUpdateCheck *bool `json:"autoUpdateCheck,omitempty"`
+}
+
+// IsAutoUpdateCheckEnabled reports whether automatic update checks are
+// enabled. Defaults to true when the setting has never been persisted.
+func (c *Config) IsAutoUpdateCheckEnabled() bool {
+	return c.AutoUpdateCheck == nil || *c.AutoUpdateCheck
 }
 
 // boolPtr returns a pointer to b, for optional bool config fields.
