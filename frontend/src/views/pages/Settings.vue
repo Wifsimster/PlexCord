@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSetupStore } from '@/stores/setup';
 import Button from 'primevue/button';
@@ -9,7 +9,9 @@ import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import Badge from 'primevue/badge';
 import ProgressSpinner from 'primevue/progressspinner';
+import ProgressBar from 'primevue/progressbar';
 import { useToast } from 'primevue/usetoast';
+import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime';
 import {
     GetPollingInterval,
     SetPollingInterval,
@@ -23,6 +25,9 @@ import {
     ValidateDiscordClientID,
     GetVersion,
     CheckForUpdate,
+    CanSelfUpdate,
+    DownloadAndInstallUpdate,
+    RestartApplication,
     OpenReleasesPage,
     OpenReleaseURL,
     ResetApplication,
@@ -61,6 +66,12 @@ const version = ref(null);
 const updateInfo = ref(null);
 const checkingUpdate = ref(false);
 
+// In-app update (download & install)
+const canSelfUpdate = ref(false);
+const installingUpdate = ref(false);
+const updateProgress = ref(0);
+const updateReady = ref(false);
+
 // Loading states
 const loading = ref({
     polling: false,
@@ -96,6 +107,7 @@ onMounted(async () => {
         discordClientId.value = await GetDiscordClientID();
         defaultClientId.value = await GetDefaultDiscordClientID();
         version.value = await GetVersion();
+        canSelfUpdate.value = await CanSelfUpdate();
 
         // Load hide-when-paused settings
         const pauseSettings = await GetHideWhenPaused();
@@ -118,6 +130,31 @@ onMounted(async () => {
             life: 3000
         });
     }
+
+    // Subscribe to in-app update progress events
+    EventsOn('UpdateDownloadProgress', (p) => {
+        updateProgress.value = Math.round(p?.percent ?? 0);
+    });
+    EventsOn('UpdateReady', () => {
+        updateProgress.value = 100;
+        installingUpdate.value = false;
+        updateReady.value = true;
+    });
+    EventsOn('UpdateError', (message) => {
+        installingUpdate.value = false;
+        toast.add({
+            severity: 'error',
+            summary: 'Update Failed',
+            detail: message || 'Failed to install update',
+            life: 5000
+        });
+    });
+});
+
+onUnmounted(() => {
+    EventsOff('UpdateDownloadProgress');
+    EventsOff('UpdateReady');
+    EventsOff('UpdateError');
 });
 
 // Computed
@@ -451,6 +488,35 @@ const openUpdatePage = () => {
     }
 };
 
+// Download and install the update in place, then prompt for a restart.
+// Progress, completion, and failure are all surfaced through the
+// UpdateDownloadProgress / UpdateReady / UpdateError events, so the promise
+// result here only needs to reset local state on rejection.
+const installUpdate = async () => {
+    installingUpdate.value = true;
+    updateProgress.value = 0;
+    updateReady.value = false;
+    try {
+        await DownloadAndInstallUpdate();
+    } catch {
+        // The UpdateError event handler surfaces the message to the user.
+        installingUpdate.value = false;
+    }
+};
+
+const restartApp = async () => {
+    try {
+        await RestartApplication();
+    } catch (error) {
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: error?.message || 'Failed to restart application',
+            life: 3000
+        });
+    }
+};
+
 // Reset application
 const confirmReset = () => {
     showResetDialog.value = true;
@@ -734,12 +800,36 @@ const goToDashboard = () => {
             </div>
 
             <!-- Update available banner -->
-            <div v-if="updateInfo?.available" class="mt-3 p-3 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-between">
-                <div>
-                    <div class="font-medium text-blue-700 dark:text-blue-400">Update Available: {{ updateInfo.latestVersion }}</div>
-                    <div class="text-sm text-blue-600 dark:text-blue-500">{{ updateInfo.releaseNotes?.substring(0, 100) }}{{ updateInfo.releaseNotes?.length > 100 ? '...' : '' }}</div>
+            <div v-if="updateInfo?.available" class="mt-3 p-3 rounded-lg bg-blue-100 dark:bg-blue-900/20">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="font-medium text-blue-700 dark:text-blue-400">Update Available: {{ updateInfo.latestVersion }}</div>
+                        <div class="text-sm text-blue-600 dark:text-blue-500">{{ updateInfo.releaseNotes?.substring(0, 100) }}{{ updateInfo.releaseNotes?.length > 100 ? '...' : '' }}</div>
+                    </div>
+                    <div class="flex gap-2 shrink-0">
+                        <!-- Platforms that support in-place updates get an install button -->
+                        <template v-if="canSelfUpdate && !updateReady">
+                            <Button label="Download & Install" icon="pi pi-download" size="small" :loading="installingUpdate" :disabled="installingUpdate" @click="installUpdate" />
+                        </template>
+                        <!-- Restart prompt once the update has been applied -->
+                        <template v-else-if="updateReady">
+                            <Button label="Restart Now" icon="pi pi-refresh" size="small" severity="success" @click="restartApp" />
+                        </template>
+                        <!-- Fallback (e.g. macOS) opens the release page to download manually -->
+                        <Button v-if="!canSelfUpdate" label="Download" icon="pi pi-external-link" size="small" @click="openUpdatePage" />
+                    </div>
                 </div>
-                <Button label="Download" icon="pi pi-download" size="small" @click="openUpdatePage" />
+
+                <!-- Download progress -->
+                <div v-if="installingUpdate" class="mt-3">
+                    <ProgressBar :value="updateProgress" />
+                    <div class="text-xs text-blue-600 dark:text-blue-500 mt-1">Downloading update… {{ updateProgress }}%</div>
+                </div>
+
+                <!-- Update applied notice -->
+                <div v-if="updateReady" class="text-sm text-green-700 dark:text-green-400 mt-2">
+                    Update installed. Restart PlexCord to finish updating to {{ updateInfo.latestVersion }}.
+                </div>
             </div>
 
             <!-- Changelog link -->

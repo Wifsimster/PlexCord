@@ -3,11 +3,14 @@ package main
 import (
 	"log"
 	"net/url"
+	"os"
+	"os/exec"
 	goruntime "runtime"
 	"strings"
 	"time"
 
 	"plexcord/internal/errors"
+	"plexcord/internal/events"
 	"plexcord/internal/history"
 	"plexcord/internal/version"
 
@@ -109,6 +112,87 @@ func (a *App) OpenReleaseURL(releaseURL string) error {
 	}
 	log.Printf("Opening release URL: %s", releaseURL)
 	runtime.BrowserOpenURL(a.ctx, releaseURL)
+	return nil
+}
+
+// CanSelfUpdate reports whether the running platform supports applying updates
+// in place (Windows and Linux). macOS ships as a .dmg app bundle and must be
+// updated manually, so the frontend should fall back to the download link.
+func (a *App) CanSelfUpdate() bool {
+	return version.CanSelfUpdate()
+}
+
+// UpdateProgress describes the state of an in-progress download for the
+// frontend progress bar.
+type UpdateProgress struct {
+	Downloaded int64   `json:"downloaded"`
+	Total      int64   `json:"total"`
+	Percent    float64 `json:"percent"`
+}
+
+// DownloadAndInstallUpdate downloads the latest release for the current
+// platform, verifies its checksum, and replaces the running executable.
+// Download progress is streamed to the frontend via the UpdateDownloadProgress
+// event; on completion an UpdateReady event carries the new version and on
+// failure an UpdateError event carries a message.
+//
+// The application must be restarted for the update to take effect — the
+// frontend is responsible for prompting the user to do so.
+func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
+	if !version.CanSelfUpdate() {
+		a.bus.Emit(events.UpdateError, version.ErrUpdateNotSupported.Error())
+		return nil, errors.Wrap(version.ErrUpdateNotSupported, errors.UNKNOWN_ERROR, "update not supported")
+	}
+
+	log.Printf("Starting in-app update download...")
+
+	progress := func(downloaded, total int64) {
+		var percent float64
+		if total > 0 {
+			percent = float64(downloaded) / float64(total) * 100
+		}
+		a.bus.Emit(events.UpdateDownloadProgress, UpdateProgress{
+			Downloaded: downloaded,
+			Total:      total,
+			Percent:    percent,
+		})
+	}
+
+	info, err := version.DownloadAndApplyUpdate(a.ctx, progress)
+	if err != nil {
+		log.Printf("ERROR: Update failed: %v", err)
+		a.bus.Emit(events.UpdateError, err.Error())
+		return nil, errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to install update")
+	}
+
+	log.Printf("Update installed: %s (restart required)", info.LatestVersion)
+	a.bus.Emit(events.UpdateReady, info)
+	return info, nil
+}
+
+// RestartApplication relaunches the application so a freshly installed update
+// takes effect. It spawns the (now-updated) executable and quits the current
+// process.
+func (a *App) RestartApplication() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to locate executable")
+	}
+	// On Linux AppImage builds, relaunch the real .AppImage rather than the
+	// temporary mount path.
+	if ap := os.Getenv("APPIMAGE"); ap != "" {
+		exe = ap
+	}
+
+	cmd := exec.Command(exe)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to relaunch application")
+	}
+
+	log.Printf("Relaunching application: %s", exe)
+	runtime.Quit(a.ctx)
 	return nil
 }
 
