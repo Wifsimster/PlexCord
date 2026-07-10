@@ -1,48 +1,425 @@
 <script setup>
-import { useRouter } from 'vue-router';
+import { computed, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import Popover from 'primevue/popover';
+import BrandMark from '@/components/BrandMark.vue';
 import { useLayout } from '@/layout/composables/layout';
+import { usePresenceStatus } from '@/composables/usePresenceStatus';
+import { usePlaybackStore } from '@/stores/playback';
+import { usePlexConnectionStore } from '@/stores/plexConnection';
+import { useDiscordConnectionStore } from '@/stores/discordConnection';
+import { usePresenceStore } from '@/stores/presence';
 
 const { toggleDarkMode, isDarkTheme } = useLayout();
+const route = useRoute();
 const router = useRouter();
 
-const goToSettings = () => {
-    router.push('/settings');
+const playbackStore = usePlaybackStore();
+const plexStore = usePlexConnectionStore();
+const discordStore = useDiscordConnectionStore();
+const presenceStore = usePresenceStore();
+const { status, headline, severity, isErrored, relayHealthy } = usePresenceStatus();
+
+// ---- Right-side actions -------------------------------------------------
+const isSettings = computed(() => route.path.startsWith('/settings'));
+
+const toggleSettings = () => {
+    router.push(isSettings.value ? '/' : '/settings');
+};
+
+const modKey = /mac/i.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl';
+const shortcutTooltip = (label, keys) => ({
+    value: `${label} <span class="pc-chip-mono">${modKey}+${keys}</span>`,
+    escape: false,
+    showDelay: 300
+});
+
+// ---- Node dot states -----------------------------------------------------
+const plexDotClass = computed(() => {
+    if (plexStore.hasError) return 'pc-dot--danger';
+    if (plexStore.isRetrying) return 'pc-dot--warn pc-dot--blink';
+    if (plexStore.connected) return playbackStore.isPlaying && !presenceStore.paused ? 'pc-dot--success pc-dot--pulse' : 'pc-dot--success';
+    return 'pc-dot--idle';
+});
+
+const discordDotClass = computed(() => {
+    if (discordStore.hasError) return 'pc-dot--danger';
+    if (discordStore.isRetrying) return 'pc-dot--warn pc-dot--blink';
+    if (discordStore.connected) return playbackStore.isPlaying && !presenceStore.paused ? 'pc-dot--success pc-dot--pulse' : 'pc-dot--success';
+    return 'pc-dot--idle';
+});
+
+// Connectors tint success when both adjacent ends are healthy (§5.1).
+const plexOk = computed(() => plexStore.connected && !plexStore.hasError);
+const discordOk = computed(() => discordStore.connected && !discordStore.hasError);
+const centerOk = computed(() => status.value === 'live' || status.value === 'idle' || status.value === 'track-paused');
+const leftConnectorOk = computed(() => plexOk.value && centerOk.value);
+const rightConnectorOk = computed(() => centerOk.value && discordOk.value);
+
+// ---- Headline node (the Afterglow graft) ---------------------------------
+const headlineParts = computed(() => {
+    const value = headline.value;
+    const sep = ' — ';
+    const idx = value.indexOf(sep);
+    if (status.value === 'live' && idx !== -1) {
+        return { state: value.slice(0, idx + sep.length), title: value.slice(idx + sep.length) };
+    }
+    return { state: value, title: '' };
+});
+
+const headlineGlyph = computed(() => {
+    switch (status.value) {
+        case 'paused':
+        case 'track-paused':
+            return 'pi pi-pause';
+        case 'plex-error':
+        case 'discord-error':
+            return 'pi pi-exclamation-triangle';
+        case 'idle':
+            return 'pi pi-minus';
+        default:
+            return '';
+    }
+});
+
+const headlineTitle = computed(() => {
+    if (isErrored.value) return 'Open the dashboard';
+    return presenceStore.paused ? 'Resume presence' : 'Pause presence';
+});
+
+const onHeadlineClick = () => {
+    if (isErrored.value) {
+        router.push('/');
+        return;
+    }
+    presenceStore.toggle();
+};
+
+// ---- Popovers -------------------------------------------------------------
+const plexPopover = ref(null);
+const discordPopover = ref(null);
+
+const togglePlexPopover = (event) => {
+    discordPopover.value?.hide();
+    plexPopover.value?.toggle(event);
+};
+const toggleDiscordPopover = (event) => {
+    plexPopover.value?.hide();
+    discordPopover.value?.toggle(event);
+};
+
+const plexHost = computed(() => {
+    if (!plexStore.serverUrl) return '—';
+    return plexStore.serverUrl.replace(/^[a-z]+:\/\//i, '').replace(/\/+$/, '');
+});
+
+const discordPresenceState = computed(() => {
+    if (!discordStore.connected) return 'Inactive';
+    if (presenceStore.paused) return 'Hidden (paused)';
+    return playbackStore.hasActiveSession ? 'Active' : 'Inactive';
+});
+
+const reconnectPlex = async () => {
+    plexPopover.value?.hide();
+    try {
+        await plexStore.retry();
+        await plexStore.refreshStatus();
+    } catch (error) {
+        console.error('Plex reconnect failed:', error);
+    }
+};
+
+const reconnectDiscord = async () => {
+    discordPopover.value?.hide();
+    try {
+        await discordStore.retry();
+        await discordStore.refreshStatus();
+    } catch (error) {
+        console.error('Discord reconnect failed:', error);
+    }
 };
 </script>
 
 <template>
-    <div class="layout-topbar">
-        <div class="layout-topbar-logo-container">
-            <router-link to="/" class="layout-topbar-logo">
-                <!-- Plexamp Logo -->
-                <svg class="plexamp-logo" width="32" height="32" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                    <polyline
-                        fill="none"
-                        stroke="#CC7B19"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        points="4.5 24 23.444 24 12.808 9.342 16.883 9.342 27.519 24 16.883 38.658 20.957 38.658 31.594 24 20.957 9.342 25.032 9.342 35.668 24 25.032 38.658 29.107 38.658 39.743 24 43.5 24"
-                    />
-                </svg>
+    <header class="layout-topbar">
+        <!-- Left: brand lockup -->
+        <router-link to="/" class="topbar-brand" aria-label="PlexCord dashboard">
+            <BrandMark />
+        </router-link>
 
-                <!-- Discord Logo -->
-                <svg class="discord-logo" width="32" height="32" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                        d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z"
-                        fill="#5865F2"
-                    />
-                </svg>
-            </router-link>
+        <!-- Center: the signal path -->
+        <nav class="signal-path" aria-label="Signal path">
+            <button type="button" class="signal-node" aria-haspopup="dialog" @click="togglePlexPopover">
+                <span class="pc-dot" :class="plexDotClass" aria-hidden="true"></span>
+                <span class="signal-node-name">Plex</span>
+            </button>
+
+            <span class="signal-connector" :class="{ 'signal-connector--ok': leftConnectorOk }" aria-hidden="true"></span>
+
+            <Transition name="pc-state" mode="out-in">
+                <button type="button" :key="status + headlineParts.title" class="signal-node signal-node--headline" :class="`signal-headline--${severity}`" :title="headlineTitle" @click="onHeadlineClick">
+                    <span v-if="status === 'live'" class="pc-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <i v-else-if="headlineGlyph" :class="headlineGlyph" class="signal-headline-glyph" aria-hidden="true"></i>
+                    <span class="signal-headline-state">{{ headlineParts.state }}</span>
+                    <span v-if="headlineParts.title" class="signal-headline-title">{{ headlineParts.title }}</span>
+                </button>
+            </Transition>
+
+            <span class="signal-connector" :class="{ 'signal-connector--ok': rightConnectorOk }" aria-hidden="true"></span>
+
+            <button type="button" class="signal-node" aria-haspopup="dialog" @click="toggleDiscordPopover">
+                <span class="pc-dot" :class="discordDotClass" aria-hidden="true"></span>
+                <span class="signal-node-name">Discord</span>
+            </button>
+        </nav>
+
+        <!-- Right: global actions -->
+        <div class="topbar-actions">
+            <button
+                type="button"
+                class="topbar-action"
+                v-tooltip.bottom="shortcutTooltip(presenceStore.paused ? 'Resume presence' : 'Pause presence', 'P')"
+                :aria-label="presenceStore.paused ? 'Resume presence' : 'Pause presence'"
+                :aria-pressed="presenceStore.paused"
+                @click="presenceStore.toggle()"
+            >
+                <i :class="presenceStore.paused ? 'pi pi-play' : 'pi pi-pause'"></i>
+            </button>
+            <button type="button" class="topbar-action" v-tooltip.bottom="shortcutTooltip(isSettings ? 'Back to dashboard' : 'Settings', ',')" :aria-label="isSettings ? 'Back to dashboard' : 'Settings'" @click="toggleSettings">
+                <i :class="isSettings ? 'pi pi-arrow-left' : 'pi pi-cog'"></i>
+            </button>
+            <button type="button" class="topbar-action" v-tooltip.bottom="{ value: isDarkTheme ? 'Light theme' : 'Dark theme', showDelay: 300 }" :aria-label="isDarkTheme ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleDarkMode">
+                <i :class="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'"></i>
+            </button>
         </div>
 
-        <div class="layout-topbar-actions">
-            <button type="button" class="layout-topbar-action" @click="goToSettings" title="Settings">
-                <i class="pi pi-cog"></i>
-            </button>
-            <button type="button" class="layout-topbar-action" @click="toggleDarkMode">
-                <i :class="['pi', { 'pi-moon': !isDarkTheme, 'pi-sun': isDarkTheme }]"></i>
-            </button>
-        </div>
-    </div>
+        <!-- Plex node popover -->
+        <Popover ref="plexPopover">
+            <div class="node-popover">
+                <span class="pc-eyebrow">Plex</span>
+                <div class="pop-row">
+                    <span class="pop-label">Server</span>
+                    <span class="pc-chip-mono">{{ plexHost }}</span>
+                </div>
+                <div class="pop-row">
+                    <span class="pop-label">Account</span>
+                    <span class="pop-value">{{ plexStore.userName || '—' }}</span>
+                </div>
+                <div class="pop-row">
+                    <span class="pop-label">Last sync</span>
+                    <span class="pop-value">{{ plexStore.lastConnectedRelative }}</span>
+                </div>
+                <div class="pop-actions">
+                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="reconnectPlex">Reconnect</button>
+                </div>
+            </div>
+        </Popover>
+
+        <!-- Discord node popover -->
+        <Popover ref="discordPopover">
+            <div class="node-popover">
+                <span class="pc-eyebrow">Discord</span>
+                <div class="pop-row">
+                    <span class="pop-label">Presence</span>
+                    <span class="pop-value">{{ discordPresenceState }}</span>
+                </div>
+                <div class="pop-row">
+                    <span class="pop-label">Last sync</span>
+                    <span class="pop-value">{{ discordStore.lastConnectedRelative }}</span>
+                </div>
+                <div class="pop-actions">
+                    <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="reconnectDiscord">Reconnect</button>
+                </div>
+            </div>
+        </Popover>
+    </header>
 </template>
+
+<style scoped>
+/* The signal strip (spec §5.1): fixed 48px, overlay surface, hairline bottom. */
+.layout-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 48px;
+    z-index: 997;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--pc-page-gutter);
+    background: var(--pc-overlay);
+    border-bottom: 1px solid var(--pc-border);
+}
+
+.topbar-brand {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 6px;
+    margin-left: -6px;
+    border-radius: var(--pc-radius-sm);
+    flex: none;
+}
+
+/* ---- Center signal path ---- */
+.signal-path {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    max-width: min(60vw, 640px);
+}
+
+.signal-node {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 8px;
+    border: none;
+    border-radius: var(--pc-radius-sm);
+    background: transparent;
+    color: var(--pc-text-secondary);
+    font-family: var(--pc-font-ui);
+    cursor: pointer;
+    transition:
+        background-color var(--pc-dur-1) var(--pc-ease-out),
+        color var(--pc-dur-1) var(--pc-ease-out);
+}
+.signal-node:hover {
+    background: var(--pc-raised);
+    color: var(--pc-text);
+}
+.signal-node .pc-dot {
+    transition: color var(--pc-dur-2) var(--pc-ease-out); /* M6 dot color crossfade */
+}
+.signal-node-name {
+    font-size: 12.5px;
+    line-height: 1;
+}
+
+.signal-connector {
+    width: 16px;
+    height: 1px;
+    flex: none;
+    background: var(--pc-border);
+    transition: background-color var(--pc-dur-2) var(--pc-ease-out);
+}
+.signal-connector--ok {
+    background: var(--pc-success);
+}
+
+/* ---- Headline node ---- */
+.signal-node--headline {
+    min-width: 0;
+}
+.signal-headline-glyph {
+    font-size: 10px;
+    flex: none;
+}
+.signal-headline-state {
+    font-size: var(--pc-text-caption);
+    font-weight: 500;
+    white-space: nowrap;
+}
+.signal-headline--success .signal-headline-state,
+.signal-headline--success .signal-headline-glyph {
+    color: var(--pc-success);
+}
+.signal-headline--warn .signal-headline-state,
+.signal-headline--warn .signal-headline-glyph {
+    color: var(--pc-warn);
+}
+.signal-headline--danger .signal-headline-state,
+.signal-headline--danger .signal-headline-glyph {
+    color: var(--pc-danger);
+}
+.signal-headline--muted .signal-headline-state,
+.signal-headline--muted .signal-headline-glyph {
+    color: var(--pc-text-muted);
+}
+.signal-headline-title {
+    font-size: var(--pc-text-body);
+    font-weight: 500;
+    color: var(--pc-text);
+    max-width: 280px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- Right actions (32px ghost icon buttons) ---- */
+.topbar-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    flex: none;
+}
+.topbar-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--pc-radius-sm);
+    background: transparent;
+    color: var(--pc-text-secondary);
+    cursor: pointer;
+    transition:
+        background-color var(--pc-dur-1) var(--pc-ease-out),
+        color var(--pc-dur-1) var(--pc-ease-out);
+}
+.topbar-action:hover {
+    background: var(--pc-raised);
+    color: var(--pc-text);
+}
+.topbar-action i {
+    font-size: 14px;
+}
+
+/* ---- Node popovers (overlay recipe; content teleports with scoped attrs) ---- */
+.node-popover {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 220px;
+    padding: 4px;
+}
+.pop-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 24px;
+}
+.pop-label {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.pop-value {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+}
+.pop-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--pc-border-subtle);
+}
+
+/* Narrow windows: keep the strip usable — hide the path labels first. */
+@media (max-width: 720px) {
+    .signal-headline-title {
+        max-width: 140px;
+    }
+}
+@media (max-width: 560px) {
+    .signal-node-name {
+        display: none;
+    }
+}
+</style>

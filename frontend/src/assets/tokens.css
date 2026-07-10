@@ -1,0 +1,186 @@
+/* ============================================================
+   PlexCord "Signal" design tokens — canonical. Do not fork values.
+   Contract: blue is what you click; gold & blurple are what you're
+   connected to; green/amber/red are what's happening.
+   ============================================================ */
+
+:root {
+    /* ---------- Surface ramp (cool neutral, hue ≈ 240°, sat 4–8%) ---------- */
+    --pc-surface-0: #ffffff;
+    --pc-surface-50: #f7f7f8;
+    --pc-surface-100: #eeeef0;
+    --pc-surface-200: #dcdce1;
+    --pc-surface-300: #b9bac3;
+    --pc-surface-400: #8b8c98; /* dark-mode muted text floor (AA on panel) */
+    --pc-surface-500: #6e6f7b;
+    --pc-surface-600: #4b4c57; /* strong border / disabled text */
+    --pc-surface-700: #2e2f38; /* hover border, active-row bg */
+    --pc-surface-800: #1e1f26; /* raised surface: inputs, chips, tiles */
+    --pc-surface-850: #17181d; /* panel/card background */
+    --pc-surface-900: #121317; /* topbar / rails / overlays */
+    --pc-surface-950: #0b0c0f; /* app canvas (window background) */
+
+    /* ---------- Accent — "Signal Blue" (interaction only) ---------- */
+    --pc-accent-50: #eef5ff;
+    --pc-accent-100: #d9e9ff;
+    --pc-accent-200: #b3d3ff;
+    --pc-accent-300: #85b8ff;
+    --pc-accent-400: #5c9eff; /* dark-mode primary: 5.1:1 on panel */
+    --pc-accent-500: #3b82f6;
+    --pc-accent-600: #2a6ae0; /* light-mode primary */
+    --pc-accent-700: #2456b8;
+    --pc-accent-800: #1f468f;
+    --pc-accent-900: #1c3a72;
+    --pc-accent-950: #142343;
+
+    /* ---------- Brand pigments (identity pins only — see §1.2) ---------- */
+    --pc-plex: #e5a00d;
+    --pc-plex-dim: rgba(229, 160, 13, 0.12);
+    --pc-blurple: #5865f2;
+    --pc-blurple-dim: rgba(88, 101, 242, 0.12);
+
+    /* ---------- Discord specimen palette (theme-exempt, pixel-faithful) ---------- */
+    --pc-discord-bg: #111214;
+    --pc-discord-raised: #1e1f22;
+    --pc-discord-text: #dbdee1;
+    --pc-discord-muted: #b5bac1;
+    --pc-discord-green: #23a55a;
+    --pc-discord-font: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+    /* ---------- Typography ---------- */
+    --pc-font-ui:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', system-ui, Roboto,
+        'Helvetica Neue', Arial, sans-serif;
+    --pc-font-mono:
+        ui-monospace, 'SF Mono', 'Cascadia Code', 'Segoe UI Mono', 'Roboto Mono', Menlo, Consolas,
+        monospace;
+
+    --pc-text-display: 1.625rem; /* 26px w600 lh1.2  ls-0.02em  — wizard heroes */
+    --pc-text-title: 1.25rem; /* 20px w600 lh1.3  ls-0.015em — page title (one/page) */
+    --pc-text-heading: 0.9375rem; /* 15px w600 lh1.4  ls-0.01em  — panel headers */
+    --pc-text-body: 0.875rem; /* 14px w400 lh1.5             — default */
+    --pc-text-caption: 0.78125rem; /* 12.5px w400 lh1.45          — helper, timestamps */
+    --pc-text-micro: 0.6875rem; /* 11px w600 lh1.3 +0.07em UPPERCASE — eyebrows, badges */
+    --pc-text-mono: 0.8125rem; /* 13px mono w400–500          — technical values */
+
+    /* ---------- Spacing (strict 4px grid: 4 8 12 16 20 24 32 40 48 64) ---------- */
+    --pc-space-control-x: 12px; /* inside buttons/inputs */
+    --pc-space-panel: 20px; /* panel padding (24px for Presence panel) */
+    --pc-space-panel-gap: 16px; /* gap between panels */
+    --pc-space-section: 32px; /* between page sections */
+    --pc-page-gutter: 24px; /* window edge → content */
+
+    /* ---------- Radius (10px hard max; child radius ≤ parent − 1 step) ---------- */
+    --pc-radius-xs: 4px; /* chips, badges, mono tokens */
+    --pc-radius-sm: 6px; /* buttons, inputs, toggles */
+    --pc-radius-md: 8px; /* tiles, nested surfaces, toasts */
+    --pc-radius-lg: 10px; /* panels/cards, dialogs */
+    --pc-radius-full: 999px; /* status dots, avatars */
+
+    /* ---------- Elevation (depth = background steps + borders; shadows float only) ---------- */
+    --pc-shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.03); /* machined top-light */
+    --pc-shadow-overlay: 0 4px 16px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --pc-shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+
+    /* ---------- Motion ---------- */
+    --pc-dur-1: 120ms; /* micro: hover, press, focus */
+    --pc-dur-2: 180ms; /* state color/border changes, toggles */
+    --pc-dur-3: 240ms; /* element enter/exit, collapse/expand */
+    --pc-dur-4: 320ms; /* route/step transitions, hero entrances */
+    --pc-ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* default: decisive arrival */
+    --pc-ease-inout: cubic-bezier(0.65, 0, 0.35, 1); /* between two visible states */
+    --pc-ease-in: cubic-bezier(0.4, 0, 1, 1); /* exits only */
+    --pc-ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1.1); /* tiny overshoot: dots, checks, toggles */
+    /* Ambient loop periods (exempt from the 320ms cap — they ARE state) */
+    --pc-loop-pulse: 2400ms; /* live status-dot ring */
+    --pc-loop-blink: 1200ms; /* retrying dot */
+    --pc-loop-eq: 1100ms; /* equalizer base period */
+    --pc-loop-breathe: 5000ms; /* ambient artwork backdrop */
+    --pc-loop-shimmer: 1600ms; /* skeletons */
+}
+
+/* ================= DARK (default, design target) ================= */
+.dark {
+    --pc-bg: var(--pc-surface-950);
+    --pc-panel: var(--pc-surface-850);
+    --pc-raised: var(--pc-surface-800);
+    --pc-overlay: var(--pc-surface-900);
+    --pc-border: #26272f; /* hairline */
+    --pc-border-subtle: #1c1d24; /* dividers inside panels */
+    --pc-border-strong: var(--pc-surface-600);
+    --pc-text: #ededf0; /* 14.9:1 on panel */
+    --pc-text-secondary: #a5a6b1; /* 7.1:1 on panel */
+    --pc-text-muted: #8b8c98; /* 5.0:1 on panel — AA floor */
+    --pc-text-faint: #6e6f7b; /* 3.3:1 — large/disabled only */
+
+    --pc-accent: var(--pc-accent-400);
+    --pc-accent-hover: var(--pc-accent-300);
+    --pc-accent-active: var(--pc-accent-500);
+    --pc-accent-contrast: #0b0c0f; /* text on accent fills: 5.4:1 */
+    --pc-accent-dim: rgba(92, 158, 255, 0.12);
+
+    --pc-success: #3dd68c; /* 8.9:1 on panel */
+    --pc-success-dim: rgba(61, 214, 140, 0.1);
+    --pc-warn: #f5b944; /* 9.6:1 on panel */
+    --pc-warn-dim: rgba(245, 185, 68, 0.1);
+    --pc-danger: #f6707b; /* 6.2:1 on panel */
+    --pc-danger-dim: rgba(246, 112, 123, 0.1);
+
+    --pc-ring-focus: 0 0 0 2px var(--pc-bg), 0 0 0 4px var(--pc-accent);
+    --pc-backdrop-opacity: 0.1; /* ambient artwork backdrop */
+    --pc-dialog-mask: rgba(4, 5, 8, 0.6);
+}
+
+/* ================= LIGHT (secondary, fully specified) ================= */
+.light,
+:root:not(.dark) {
+    --pc-bg: #f7f7f8;
+    --pc-panel: #ffffff;
+    --pc-raised: #f1f1f3;
+    --pc-overlay: #ffffff;
+    --pc-border: #e3e3e8;
+    --pc-border-subtle: #ececef;
+    --pc-border-strong: #c9cad1;
+    --pc-text: #17181d; /* 15.6:1 on white */
+    --pc-text-secondary: #4b4c57; /* 8.9:1 */
+    --pc-text-muted: #5c5d68; /* 6.9:1 */
+    --pc-text-faint: #8b8c98; /* large/disabled only */
+
+    --pc-accent: var(--pc-accent-600); /* 4.8:1 on white */
+    --pc-accent-hover: var(--pc-accent-700);
+    --pc-accent-active: var(--pc-accent-800);
+    --pc-accent-contrast: #ffffff;
+    --pc-accent-dim: rgba(42, 106, 224, 0.1);
+
+    --pc-success: #0f9d63; /* 4.6:1 on white */
+    --pc-success-dim: rgba(15, 157, 99, 0.1);
+    --pc-warn: #b26205; /* 4.9:1 on white */
+    --pc-warn-dim: rgba(178, 98, 5, 0.1);
+    --pc-danger: #d93843; /* 4.9:1 on white */
+    --pc-danger-dim: rgba(217, 56, 67, 0.1);
+
+    --pc-ring-focus: 0 0 0 2px var(--pc-bg), 0 0 0 4px var(--pc-accent);
+    --pc-backdrop-opacity: 0.08;
+    --pc-dialog-mask: rgba(23, 24, 29, 0.45);
+    --pc-shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* ================= Global base ================= */
+html {
+    font-size: 16px; /* removes the 14px Sakai override */
+}
+body {
+    font-family: var(--pc-font-ui);
+    font-size: var(--pc-text-body);
+    color: var(--pc-text);
+    background: var(--pc-bg);
+    -webkit-font-smoothing: antialiased;
+}
+time,
+.pc-num {
+    font-variant-numeric: tabular-nums;
+}
+code,
+.pc-mono {
+    font-family: var(--pc-font-mono);
+}

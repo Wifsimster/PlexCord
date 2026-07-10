@@ -1,59 +1,53 @@
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue';
-import { ConnectDiscord, DisconnectDiscord, IsDiscordConnected, GetDefaultDiscordClientID, GetDiscordClientID, SaveDiscordClientID, ValidateDiscordClientID, TestDiscordPresence } from '../../wailsjs/go/main/App';
-import InputText from 'primevue/inputtext';
-import Button from 'primevue/button';
-import Message from 'primevue/message';
-import ProgressSpinner from 'primevue/progressspinner';
+import { ref, computed, inject, onMounted, onUnmounted } from 'vue';
+import { useSetupStore } from '@/stores/setup';
+import { ConnectDiscord, IsDiscordConnected, GetDefaultDiscordClientID, GetDiscordClientID, SaveDiscordClientID, ValidateDiscordClientID, TestDiscordPresence } from '../../wailsjs/go/main/App';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
+import InputText from 'primevue/inputtext';
+import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
-// Connection state
-const connectionState = ref('initial'); // 'initial', 'connecting', 'connected', 'error'
+const setupStore = useSetupStore();
+const wizard = inject('setupWizard', null);
+
+// Connection state machine
+const connectionState = ref(setupStore.discordConnected ? 'connected' : 'initial'); // 'initial' | 'connecting' | 'connected' | 'error'
 const connectionError = ref('');
 const isConnecting = ref(false);
 
-// Test presence state
+// Test presence state (M15 — transient inline confirmation)
 const isTesting = ref(false);
-const testSuccess = ref(false);
+const testSent = ref(false);
 const testError = ref('');
-let testSuccessTimer = null;
+let testSentTimer = null;
 
-// Client ID state
-const showCustomClientId = ref(false);
+// Custom Client ID (Advanced) — the value persists when the section is
+// collapsed (F31); a CUSTOM ID badge marks it while hidden.
+const showAdvanced = ref(false);
 const customClientId = ref('');
 const defaultClientId = ref('');
 const clientIdError = ref('');
 const isClientIdValid = ref(true);
-
-// Instructions state
 const showInstructions = ref(false);
 
-// Load default client ID on mount
-const loadDefaultClientId = async () => {
+const loadClientId = async () => {
     try {
         defaultClientId.value = await GetDefaultDiscordClientID();
         const currentId = await GetDiscordClientID();
-        if (currentId !== defaultClientId.value) {
+        if (currentId && currentId !== defaultClientId.value) {
             customClientId.value = currentId;
-            showCustomClientId.value = true;
         }
     } catch (error) {
         console.error('Failed to load Discord client ID:', error);
     }
 };
-loadDefaultClientId();
 
-// Computed: Get the client ID to use for connection
-const activeClientId = computed(() => {
-    if (showCustomClientId.value && customClientId.value.trim()) {
-        return customClientId.value.trim();
-    }
-    return defaultClientId.value;
-});
+const hasCustomClientId = computed(() => customClientId.value.trim().length > 0);
 
-// Validate custom client ID format
+const activeClientId = computed(() => (hasCustomClientId.value ? customClientId.value.trim() : defaultClientId.value));
+
+// ---- Client ID validation -------------------------------------------------
 const validateClientId = async () => {
-    if (!showCustomClientId.value || !customClientId.value.trim()) {
+    if (!hasCustomClientId.value) {
         isClientIdValid.value = true;
         clientIdError.value = '';
         return true;
@@ -71,14 +65,12 @@ const validateClientId = async () => {
     }
 };
 
-// Handle custom client ID change
 const handleClientIdChange = async () => {
     await validateClientId();
 };
 
-// Save custom client ID
 const saveCustomClientId = async () => {
-    if (!showCustomClientId.value) {
+    if (!hasCustomClientId.value) {
         // Reset to default
         try {
             await SaveDiscordClientID('');
@@ -104,11 +96,16 @@ const saveCustomClientId = async () => {
     }
 };
 
-// Connect to Discord
+// ---- Connect ---------------------------------------------------------------
 const connectToDiscord = async () => {
+    if (isConnecting.value) {
+        return;
+    }
+
     // Save client ID first if using custom
     const saved = await saveCustomClientId();
-    if (!saved && showCustomClientId.value) {
+    if (!saved && hasCustomClientId.value) {
+        showAdvanced.value = true;
         return;
     }
 
@@ -124,12 +121,14 @@ const connectToDiscord = async () => {
         if (isConnected) {
             connectionState.value = 'connected';
             connectionError.value = '';
+            setupStore.setDiscordConnected(true);
         } else {
             throw new Error('Connection verification failed');
         }
     } catch (error) {
         console.error('Discord connection failed:', error);
         connectionState.value = 'error';
+        setupStore.setDiscordConnected(false);
 
         // Parse error message for user-friendly display
         let errorMessage = 'Failed to connect to Discord';
@@ -139,11 +138,10 @@ const connectToDiscord = async () => {
             errorMessage = error.message;
         }
 
-        // Provide specific guidance based on error
         if (errorMessage.includes('not running')) {
-            connectionError.value = 'Discord is not running. Please start Discord and try again.';
+            connectionError.value = 'Discord is not running. Start Discord, then try again.';
         } else if (errorMessage.includes('invalid') || errorMessage.includes('Client ID')) {
-            connectionError.value = 'Invalid Discord Client ID. Please check your configuration.';
+            connectionError.value = 'Invalid Discord Client ID. Check your configuration below.';
         } else {
             connectionError.value = errorMessage;
         }
@@ -152,44 +150,28 @@ const connectToDiscord = async () => {
     }
 };
 
-// Retry connection
 const retryConnection = () => {
     connectionError.value = '';
     connectToDiscord();
 };
 
-// Disconnect from Discord
-const disconnect = async () => {
-    try {
-        await DisconnectDiscord();
-        connectionState.value = 'initial';
-        connectionError.value = '';
-        testSuccess.value = false;
-        testError.value = '';
-    } catch (error) {
-        console.error('Failed to disconnect:', error);
-    }
-};
-
-// Test Discord presence
+// ---- Test presence (M15) ----------------------------------------------------
 const testPresence = async () => {
     isTesting.value = true;
     testError.value = '';
-    testSuccess.value = false;
+    testSent.value = false;
 
     try {
         await TestDiscordPresence();
-        testSuccess.value = true;
-        // Auto-hide success message after 3 seconds. Clear any previous
-        // pending timer so rapid retries don't leave dangling callbacks
-        // firing after unmount.
-        if (testSuccessTimer) {
-            clearTimeout(testSuccessTimer);
+        testSent.value = true;
+        if (testSentTimer) {
+            clearTimeout(testSentTimer);
         }
-        testSuccessTimer = setTimeout(() => {
-            testSuccess.value = false;
-            testSuccessTimer = null;
-        }, 3000);
+        // M15: hold 1600ms, then fade out via <Transition>
+        testSentTimer = setTimeout(() => {
+            testSent.value = false;
+            testSentTimer = null;
+        }, 1600);
     } catch (error) {
         console.error('Test presence failed:', error);
         testError.value = error?.message || 'Failed to send test presence';
@@ -198,185 +180,343 @@ const testPresence = async () => {
     }
 };
 
-// Toggle custom client ID section
-const toggleCustomClientId = () => {
-    showCustomClientId.value = !showCustomClientId.value;
-    if (!showCustomClientId.value) {
-        customClientId.value = '';
-        clientIdError.value = '';
-        isClientIdValid.value = true;
-    }
+// Collapsing keeps the entered value (F31)
+const toggleAdvanced = () => {
+    showAdvanced.value = !showAdvanced.value;
 };
 
-// Open Discord Developer Portal
 const openDeveloperPortal = () => {
     BrowserOpenURL('https://discord.com/developers/applications');
 };
 
-// Watch for custom client ID toggle to reset validation
-watch(showCustomClientId, () => {
-    if (connectionState.value === 'error' || connectionState.value === 'connected') {
-        connectionState.value = 'initial';
-        connectionError.value = '';
+// ---- Wizard integration ------------------------------------------------------
+// Enter submits this step's primary action while unconnected (§5.4)
+const primaryAction = () => {
+    if (connectionState.value === 'initial' || connectionState.value === 'error') {
+        connectToDiscord();
+        return true;
+    }
+    return false;
+};
+
+onMounted(async () => {
+    await loadClientId();
+    wizard?.registerPrimary(primaryAction);
+
+    // Restore live connection state (e.g. connected in an earlier visit)
+    try {
+        const connected = await IsDiscordConnected();
+        if (connected) {
+            connectionState.value = 'connected';
+            setupStore.setDiscordConnected(true);
+        } else if (connectionState.value === 'connected') {
+            connectionState.value = 'initial';
+            setupStore.setDiscordConnected(false);
+        }
+    } catch (error) {
+        console.error('Failed to check Discord connection state:', error);
     }
 });
 
 onUnmounted(() => {
-    if (testSuccessTimer) {
-        clearTimeout(testSuccessTimer);
-        testSuccessTimer = null;
+    wizard?.unregisterPrimary(primaryAction);
+    if (testSentTimer) {
+        clearTimeout(testSentTimer);
+        testSentTimer = null;
     }
 });
 </script>
 
 <template>
-    <div class="max-w-4xl mx-auto">
-        <div class="py-8">
-            <h2 class="text-3xl font-bold mb-4 text-surface-900 dark:text-surface-0">Connect to Discord</h2>
-            <p class="text-lg mb-6 text-surface-600 dark:text-surface-400">PlexCord will display your Plex music activity on Discord using Rich Presence.</p>
+    <div>
+        <h1 class="setup-title">Connect to Discord</h1>
+        <p class="setup-lede">PlexCord will show your Plex music activity on your Discord profile using Rich Presence.</p>
 
-            <!-- Discord Client Detection Notice -->
-            <div v-if="connectionState === 'initial'" class="mb-6">
-                <Message severity="info" :closable="false">
-                    <div class="flex items-center gap-3">
-                        <i class="pi pi-discord text-xl"></i>
-                        <span>Make sure Discord is running on your computer before connecting.</span>
+        <div class="setup-panels">
+            <!-- Connection panel -->
+            <section class="pc-panel">
+                <span class="pc-eyebrow">Discord Rich Presence</span>
+
+                <Transition name="pc-state" mode="out-in">
+                    <!-- initial -->
+                    <div v-if="connectionState === 'initial'" key="initial" class="discord-initial">
+                        <p class="discord-notice">Discord must be running on this computer.</p>
+                        <button type="button" class="pc-btn pc-btn--primary pc-btn--lg" :disabled="!isClientIdValid" @click="connectToDiscord">Connect to Discord</button>
                     </div>
-                </Message>
-            </div>
 
-            <!-- Connection Status Section -->
-            <div class="mb-8">
-                <!-- Initial State: Show Connect Button -->
-                <div v-if="connectionState === 'initial'" class="animate-fadein">
-                    <div class="flex flex-col items-center gap-4 p-8 border-2 border-dashed border-surface-300 dark:border-surface-600 rounded-lg">
-                        <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0">Discord Rich Presence</h3>
-                        <p class="text-center text-surface-600 dark:text-surface-400">Connect to Discord to show your Plex music activity on your profile.</p>
-                        <Button label="Connect to Discord" icon="pi pi-link" @click="connectToDiscord" size="large" class="mt-2" :disabled="!isClientIdValid" />
+                    <!-- connecting -->
+                    <div v-else-if="connectionState === 'connecting'" key="connecting" class="discord-connecting">
+                        <i class="pi pi-spin pi-spinner discord-spinner" aria-hidden="true"></i>
+                        <span>Connecting to Discord…</span>
                     </div>
-                </div>
 
-                <!-- Connecting State -->
-                <div v-if="connectionState === 'connecting'" class="animate-fadein">
-                    <div class="flex flex-col items-center gap-4 p-8 bg-surface-100 dark:bg-surface-800 rounded-lg">
-                        <ProgressSpinner style="width: 50px; height: 50px" />
-                        <h3 class="text-xl font-semibold text-surface-900 dark:text-surface-0">Connecting to Discord...</h3>
-                        <p class="text-surface-600 dark:text-surface-400">Establishing connection with your Discord client</p>
-                    </div>
-                </div>
-
-                <!-- Connected State -->
-                <div v-if="connectionState === 'connected'" class="animate-fadein">
-                    <div class="flex flex-col items-center gap-4 p-8 bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-lg">
-                        <i class="pi pi-check-circle text-6xl text-green-500"></i>
-                        <h3 class="text-xl font-semibold text-green-600 dark:text-green-400">Connected to Discord!</h3>
-                        <p class="text-center text-surface-600 dark:text-surface-400">PlexCord is now connected and will update your Discord status when you play music.</p>
-
-                        <!-- Test Success Message -->
-                        <Message v-if="testSuccess" severity="success" :closable="true" class="w-full"> Test presence sent successfully! Check your Discord profile. </Message>
-
-                        <!-- Test Error Message -->
-                        <Message v-if="testError" severity="error" :closable="true" class="w-full" @close="testError = ''">
-                            {{ testError }}
-                        </Message>
-
-                        <div class="flex gap-3 flex-wrap justify-center mt-2">
-                            <Button label="Send Test Presence" icon="pi pi-send" @click="testPresence" :loading="isTesting" severity="info" />
-                            <Button label="Test Again" icon="pi pi-refresh" @click="retryConnection" outlined severity="secondary" />
-                            <Button label="Disconnect" icon="pi pi-times" @click="disconnect" outlined severity="danger" />
+                    <!-- connected -->
+                    <div v-else-if="connectionState === 'connected'" key="connected" class="discord-done">
+                        <p class="discord-done-title">
+                            <DrawnCheck :size="14" />
+                            <span>Connected to Discord</span>
+                        </p>
+                        <p class="discord-done-caption">Your profile will update when you play music on Plex.</p>
+                        <div class="discord-done-actions">
+                            <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" :disabled="isTesting" @click="testPresence">
+                                <i v-if="isTesting" class="pi pi-spin pi-spinner discord-spinner" aria-hidden="true"></i>
+                                Send test presence
+                            </button>
+                            <Transition name="pc-fade">
+                                <span v-if="testSent" class="discord-test-ok pc-fade-ok"><i class="pi pi-check" aria-hidden="true"></i> Sent — check your Discord profile</span>
+                            </Transition>
+                            <span v-if="testError" class="discord-test-error" role="alert">{{ testError }}</span>
                         </div>
+                        <p class="discord-reconnect">
+                            Connection trouble?
+                            <a href="#" @click.prevent="retryConnection">Reconnect</a>
+                        </p>
                     </div>
-                </div>
 
-                <!-- Error State -->
-                <div v-if="connectionState === 'error'" class="animate-fadein">
-                    <Message severity="error" :closable="false" class="mb-4">
-                        <div class="flex flex-col gap-2">
-                            <div class="flex items-center gap-2">
-                                <i class="pi pi-times-circle text-xl"></i>
-                                <span class="font-semibold text-lg">Connection Failed</span>
+                    <!-- error -->
+                    <div v-else key="error" class="discord-error" role="alert">
+                        <p class="discord-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> Connection failed</p>
+                        <p class="discord-error-text">{{ connectionError }}</p>
+                        <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" :disabled="isConnecting" @click="retryConnection">
+                            <i v-if="isConnecting" class="pi pi-spin pi-spinner discord-spinner" aria-hidden="true"></i>
+                            Retry
+                        </button>
+                    </div>
+                </Transition>
+            </section>
+
+            <!-- Advanced: custom Client ID (persistent value — F31) -->
+            <section class="pc-panel">
+                <button type="button" class="advanced-toggle" :aria-expanded="showAdvanced" @click="toggleAdvanced">
+                    <span class="pc-eyebrow">Advanced</span>
+                    <span v-if="hasCustomClientId" class="pc-badge pc-badge--accent">Custom ID</span>
+                    <i class="pi advanced-chevron" :class="showAdvanced ? 'pi-chevron-up' : 'pi-chevron-down'" aria-hidden="true"></i>
+                </button>
+
+                <div class="pc-collapse" :class="{ 'pc-collapse--open': showAdvanced }">
+                    <div>
+                        <div class="advanced-body">
+                            <label class="advanced-label" for="custom-client-id">Custom Discord application Client ID</label>
+                            <p class="advanced-caption">Use your own Discord application for custom branding or testing. Leave empty to use the default PlexCord application.</p>
+                            <InputText
+                                id="custom-client-id"
+                                v-model="customClientId"
+                                class="advanced-input"
+                                placeholder="17–20 digit application ID"
+                                :invalid="!isClientIdValid"
+                                aria-describedby="client-id-feedback"
+                                @input="handleClientIdChange"
+                                @blur="handleClientIdChange"
+                            />
+                            <small v-if="clientIdError" id="client-id-feedback" class="advanced-feedback advanced-feedback--danger" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ clientIdError }}</small>
+                            <small v-else id="client-id-feedback" class="advanced-feedback">
+                                Default: <span class="pc-chip-mono">{{ defaultClientId }}</span>
+                            </small>
+
+                            <p class="advanced-instructions-link">
+                                <a href="#" @click.prevent="showInstructions = !showInstructions">How to create a Discord application</a>
+                            </p>
+
+                            <div class="pc-collapse" :class="{ 'pc-collapse--open': showInstructions }">
+                                <div>
+                                    <div class="advanced-instructions">
+                                        <ol class="advanced-steps">
+                                            <li>
+                                                Open the
+                                                <a href="#" @click.prevent="openDeveloperPortal">Discord Developer Portal</a>
+                                            </li>
+                                            <li>Click "New Application" and give it a name</li>
+                                            <li>Copy the "Application ID" from the General Information page</li>
+                                            <li>Paste it in the field above</li>
+                                            <li>(Optional) Upload custom images under Rich Presence Art Assets</li>
+                                        </ol>
+                                        <p class="advanced-note">Custom applications require additional setup. Most users should use the default PlexCord application.</p>
+                                    </div>
+                                </div>
                             </div>
-                            <p>{{ connectionError }}</p>
-                        </div>
-                    </Message>
-                    <div class="flex flex-col gap-3 sm:flex-row justify-center">
-                        <Button label="Retry Connection" icon="pi pi-refresh" @click="retryConnection" :loading="isConnecting" />
-                        <Button label="Back to Setup" icon="pi pi-arrow-left" @click="disconnect" outlined severity="secondary" />
-                    </div>
-                </div>
-            </div>
-
-            <!-- Advanced Configuration -->
-            <div class="border-t border-surface-200 dark:border-surface-700 pt-8">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-0">Advanced Configuration</h3>
-                    <Button :icon="showCustomClientId ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" @click="toggleCustomClientId" text size="small" :label="showCustomClientId ? 'Hide' : 'Show'" />
-                </div>
-
-                <div v-if="showCustomClientId" class="animate-slideDown p-6 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
-                    <div class="mb-4">
-                        <label class="block mb-2 font-medium text-surface-900 dark:text-surface-0">Custom Discord Application Client ID</label>
-                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">Use your own Discord application for custom branding or testing. Leave empty to use the default PlexCord application.</p>
-                        <div class="flex flex-col gap-2">
-                            <InputText v-model="customClientId" placeholder="Enter Discord Application Client ID (17+ digits)" @blur="handleClientIdChange" @input="handleClientIdChange" :class="{ 'p-invalid': !isClientIdValid }" class="w-full" />
-                            <small v-if="clientIdError" class="text-red-500">{{ clientIdError }}</small>
-                            <small v-else class="text-surface-500"> Default: {{ defaultClientId }} </small>
-                        </div>
-                    </div>
-
-                    <!-- Instructions Toggle -->
-                    <div class="mt-4">
-                        <Button label="How to create a Discord application" icon="pi pi-question-circle" @click="showInstructions = !showInstructions" text size="small" />
-                    </div>
-
-                    <!-- Instructions Panel -->
-                    <div v-if="showInstructions" class="mt-4 p-4 bg-surface-100 dark:bg-surface-900/50 rounded-lg animate-fadein">
-                        <h4 class="font-semibold mb-3 text-surface-900 dark:text-surface-0">Creating a Custom Discord Application:</h4>
-                        <ol class="list-decimal list-inside space-y-2 text-sm text-surface-700 dark:text-surface-300">
-                            <li>Go to the <a href="#" @click.prevent="openDeveloperPortal" class="text-primary-500 hover:underline">Discord Developer Portal</a></li>
-                            <li>Click "New Application" and give it a name</li>
-                            <li>Copy the "Application ID" from the General Information page</li>
-                            <li>Paste it in the field above</li>
-                            <li>(Optional) Upload custom images in the Rich Presence Art Assets section</li>
-                        </ol>
-                        <div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded text-yellow-700 dark:text-yellow-300 text-sm">
-                            <p>Custom applications require additional setup. Most users should use the default PlexCord application.</p>
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 </template>
 
 <style scoped>
-.animate-fadein {
-    animation: fadein 0.3s ease-out;
+/* ---- Connection panel states ---- */
+.discord-initial {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 12px;
+}
+.discord-notice {
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: var(--pc-radius-md);
+    background: var(--pc-raised);
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+}
+.discord-connecting {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: var(--pc-text-body);
+    color: var(--pc-text-secondary);
+}
+.discord-spinner {
+    font-size: 12px;
+}
+.discord-done {
+    margin-top: 12px;
+}
+.discord-done-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    font-size: var(--pc-text-body);
+    color: var(--pc-text);
+}
+.discord-done-caption {
+    margin: 0 0 12px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.discord-done-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.discord-test-ok {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-success);
+}
+.discord-test-error {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-danger);
+}
+.discord-reconnect {
+    margin: 12px 0 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.discord-reconnect a {
+    color: var(--pc-accent);
+    text-decoration: none;
+}
+.discord-reconnect a:hover {
+    text-decoration: underline;
+}
+.discord-error {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--pc-danger) 40%, transparent);
+    border-radius: var(--pc-radius-md);
+    background: var(--pc-danger-dim);
+}
+.discord-error-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 4px;
+    font-size: var(--pc-text-body);
+    font-weight: 600;
+    color: var(--pc-danger);
+}
+.discord-error-text {
+    margin: 0 0 10px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+    overflow-wrap: anywhere;
 }
 
-.animate-slideDown {
-    animation: slideDown 0.3s ease-out;
+/* ---- Advanced section ---- */
+.advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
 }
-
-@keyframes fadein {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.advanced-chevron {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--pc-text-muted);
 }
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.advanced-body {
+    padding-top: 12px;
+}
+.advanced-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: var(--pc-text-caption);
+    font-weight: 500;
+    color: var(--pc-text-secondary);
+}
+.advanced-caption {
+    margin: 0 0 8px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.advanced-input {
+    width: 100%;
+    font-family: var(--pc-font-mono);
+    font-size: var(--pc-text-mono);
+}
+.advanced-feedback {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
+}
+.advanced-feedback--danger {
+    color: var(--pc-danger);
+}
+.advanced-instructions-link {
+    margin: 12px 0 0;
+    font-size: var(--pc-text-caption);
+}
+.advanced-instructions-link a,
+.advanced-steps a {
+    color: var(--pc-accent);
+    text-decoration: none;
+}
+.advanced-instructions-link a:hover,
+.advanced-steps a:hover {
+    text-decoration: underline;
+}
+.advanced-instructions {
+    margin-top: 8px;
+    padding: 12px;
+    border-radius: var(--pc-radius-md);
+    background: var(--pc-raised);
+}
+.advanced-steps {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+}
+.advanced-note {
+    margin: 10px 0 0;
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-muted);
 }
 </style>
