@@ -4,7 +4,10 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
@@ -60,6 +63,10 @@ type App struct {
 	presencePaused bool        // Manual one-click pause toggle
 	pauseTimer     *time.Timer // Timer for delayed hide-when-paused
 	pauseTimerGen  uint64      // Incremented every schedule/cancel so a fired-but-cancelled callback bails out
+
+	// quitting is set when the user explicitly quits (e.g. via QuitApp) so
+	// beforeClose knows to allow shutdown instead of hiding to the background.
+	quitting atomic.Bool
 
 	// Mutexes grouped together for alignment
 	pollerMu   sync.Mutex
@@ -162,7 +169,16 @@ func (a *App) domReady(ctx context.Context) {
 // beforeClose is called when the application is about to quit,
 // either by clicking the window close button or calling runtime.Quit.
 // Returning true will cause the application to continue, false will continue shutdown as normal.
+//
+// When "Minimize to tray" is enabled, clicking the window close button hides
+// the window and keeps PlexCord running in the background instead of quitting.
+// Explicit quits (QuitApp) set the quitting flag so this path is bypassed.
 func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+	if !a.quitting.Load() && a.config != nil && a.config.MinimizeToTray {
+		log.Printf("Close requested: hiding window, PlexCord keeps running in the background")
+		runtime.WindowHide(ctx)
+		return true
+	}
 	return false
 }
 

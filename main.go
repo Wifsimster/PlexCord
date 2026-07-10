@@ -25,16 +25,19 @@ func main() {
 	// Create application with options
 	// Note: Removed MaxWidth and MaxHeight
 	err := wails.Run(&options.App{
-		Title:             "plexcord",
-		Width:             1100,
-		Height:            1000,
-		MinWidth:          1024,
-		MinHeight:         768,
-		DisableResize:     false,
-		Fullscreen:        false,
-		Frameless:         false,
-		StartHidden:       false,
-		HideWindowOnClose: true, // Minimize to tray instead of closing
+		Title:         "plexcord",
+		Width:         1100,
+		Height:        1000,
+		MinWidth:      1024,
+		MinHeight:     768,
+		DisableResize: false,
+		Fullscreen:    false,
+		Frameless:     false,
+		StartHidden:   false,
+		// Close behavior is handled dynamically in app.beforeClose so it can
+		// honor the user's "Minimize to tray" setting: hide to the background
+		// when enabled, quit when disabled.
+		HideWindowOnClose: false,
 		BackgroundColour:  &options.RGBA{R: 255, G: 255, B: 255, A: 255},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
@@ -47,6 +50,13 @@ func main() {
 		OnBeforeClose:    app.beforeClose,
 		OnShutdown:       app.shutdown,
 		WindowStartState: options.Normal,
+		// With no native system tray in Wails v2, a single-instance lock gives
+		// users a way back: launching PlexCord again while it runs in the
+		// background restores the existing window instead of starting a copy.
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "com.plexcord.app",
+			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
+		},
 		Bind: []interface{}{
 			app,
 		},

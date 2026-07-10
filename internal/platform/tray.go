@@ -52,7 +52,8 @@ func NewTrayManager(callbacks TrayCallbacks) *TrayManager {
 }
 
 // Start initializes the system tray (placeholder for Wails v2).
-// In Wails v2, we rely on HideWindowOnClose for minimize-to-tray behavior.
+// In Wails v2, minimize-to-background is handled in App.beforeClose (hide the
+// window on close) with SingleInstanceLock providing the restore path.
 // Full tray icon support will be added when migrating to Wails v3.
 func (tm *TrayManager) Start() {
 	tm.mu.Lock()
