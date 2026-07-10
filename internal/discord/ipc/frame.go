@@ -23,11 +23,18 @@ const (
 const maxFrameSize = 64 * 1024
 
 // encodeFrame builds a Discord IPC frame: a little-endian opcode and payload
-// length header followed by the raw payload bytes.
+// length header followed by the raw payload bytes. Callers (Client.send) reject
+// oversized payloads first; the length is clamped to maxFrameSize here so the
+// uint32 length header can never overflow and the frame stays self-consistent.
 func encodeFrame(op opcode, payload []byte) []byte {
-	buf := make([]byte, 8+len(payload))
+	n := len(payload)
+	if n > maxFrameSize {
+		n = maxFrameSize
+		payload = payload[:n]
+	}
+	buf := make([]byte, 8+n)
 	binary.LittleEndian.PutUint32(buf[0:4], uint32(op))
-	binary.LittleEndian.PutUint32(buf[4:8], uint32(len(payload)))
+	binary.LittleEndian.PutUint32(buf[4:8], uint32(n))
 	copy(buf[8:], payload)
 	return buf
 }

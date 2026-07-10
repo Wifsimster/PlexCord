@@ -65,22 +65,26 @@ func (c *Client) Login(clientID string) error {
 	}
 	c.conn = conn
 
+	if err := c.handshake(clientID); err != nil {
+		// Tear the connection down on any handshake failure; the close error is
+		// not actionable, so join it with the primary error for visibility.
+		return errors.Join(err, c.Close())
+	}
+	return nil
+}
+
+// handshake sends the op-0 handshake and validates Discord's reply. Discord
+// replies with a DISPATCH/READY frame; a CLOSE (e.g. an invalid client id) is
+// surfaced as an error so callers do not believe they connected.
+func (c *Client) handshake(clientID string) error {
 	payload, err := json.Marshal(handshake{V: "1", ClientID: clientID})
 	if err != nil {
-		c.closeConn()
 		return err
 	}
 	if err := c.send(opHandshake, payload); err != nil {
-		c.closeConn()
 		return err
 	}
-	// Discord replies with a DISPATCH/READY frame; surface a CLOSE (e.g. an
-	// invalid client id) as an error so callers do not believe they connected.
-	if err := c.readResponse(); err != nil {
-		c.closeConn()
-		return err
-	}
-	return nil
+	return c.readResponse()
 }
 
 // SetActivity sends a SET_ACTIVITY command and parses the response, returning
@@ -106,10 +110,6 @@ func (c *Client) SetActivity(a Activity) error {
 
 // Close tears down the connection. It is safe to call when not connected.
 func (c *Client) Close() error {
-	return c.closeConn()
-}
-
-func (c *Client) closeConn() error {
 	if c.conn == nil {
 		return nil
 	}
@@ -122,6 +122,9 @@ func (c *Client) send(op opcode, payload []byte) error {
 	if c.conn == nil {
 		return errNotConnected
 	}
+	if len(payload) > maxFrameSize {
+		return fmt.Errorf("ipc: payload too large (%d bytes)", len(payload))
+	}
 	_, err := c.conn.Write(encodeFrame(op, payload))
 	return err
 }
@@ -133,8 +136,11 @@ func (c *Client) readResponse() error {
 	if c.conn == nil {
 		return errNotConnected
 	}
-	_ = c.conn.SetReadDeadline(time.Now().Add(responseTimeout))
-	defer func() { _ = c.conn.SetReadDeadline(time.Time{}) }()
+	// Bound the wait so a silent socket cannot block a presence update forever.
+	// The deadline is refreshed on each call, so it need not be reset here.
+	if err := c.conn.SetReadDeadline(time.Now().Add(responseTimeout)); err != nil {
+		return err
+	}
 
 	op, payload, err := readFrame(c.conn)
 	if err != nil {
@@ -144,7 +150,10 @@ func (c *Client) readResponse() error {
 	switch op {
 	case opClose:
 		var cl closePayload
-		_ = json.Unmarshal(payload, &cl)
+		if err := json.Unmarshal(payload, &cl); err != nil {
+			// A malformed CLOSE body still means the connection is going away.
+			return &ClosedError{}
+		}
 		return &ClosedError{Code: cl.Code, Message: cl.Message}
 	case opFrame:
 		var resp responseFrame

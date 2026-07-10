@@ -167,7 +167,7 @@ func (a Activity) toPayload() *payloadActivity {
 	}
 
 	for _, b := range a.Buttons {
-		p.Buttons = append(p.Buttons, payloadButton{Label: b.Label, URL: b.URL})
+		p.Buttons = append(p.Buttons, payloadButton(b))
 	}
 
 	return p

@@ -3,6 +3,7 @@
 package ipc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -26,7 +27,7 @@ func candidateDirs() []string {
 	}
 	bases = append(bases, "/tmp")
 
-	var dirs []string
+	dirs := make([]string, 0, 4*len(bases))
 	for _, b := range bases {
 		dirs = append(dirs,
 			b,
@@ -40,11 +41,13 @@ func candidateDirs() []string {
 
 // dialDiscord connects to the first available discord-ipc-{0..9} unix socket.
 func dialDiscord() (net.Conn, error) {
+	dialer := net.Dialer{Timeout: dialTimeout}
+	ctx := context.Background()
 	var lastErr error
 	for _, dir := range candidateDirs() {
 		for i := 0; i < 10; i++ {
 			path := filepath.Join(dir, fmt.Sprintf("discord-ipc-%d", i))
-			conn, err := net.DialTimeout("unix", path, dialTimeout)
+			conn, err := dialer.DialContext(ctx, "unix", path)
 			if err == nil {
 				return conn, nil
 			}

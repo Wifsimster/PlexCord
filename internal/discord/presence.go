@@ -56,7 +56,9 @@ func (pm *PresenceManager) Connect(clientID string) error {
 	if pm.connected && pm.clientID != clientID {
 		log.Printf("Discord: Client ID changed, reconnecting...")
 		if pm.conn != nil {
-			_ = pm.conn.Close()
+			if err := pm.conn.Close(); err != nil {
+				log.Printf("Discord: error closing previous IPC connection: %v", err)
+			}
 			pm.conn = nil
 		}
 		pm.connected = false
@@ -95,7 +97,9 @@ func (pm *PresenceManager) Disconnect() error {
 
 	// Close the IPC connection
 	if pm.conn != nil {
-		_ = pm.conn.Close()
+		if err := pm.conn.Close(); err != nil {
+			log.Printf("Discord: error closing IPC connection: %v", err)
+		}
 		pm.conn = nil
 	}
 	pm.connected = false
