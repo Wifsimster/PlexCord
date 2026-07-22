@@ -1144,7 +1144,7 @@ async function executeReset() {
                                 <p v-if="updateReady" class="row-caption row-caption--success">{{ $t('settings.updateInstalled', { version: updateInfo?.latestVersion }) }}</p>
                             </div>
                             <!-- Self-updating platforms install in place; the rest fall back to the release page -->
-                            <button v-if="updateReady" type="button" class="pc-btn pc-btn--success" @click="restartApp"><i class="pi pi-refresh" aria-hidden="true"></i>{{ $t('settings.restartNow') }}</button>
+                            <button v-if="updateReady" type="button" class="pc-btn pc-btn--primary" @click="restartApp"><i class="pi pi-refresh" aria-hidden="true"></i>{{ $t('settings.restartNow') }}</button>
                             <button v-else-if="canSelfUpdate" type="button" class="pc-btn pc-btn--primary" :class="{ 'is-loading': installingUpdate }" :disabled="installingUpdate" @click="installUpdate">
                                 <span class="btn-label"><i class="pi pi-download" aria-hidden="true"></i>{{ $t('settings.downloadInstall') }}</span>
                                 <i v-if="installingUpdate" class="pi pi-spinner pi-spin btn-spinner" aria-hidden="true"></i>
@@ -1650,15 +1650,6 @@ async function executeReset() {
 .update-progress .row-caption {
     margin-top: 6px;
     font-variant-numeric: tabular-nums;
-}
-/* Success-severity confirm for the restart step (tokens only) */
-.pc-btn--success {
-    background: var(--pc-success);
-    border-color: transparent;
-    color: var(--pc-accent-contrast);
-}
-.pc-btn--success:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--pc-success) 88%, var(--pc-text));
 }
 .danger-zone {
     margin-top: 8px;

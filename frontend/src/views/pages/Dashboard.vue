@@ -131,7 +131,10 @@ const specimenCaption = computed(() => (ready.value && !hasActiveSession.value ?
                         {{ chip.label }}
                     </button>
                     <span v-else :key="chip.kind" class="pc-badge state-chip" :class="{ 'pc-badge--success': chip.severity === 'success', 'pc-badge--warn': chip.severity === 'warn' }">
-                        <span v-if="chip.kind === 'live'" class="pc-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+                        <template v-if="chip.kind === 'live'">
+                            <span class="pc-dot pc-dot--success" aria-hidden="true"></span>
+                            <span class="pc-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+                        </template>
                         <i v-else-if="chip.kind === 'paused-track'" class="pi pi-pause state-chip-glyph" aria-hidden="true"></i>
                         <span v-else class="state-chip-glyph" aria-hidden="true">–</span>
                         {{ chip.label }}
