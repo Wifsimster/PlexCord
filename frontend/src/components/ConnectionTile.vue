@@ -175,7 +175,7 @@ const retryNow = () => store.retry();
 </script>
 
 <template>
-    <article class="tile" :class="[`tile--${source}`, { 'tile--error': !!errorInfo }]">
+    <article class="pc-panel--raised tile" :class="[`tile--${source}`, { 'tile--error': !!errorInfo }]">
         <header class="tile-header">
             <span class="tile-glyph" :class="`tile-glyph--${source}`" aria-hidden="true">
                 <svg v-if="isPlex" width="16" height="16" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -261,11 +261,10 @@ const retryNow = () => store.retry();
 </template>
 
 <style scoped>
-/* Raised tile with the 2px brand identity keyline on top (§5.2) — the only
+/* Canonical raised surface (.pc-panel--raised, §5.0.1) carries bg + radius;
+   the tile adds the 2px brand identity keyline on top (§5.2) — the only
    non-neutral borders in the app. Error adds a 2px danger left keyline. */
 .tile {
-    background: var(--pc-raised);
-    border-radius: var(--pc-radius-md);
     border-top: 2px solid transparent;
     border-left: 2px solid transparent;
     padding: 12px 16px;
