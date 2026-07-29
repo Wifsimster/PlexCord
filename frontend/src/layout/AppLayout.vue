@@ -7,6 +7,7 @@ import Toast from 'primevue/toast';
 import AppFooter from './AppFooter.vue';
 import AppTopbar from './AppTopbar.vue';
 import { usePlayback } from '@/composables/usePlayback';
+import { useLayout } from '@/layout/composables/layout';
 import { usePlexConnectionStore } from '@/stores/plexConnection';
 import { useDiscordConnectionStore } from '@/stores/discordConnection';
 import { usePresenceStore } from '@/stores/presence';
@@ -21,6 +22,7 @@ const plexStore = usePlexConnectionStore();
 const discordStore = useDiscordConnectionStore();
 const presenceStore = usePresenceStore();
 const updatesStore = useUpdatesStore();
+const { toggleDarkMode } = useLayout();
 
 // ---- Update notifications (auto-updater) ----------------------------------
 // The backend checks for updates in the background (startup + periodic) and
@@ -74,10 +76,22 @@ usePlayback();
 
 // ---- Keyboard shortcuts (spec §5.1 / §6.7) --------------------------------
 // Ctrl/⌘+P toggle pause · Ctrl/⌘+, settings · Ctrl/⌘+R retry failed connection
+// Alt+D toggle dark/light theme
 const handleShortcuts = (event) => {
-    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
     // Never fire while an input-like element has focus (§6.7).
     if (event.target?.closest?.('input, textarea, [contenteditable], .p-inputtext')) return;
+
+    // Alt+D (no other modifiers) flips the theme. Alt maps a key to a glyph on
+    // some layouts, so match on event.code as well as event.key.
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        if (event.key?.toLowerCase() === 'd' || event.code === 'KeyD') {
+            event.preventDefault();
+            toggleDarkMode();
+        }
+        return;
+    }
+
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
 
     const key = event.key?.toLowerCase();
     if (key === 'p') {
