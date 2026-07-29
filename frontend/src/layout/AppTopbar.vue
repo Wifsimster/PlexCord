@@ -30,12 +30,16 @@ const toggleSettings = () => {
     router.push(isSettings.value ? '/' : '/settings');
 };
 
-const modKey = /mac/i.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl';
-const shortcutTooltip = (label, keys) => ({
-    value: `${label} <span class="pc-chip-mono">${modKey}+${keys}</span>`,
+const isMac = /mac/i.test(navigator.platform || navigator.userAgent);
+const modKey = isMac ? '⌘' : 'Ctrl';
+const altKey = isMac ? '⌥' : 'Alt';
+const keyTooltip = (label, combo) => ({
+    value: `${label} <span class="pc-chip-mono">${combo}</span>`,
     escape: false,
     showDelay: 300
 });
+const shortcutTooltip = (label, keys) => keyTooltip(label, `${modKey}+${keys}`);
+const altShortcutTooltip = (label, keys) => keyTooltip(label, `${altKey}+${keys}`);
 
 // ---- Node dot states -----------------------------------------------------
 const plexDotClass = computed(() => {
@@ -218,10 +222,22 @@ onBeforeUnmount(() => {
                 >
                     <i :class="presenceStore.paused ? 'pi pi-play' : 'pi pi-pause'"></i>
                 </button>
-                <button type="button" class="topbar-action" v-tooltip.bottom="shortcutTooltip(isSettings ? $t('topbar.backToDashboard') : $t('topbar.settings'), ',')" :aria-label="isSettings ? $t('topbar.backToDashboard') : $t('topbar.settings')" @click="toggleSettings">
+                <button
+                    type="button"
+                    class="topbar-action"
+                    v-tooltip.bottom="shortcutTooltip(isSettings ? $t('topbar.backToDashboard') : $t('topbar.settings'), ',')"
+                    :aria-label="isSettings ? $t('topbar.backToDashboard') : $t('topbar.settings')"
+                    @click="toggleSettings"
+                >
                     <i :class="isSettings ? 'pi pi-arrow-left' : 'pi pi-cog'"></i>
                 </button>
-                <button type="button" class="topbar-action" v-tooltip.bottom="{ value: isDarkTheme ? $t('topbar.lightTheme') : $t('topbar.darkTheme'), showDelay: 300 }" :aria-label="isDarkTheme ? $t('topbar.switchToLight') : $t('topbar.switchToDark')" @click="toggleDarkMode">
+                <button
+                    type="button"
+                    class="topbar-action"
+                    v-tooltip.bottom="altShortcutTooltip(isDarkTheme ? $t('topbar.lightTheme') : $t('topbar.darkTheme'), 'D')"
+                    :aria-label="isDarkTheme ? $t('topbar.switchToLight') : $t('topbar.switchToDark')"
+                    @click="toggleDarkMode"
+                >
                     <i :class="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'"></i>
                 </button>
             </div>
