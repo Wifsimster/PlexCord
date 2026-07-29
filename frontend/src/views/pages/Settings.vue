@@ -26,6 +26,8 @@ import {
     SetAutoStart,
     GetMinimizeToTray,
     SetMinimizeToTray,
+    GetStartMinimized,
+    SetStartMinimized,
     GetAutoUpdateCheck,
     SetAutoUpdateCheck,
     GetDiscordClientID,
@@ -82,6 +84,7 @@ const loaded = ref(false);
 const pollingInterval = ref(2);
 const autoStart = ref(false);
 const minimizeToTray = ref(true);
+const startMinimized = ref(false);
 const autoUpdateCheck = ref(true);
 const hideWhenPaused = ref(false);
 const hideWhenPausedDelay = ref(0);
@@ -199,6 +202,7 @@ onMounted(async () => {
         pollingInterval.value = await GetPollingInterval();
         autoStart.value = await GetAutoStart();
         minimizeToTray.value = await GetMinimizeToTray();
+        startMinimized.value = await GetStartMinimized();
         autoUpdateCheck.value = await GetAutoUpdateCheck();
         discordClientId.value = await GetDiscordClientID();
         defaultClientId.value = await GetDefaultDiscordClientID();
@@ -591,6 +595,11 @@ function updateArtworkLookup(value) {
 // ---------------- App: toggles (instant, optimistic + revert) ----------------
 const autoStartSaving = ref(false);
 const minimizeToTraySaving = ref(false);
+const startMinimizedSaving = ref(false);
+
+// Caption depends on where "minimized" lands: the tray when closing to the
+// tray is enabled, the taskbar otherwise. Mirrors resolveWindowLaunchState.
+const startMinimizedCaption = computed(() => (minimizeToTray.value ? t('settings.startMinimizedCaptionTray') : t('settings.startMinimizedCaptionTaskbar')));
 
 async function updateAutoStart(value) {
     autoStartSaving.value = true;
@@ -617,6 +626,20 @@ async function updateMinimizeToTray(value) {
         toastFailure(t('settings.toast.trayFailed'), error, t('settings.toast.settingFailedDetail'));
     } finally {
         minimizeToTraySaving.value = false;
+    }
+}
+
+async function updateStartMinimized(value) {
+    startMinimizedSaving.value = true;
+    startMinimized.value = value;
+    try {
+        await SetStartMinimized(value);
+        flashSaved('startMinimized');
+    } catch (error) {
+        startMinimized.value = !value;
+        toastFailure(t('settings.toast.startMinimizedFailed'), error, t('settings.toast.settingFailedDetail'));
+    } finally {
+        startMinimizedSaving.value = false;
     }
 }
 
@@ -1014,6 +1037,16 @@ async function executeReset() {
                             <div class="row-control">
                                 <SavedIndicator :visible="!!savedFlags.minimizeToTray" />
                                 <ToggleSwitch :modelValue="minimizeToTray" :disabled="minimizeToTraySaving" aria-labelledby="lbl-tray" @update:modelValue="updateMinimizeToTray" />
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="row-text">
+                                <span class="row-label" id="lbl-start-minimized">{{ $t('settings.startMinimized') }}</span>
+                                <p class="row-caption">{{ startMinimizedCaption }}</p>
+                            </div>
+                            <div class="row-control">
+                                <SavedIndicator :visible="!!savedFlags.startMinimized" />
+                                <ToggleSwitch :modelValue="startMinimized" :disabled="startMinimizedSaving" aria-labelledby="lbl-start-minimized" @update:modelValue="updateStartMinimized" />
                             </div>
                         </div>
                         <div class="setting-row">

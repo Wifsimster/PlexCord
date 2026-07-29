@@ -31,10 +31,13 @@ const relaunchLockSettle = 250 * time.Millisecond
 // relaunchPIDEnv has exited (or relaunchWaitTimeout elapses). It must run
 // before wails.Run acquires the single-instance lock. For a normal launch the
 // env var is absent and this returns immediately.
-func waitForPreviousInstanceExit() {
+//
+// It reports whether this process was spawned by an update relaunch, which the
+// caller uses to force the window open even when "Start minimized" is enabled.
+func waitForPreviousInstanceExit() bool {
 	raw := os.Getenv(relaunchPIDEnv)
 	if raw == "" {
-		return
+		return false
 	}
 	// Clear it so this instance's own environment (and any future relaunch it
 	// spawns) starts clean rather than inheriting a stale predecessor PID.
@@ -44,7 +47,7 @@ func waitForPreviousInstanceExit() {
 
 	pid, err := strconv.Atoi(raw)
 	if err != nil || pid <= 0 {
-		return
+		return true
 	}
 
 	log.Printf("Update relaunch: waiting for previous instance (pid %d) to exit", pid)
@@ -53,9 +56,10 @@ func waitForPreviousInstanceExit() {
 		if !processExists(pid) {
 			time.Sleep(relaunchLockSettle)
 			log.Printf("Previous instance exited; continuing startup")
-			return
+			return true
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	log.Printf("Timed out waiting for previous instance (pid %d) to exit; starting anyway", pid)
+	return true
 }

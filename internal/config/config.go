@@ -30,6 +30,7 @@ type Config struct {
 	PollingInterval      int    `json:"pollingInterval"`      // seconds
 	MinimizeToTray       bool   `json:"minimizeToTray"`
 	AutoStart            bool   `json:"autoStart"`
+	StartMinimized       bool   `json:"startMinimized"` // Launch in the background (tray or taskbar) instead of showing the window
 	SetupCompleted       bool   `json:"setupCompleted"` // True when setup wizard is done
 	SetupSkipped         bool   `json:"setupSkipped"`   // True when user skipped setup
 
@@ -87,6 +88,7 @@ func DefaultConfig() *Config {
 		PollingInterval: 2, // 2 seconds for NFR4 compliance
 		MinimizeToTray:  true,
 		AutoStart:       false,
+		StartMinimized:  false,
 		DiscordClientID: "", // Empty means use default from discord package
 		// Media-style presence (Listening/Watching) with the state line in the
 		// member list is the new default; users can revert to classic Playing.

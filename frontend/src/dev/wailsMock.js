@@ -70,6 +70,7 @@ export function installWailsMock() {
         autoStart: true,
         autoUpdateCheck: true,
         minimizeToTray: true,
+        startMinimized: false,
         hideWhenPaused: false,
         hideWhenPausedDelay: 0,
         pollingInterval: 5,
@@ -160,6 +161,10 @@ export function installWailsMock() {
         GetMinimizeToTray: () => state.minimizeToTray,
         SetMinimizeToTray: (v) => {
             state.minimizeToTray = v;
+        },
+        GetStartMinimized: () => state.startMinimized,
+        SetStartMinimized: (v) => {
+            state.startMinimized = v;
         },
         // Matches the Go App.GetHideWhenPaused map shape
         GetHideWhenPaused: () => ({ enabled: state.hideWhenPaused, delaySeconds: state.hideWhenPausedDelay }),

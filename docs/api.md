@@ -253,6 +253,7 @@ type Config struct {
     PollingInterval  int    `json:"pollingInterval"`
     AutoStart        bool   `json:"autoStart"`
     MinimizeToTray   bool   `json:"minimizeToTray"`
+    StartMinimized   bool   `json:"startMinimized"`
     SetupComplete    bool   `json:"setupComplete"`
 }
 ```

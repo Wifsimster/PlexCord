@@ -88,7 +88,15 @@ type App struct {
 	// beforeClose knows to allow shutdown instead of hiding to the background.
 	quitting atomic.Bool
 
+	// windowCtx is the Wails context published once the window can be driven;
+	// pendingShow records a restore request that arrived before that — a second
+	// instance launched while PlexCord was still booting — so it can be
+	// replayed instead of dropped. Both are guarded by windowMu.
+	windowCtx   context.Context
+	pendingShow bool
+
 	// Mutexes grouped together for alignment
+	windowMu   sync.Mutex // Protect windowCtx and pendingShow
 	pollerMu   sync.Mutex
 	sessionMu  sync.RWMutex // Protect currentSession access
 	discordMu  sync.Mutex
@@ -132,6 +140,15 @@ func (a *App) startup(ctx context.Context) {
 	// Perform your setup here
 	a.ctx = ctx
 	a.bus = events.NewWailsBus(ctx)
+
+	// The window can be driven from here on. A restore request that came in
+	// earlier — PlexCord started minimized and the user relaunched it while it
+	// was still booting — was parked rather than run against a nil context, so
+	// replay it now.
+	if a.markWindowReady(ctx) {
+		log.Printf("Replaying window restore requested before startup completed")
+		a.ShowWindow()
+	}
 
 	// Capture the executable's launch path now, while the running binary still
 	// has its original name. A self-update later renames it in place, so this
