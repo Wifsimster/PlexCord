@@ -134,6 +134,10 @@ export function GetServers() {
   return window['go']['main']['App']['GetServers']();
 }
 
+export function GetStartMinimized() {
+  return window['go']['main']['App']['GetStartMinimized']();
+}
+
 export function GetUpdateStatus() {
   return window['go']['main']['App']['GetUpdateStatus']();
 }
@@ -252,6 +256,10 @@ export function SetPresenceOptions(arg1) {
 
 export function SetServerActive(arg1, arg2) {
   return window['go']['main']['App']['SetServerActive'](arg1, arg2);
+}
+
+export function SetStartMinimized(arg1) {
+  return window['go']['main']['App']['SetStartMinimized'](arg1);
 }
 
 export function ShowWindow() {

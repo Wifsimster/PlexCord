@@ -27,7 +27,13 @@ func main() {
 	// lock. Otherwise the lock is still held by the outgoing process and this
 	// (updated) instance would be treated as a second instance and exit,
 	// leaving the previous version running. No-op for normal launches.
-	waitForPreviousInstanceExit()
+	isUpdateRelaunch := waitForPreviousInstanceExit()
+
+	// Decide how the window comes up before handing the options to Wails: the
+	// "Start minimized" setting lives in the config file, which the app itself
+	// only loads later, in OnStartup. An update relaunch ignores the setting
+	// and always shows the window.
+	launch := resolveWindowLaunchState(loadLaunchConfig(), isUpdateRelaunch)
 
 	// Create an instance of the app structure
 	app := NewApp()
@@ -48,7 +54,9 @@ func main() {
 		DisableResize: false,
 		Fullscreen:    false,
 		Frameless:     true, // Custom in-app title bar (single merged header)
-		StartHidden:   false,
+		// Start hidden when "Start minimized" runs PlexCord straight into the
+		// tray; the tray icon and relaunching the app both restore it.
+		StartHidden: launch.StartHidden,
 		// Close behavior is handled dynamically in app.beforeClose so it can
 		// honor the user's "Minimize to tray" setting: hide to the background
 		// when enabled, quit when disabled.
@@ -57,14 +65,16 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		Menu:             nil,
-		Logger:           nil,
-		LogLevel:         logger.DEBUG,
-		OnStartup:        app.startup,
-		OnDomReady:       app.domReady,
-		OnBeforeClose:    app.beforeClose,
-		OnShutdown:       app.shutdown,
-		WindowStartState: options.Normal,
+		Menu:          nil,
+		Logger:        nil,
+		LogLevel:      logger.DEBUG,
+		OnStartup:     app.startup,
+		OnDomReady:    app.domReady,
+		OnBeforeClose: app.beforeClose,
+		OnShutdown:    app.shutdown,
+		// Normal, or Minimised when "Start minimized" is on without
+		// "Minimize to tray" (see resolveWindowLaunchState).
+		WindowStartState: launch.StartState,
 		// A single-instance lock complements the system tray: it prevents
 		// stacking up background copies and, when PlexCord is relaunched while
 		// already running, restores the existing window instead of starting

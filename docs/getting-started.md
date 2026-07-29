@@ -55,6 +55,22 @@ Once setup is complete:
 3. Your Discord status will update automatically
 4. When you stop playing, the status clears
 
+### Running in the background
+
+Settings → App controls how PlexCord behaves around the window:
+
+- **Start on login** launches PlexCord automatically when you log in.
+- **Minimize to tray** keeps PlexCord running in the tray when you close the
+  window, instead of quitting.
+- **Start minimized** launches PlexCord without opening the window — into the
+  tray when "Minimize to tray" is on, otherwise minimized to the taskbar.
+  It takes effect on the next launch.
+
+To bring the window back, click the tray icon (or its "Show PlexCord" menu
+entry), or simply open PlexCord again: launching it while it is already running
+in the background restores the running instance rather than starting a second
+copy.
+
 ## System Requirements
 
 - **Operating System**: Windows 10+, macOS 11+, or Linux (Ubuntu 20.04+)

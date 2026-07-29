@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -12,12 +13,53 @@ import (
 // ============================================================================
 
 // ShowWindow shows and focuses the main application window.
-// This is used when restoring from minimized/hidden state.
+// This is used when restoring from minimized/hidden state: from the tray, and
+// from a relaunch of PlexCord while it is already running in the background.
 func (a *App) ShowWindow() {
-	runtime.WindowShow(a.ctx)
-	runtime.WindowUnminimise(a.ctx)
-	runtime.WindowSetAlwaysOnTop(a.ctx, true)
-	runtime.WindowSetAlwaysOnTop(a.ctx, false) // Trick to bring to front
+	ctx := a.windowContext()
+	if ctx == nil {
+		log.Printf("Show requested before the window was ready; deferred until startup completes")
+		return
+	}
+
+	runtime.WindowShow(ctx)
+	// Only un-minimise when the window actually is minimised: on a window that
+	// was hidden while maximised, an unconditional restore would also drop it
+	// back to its normal size.
+	if runtime.WindowIsMinimised(ctx) {
+		runtime.WindowUnminimise(ctx)
+	}
+	runtime.WindowSetAlwaysOnTop(ctx, true)
+	runtime.WindowSetAlwaysOnTop(ctx, false) // Trick to bring to front
+}
+
+// windowContext returns the context to drive the window with, or nil when the
+// window is not ready yet — a restore arriving before OnStartup handed us the
+// Wails context. In that case the request is remembered so markWindowReady can
+// replay it, rather than being dropped (or run against a nil context, which
+// panics inside the Wails runtime).
+func (a *App) windowContext() context.Context {
+	a.windowMu.Lock()
+	defer a.windowMu.Unlock()
+
+	if a.windowCtx != nil {
+		return a.windowCtx
+	}
+	a.pendingShow = true
+	return nil
+}
+
+// markWindowReady publishes the Wails context that drives the window and
+// reports whether a restore request arrived before it existed, in which case
+// the caller should replay it. Called from startup.
+func (a *App) markWindowReady(ctx context.Context) bool {
+	a.windowMu.Lock()
+	defer a.windowMu.Unlock()
+
+	a.windowCtx = ctx
+	pending := a.pendingShow
+	a.pendingShow = false
+	return pending
 }
 
 // HideWindow hides the main application window.
@@ -45,6 +87,13 @@ func (a *App) QuitApp() {
 // launches PlexCord again while an instance is already running in the
 // background. Alongside the system tray, relaunching is a restore path:
 // bring the existing window back to the foreground instead of starting a copy.
+//
+// This is the path that makes "Start minimized" recoverable on Windows: with
+// no window and (when minimizing to the tray) no taskbar button, re-running
+// PlexCord — from the Start menu, a shortcut, or a double-clicked exe — is
+// what the user reaches for, and it must reopen the running instance. The
+// second instance can land before OnStartup has run, so ShowWindow parks the
+// request until the window exists rather than dropping it.
 func (a *App) onSecondInstanceLaunch(options.SecondInstanceData) {
 	log.Printf("Second instance launched: restoring existing window")
 	a.ShowWindow()
@@ -63,6 +112,25 @@ func (a *App) SetMinimizeToTray(enabled bool) error {
 		return err
 	}
 	log.Printf("Minimize to tray set to: %v", enabled)
+	return nil
+}
+
+// GetStartMinimized returns whether PlexCord should launch in the background
+// instead of showing its window.
+func (a *App) GetStartMinimized() bool {
+	return a.config.StartMinimized
+}
+
+// SetStartMinimized updates the start-minimized setting. It takes effect on
+// the next launch — the window state is decided before Wails starts, in
+// resolveWindowLaunchState.
+func (a *App) SetStartMinimized(enabled bool) error {
+	a.config.StartMinimized = enabled
+	if err := a.saveConfig(); err != nil {
+		log.Printf("ERROR: Failed to save start minimized setting: %v", err)
+		return err
+	}
+	log.Printf("Start minimized set to: %v", enabled)
 	return nil
 }
 
