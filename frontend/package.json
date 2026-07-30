@@ -29,7 +29,7 @@
     },
     "devDependencies": {
         "@commitlint/cli": "^20.5.2",
-        "@commitlint/config-conventional": "^19.0.0",
+        "@commitlint/config-conventional": "^21.2.0",
         "@primevue/auto-import-resolver": "^4.5.5",
         "@rushstack/eslint-patch": "^1.16.1",
         "@semantic-release/changelog": "^6.0.0",
