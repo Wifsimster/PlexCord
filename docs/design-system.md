@@ -439,6 +439,18 @@ Topbar = the **signal strip**: fixed 48px (down from 64px), bg `--pc-overlay`, b
 - **Keyboard shortcuts** (registered in AppLayout, guarded against input targets): `Ctrl/⌘+P` toggle pause, `Ctrl/⌘+,` settings, `Ctrl/⌘+R` retry the failed connection (no-op + toast "Nothing to retry" when healthy), `Alt/⌥+D` toggle dark/light theme (same M-transition path as the topbar theme button).
 - Footer: one quiet caption line — `PlexCord v1.4.2 · a1b2c3d` (mono chip, from `useVersion()`). **The only version display** (removed from Dashboard header; Settings→About shows it too but from the same composable).
 - Layout container: `.layout-main-container { padding: 64px var(--pc-page-gutter) 24px; }` (48px bar + 16px). Pages **stop** declaring their own `min-h-screen`/background/padding (fixes the double-padding). Canvas `--pc-bg` comes from `body`. Route transitions: M7 on the main `<router-view>`. Remove `.layout-mask` and the dead `containerClass` from `AppLayout.vue`.
+- The centered signal path is `position: absolute`, so the flanks are not part of its layout. It is capped at `min(60vw, 640px, calc(100% - 2 * (var(--topbar-flank) + var(--topbar-flank-gap))))` — `--topbar-flank` (279px) is the right cluster, the wider flank — so a long headline title ellipsizes instead of running into the action buttons at narrow window widths. The `640px` spec cap governs above ~1200px.
+
+**Window geometry** (`window_state.go`, applied in `main.go`): the window is sized from the content above, not from round numbers.
+
+| | Value | Derivation |
+|---|---|---|
+| Preferred width | 1248 | Dashboard content cap 1200 (§5.2) + 2×24px page gutter — the widest surface. Settings (1088) and the wizard (848) center inside it. |
+| Preferred height | 700 | Dashboard in its tallest (idle) state: 64px top gutter + 525px panels + 46px footer + 24px ≈ 663, plus air. The view that stays open sets the height; Settings (~2170px) and the wizard's Complete step (796px) scroll instead. |
+| Minimum width | 880 | Where the wizard's step column reaches its full 560px (240px rail + 2×24px gutter + 560). Below it the Dashboard (<992px) and Settings (<860px) responsive fallbacks are still correct — the floor just stops anything being *forced* into them. |
+| Minimum height | 600 | Deliberately below every view's natural height: pages scroll and the wizard has its own scroller with a pinned footer. A taller floor is what stops the window fitting a scaled or small display. |
+
+Wails takes its window size before any screen is known, so the preferred size is the static option and `App.adaptWindowToScreen` corrects it on startup: it clamps to 95% × 90% of the screen the window opened on (Wails v2 reports screen size, not work area, so the remainder absorbs the taskbar/dock), never below the minimum and never larger than the screen itself, then re-centers.
 
 ### 5.2 Dashboard (`/`)
 

@@ -150,6 +150,11 @@ func (a *App) startup(ctx context.Context) {
 		a.ShowWindow()
 	}
 
+	// The window opened at the content-derived preferred size, which Wails had
+	// to take before it could report a screen. Now that it can, shrink the
+	// window if that size does not fit the display it opened on.
+	a.adaptWindowToScreen(ctx)
+
 	// Capture the executable's launch path now, while the running binary still
 	// has its original name. A self-update later renames it in place, so this
 	// pre-update snapshot is what a restart must relaunch to run the new version.
