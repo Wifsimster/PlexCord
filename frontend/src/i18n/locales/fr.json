@@ -125,7 +125,13 @@
     },
     "layout": {
         "nothingToRetry": "Rien à réessayer",
-        "connectionsHealthy": "Les deux connexions sont saines."
+        "connectionsHealthy": "Les deux connexions sont saines.",
+        "updateReadySummary": "Mise à jour prête",
+        "updateReadyDetail": "PlexCord {version} a été téléchargé — redémarrez pour l'appliquer.",
+        "updateAvailableSummary": "Mise à jour disponible",
+        "updateAvailableDetail": "PlexCord {version} est disponible. Sur cette plateforme, la mise à jour est manuelle — téléchargez-la depuis la page des versions.",
+        "updateViewInSettings": "Voir dans les réglages",
+        "updateLater": "Plus tard"
     },
     "notFound": {
         "caption": "Cette page n'existe pas.",

@@ -66,6 +66,7 @@ type Updater struct {
 	status          Status
 	notifiedVersion string             // dedup: one announcement/download per version
 	stop            context.CancelFunc // non-nil while the checker goroutine runs
+	onStatusChange  func(Status)       // optional in-process listener, see OnStatusChange
 
 	// downloadMu is held for the whole duration of a download so the manual
 	// button and the background checker can never download concurrently.
@@ -128,6 +129,71 @@ func (u *Updater) GetStatus() Status {
 	return u.status
 }
 
+// OnStatusChange registers a listener for lifecycle transitions, for consumers
+// inside the process — the system tray, which has to surface a pending update
+// even when no window is on screen to receive the frontend events.
+//
+// It fires on State transitions only, not on download progress, and runs on the
+// goroutine that made the transition (the background checker, or the caller of
+// StartDownload). Callbacks must not block. Only one listener is supported;
+// registering again replaces it.
+func (u *Updater) OnStatusChange(fn func(Status)) {
+	u.mu.Lock()
+	u.onStatusChange = fn
+	status := u.status
+	u.mu.Unlock()
+
+	// Deliver the current state immediately so a listener registered after an
+	// early transition is not left behind.
+	if fn != nil {
+		fn(status)
+	}
+}
+
+// notifyStatusChange delivers the current status to the listener. Must be
+// called with u.mu released, since the listener may call back into GetStatus.
+func (u *Updater) notifyStatusChange() {
+	u.mu.Lock()
+	fn, status := u.onStatusChange, u.status
+	u.mu.Unlock()
+
+	if fn != nil {
+		fn(status)
+	}
+}
+
+// Check performs a user-initiated update check and records the result, without
+// starting a download — the user decides that from Settings.
+//
+// Going through here rather than calling version.CheckForUpdate directly is what
+// keeps the manual and automatic paths telling the same story: the status
+// snapshot and the tray notice pick the update up, and the announcement dedup is
+// primed so the background checker does not re-announce what the user just saw.
+func (u *Updater) Check() (*version.UpdateInfo, error) {
+	info, err := u.check()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Available {
+		// Nothing new. An update already found (possibly downloaded and waiting
+		// for a restart) stays where it is — it is still pending.
+		return info, nil
+	}
+
+	u.mu.Lock()
+	// A download in flight, or one already applied, owns the status.
+	if u.status.State == StateDownloading || u.status.State == StateReady {
+		u.mu.Unlock()
+		return info, nil
+	}
+	u.notifiedVersion = info.LatestVersion
+	u.status = Status{State: StateAvailable, Info: info, Auto: false}
+	u.mu.Unlock()
+
+	u.notifyStatusChange()
+	return info, nil
+}
+
 // run is the checker goroutine body.
 func (u *Updater) run(ctx context.Context) {
 	select {
@@ -183,6 +249,7 @@ func (u *Updater) runAutoCheck(ctx context.Context) {
 	if newVersion {
 		log.Printf("Automatic update check: %s -> %s available", info.CurrentVersion, info.LatestVersion)
 		u.bus.Emit(events.UpdateAvailable, info)
+		u.notifyStatusChange()
 	}
 
 	if !u.canSelf() {
@@ -225,6 +292,7 @@ func (u *Updater) StartDownload(ctx context.Context, auto bool) (*version.Update
 		s.Progress = 0
 		s.Auto = auto
 	})
+	u.notifyStatusChange()
 
 	progress := func(downloaded, total int64) {
 		var percent float64
@@ -256,6 +324,7 @@ func (u *Updater) StartDownload(ctx context.Context, auto bool) (*version.Update
 		if !auto {
 			u.bus.Emit(events.UpdateError, err.Error())
 		}
+		u.notifyStatusChange()
 		return nil, err
 	}
 
@@ -266,6 +335,7 @@ func (u *Updater) StartDownload(ctx context.Context, auto bool) (*version.Update
 
 	log.Printf("Update installed: %s (restart required)", info.LatestVersion)
 	u.bus.Emit(events.UpdateReady, info)
+	u.notifyStatusChange()
 	return info, nil
 }
 

@@ -73,10 +73,20 @@ func (a *App) GetVersion() version.Info {
 // CheckForUpdate checks GitHub releases for a newer version.
 // Returns update info including availability, latest version, and download URL.
 // A loading indicator should be shown during the check (typically 1-5 seconds).
+//
+// The check runs through the updater rather than straight at the version
+// package, so a manually-found update lands in the same state the automatic
+// checker feeds: it survives a page reload via GetUpdateStatus, it reaches the
+// system tray, and the background checker will not announce it a second time.
 func (a *App) CheckForUpdate() (*version.UpdateInfo, error) {
 	log.Printf("Checking for updates...")
 
-	info, err := version.CheckForUpdate()
+	check := version.CheckForUpdate
+	if a.updater != nil {
+		check = a.updater.Check
+	}
+
+	info, err := check()
 	if err != nil {
 		log.Printf("ERROR: Update check failed: %v", err)
 		return nil, errors.Wrap(err, errors.TIMEOUT, "failed to check for updates")

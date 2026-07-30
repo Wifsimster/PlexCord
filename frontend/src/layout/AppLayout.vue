@@ -35,8 +35,8 @@ watch(
         const version = updatesStore.info?.latestVersion ?? '';
         toast.add(
             updatesStore.updateReady
-                ? { group: 'updates', severity: 'success', summary: 'Update ready', detail: `PlexCord ${version} has been downloaded — restart to apply.` }
-                : { group: 'updates', severity: 'info', summary: 'Update available', detail: `PlexCord ${version} is out. This platform updates manually — download it from the releases page.` }
+                ? { group: 'updates', severity: 'success', summary: t('layout.updateReadySummary'), detail: t('layout.updateReadyDetail', { version }) }
+                : { group: 'updates', severity: 'info', summary: t('layout.updateAvailableSummary'), detail: t('layout.updateAvailableDetail', { version }) }
         );
     },
     { immediate: true }
@@ -52,7 +52,7 @@ async function restartForUpdate() {
     try {
         await updatesStore.restart();
     } catch (error) {
-        toast.add({ severity: 'error', summary: 'Failed to restart', detail: error?.message || 'PlexCord could not restart itself — please restart it manually.', life: 8000 });
+        toast.add({ severity: 'error', summary: t('settings.toast.restartFailed'), detail: error?.message || t('settings.toast.restartFailedDetail'), life: 8000 });
     }
 }
 
@@ -155,10 +155,10 @@ onBeforeUnmount(() => {
                     <span class="update-toast-summary">{{ message.summary }}</span>
                     <p class="update-toast-detail">{{ message.detail }}</p>
                     <div class="update-toast-actions">
-                        <button v-if="updatesStore.updateReady" type="button" class="pc-btn pc-btn--primary pc-btn--sm" @click="restartForUpdate"><i class="pi pi-refresh" aria-hidden="true"></i>Restart now</button>
-                        <button v-else type="button" class="pc-btn pc-btn--primary pc-btn--sm" @click="openUpdateRelease"><i class="pi pi-download" aria-hidden="true"></i>Download</button>
-                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="viewUpdateInSettings">View in Settings</button>
-                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="dismissUpdateToast">Later</button>
+                        <button v-if="updatesStore.updateReady" type="button" class="pc-btn pc-btn--primary pc-btn--sm" @click="restartForUpdate"><i class="pi pi-refresh" aria-hidden="true"></i>{{ $t('settings.restartNow') }}</button>
+                        <button v-else type="button" class="pc-btn pc-btn--primary pc-btn--sm" @click="openUpdateRelease"><i class="pi pi-download" aria-hidden="true"></i>{{ $t('settings.download') }}</button>
+                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="viewUpdateInSettings">{{ $t('layout.updateViewInSettings') }}</button>
+                        <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="dismissUpdateToast">{{ $t('layout.updateLater') }}</button>
                     </div>
                 </div>
             </template>

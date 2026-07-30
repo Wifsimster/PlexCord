@@ -178,8 +178,9 @@ func (a *App) startup(ctx context.Context) {
 	// window (or quitting) once the app is running in the background, so it
 	// runs regardless of the "Minimize to tray" setting.
 	a.tray = platform.NewTrayManager(platform.TrayCallbacks{
-		OnShow: a.ShowWindow,
-		OnQuit: a.QuitApp,
+		OnShow:   a.ShowWindow,
+		OnQuit:   a.QuitApp,
+		OnUpdate: a.onTrayUpdateClick,
 	}, a.trayIconPNG, a.trayIconICO)
 	a.tray.Start()
 
@@ -189,6 +190,9 @@ func (a *App) startup(ctx context.Context) {
 	// Start the automatic update checker (startup check + periodic re-check).
 	// No-op for dev builds; can be toggled at runtime via SetAutoUpdateCheck.
 	a.updater = updater.New(a.bus, 6*time.Hour)
+	// Mirror update state into the tray menu: the frontend toast needs an open
+	// window, and PlexCord is built to run without one.
+	a.updater.OnStatusChange(a.publishUpdateNotice)
 	if a.config.IsAutoUpdateCheckEnabled() {
 		a.updater.StartChecker(ctx)
 	}
