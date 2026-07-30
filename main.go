@@ -46,11 +46,16 @@ func main() {
 	// Create application with options
 	// Note: Removed MaxWidth and MaxHeight
 	err := wails.Run(&options.App{
-		Title:         "plexcord",
-		Width:         1100,
-		Height:        1000,
-		MinWidth:      1024,
-		MinHeight:     768,
+		Title: "plexcord",
+		// Sized to the content, not to round numbers: the Dashboard grid sets
+		// the width and the setup wizard's tallest step sets the height (see
+		// window_state.go). Wails needs a size before any screen is known, so
+		// this is the preferred size — app.startup shrinks it to fit the actual
+		// display via adaptWindowToScreen.
+		Width:         preferredWindowWidth,
+		Height:        preferredWindowHeight,
+		MinWidth:      minWindowWidth,
+		MinHeight:     minWindowHeight,
 		DisableResize: false,
 		Fullscreen:    false,
 		Frameless:     true, // Custom in-app title bar (single merged header)

@@ -71,6 +71,25 @@ entry), or simply open PlexCord again: launching it while it is already running
 in the background restores the running instance rather than starting a second
 copy.
 
+### Updates
+
+PlexCord checks for a new release shortly after launch and every 6 hours after
+that (Settings → About turns this off, and has a "Check for updates" button for
+checking on demand). Where PlexCord can update itself, the new version
+downloads in the background and all that is left is a restart.
+
+You are told about it wherever you happen to be:
+
+- **In the window**, a notification offers `Restart now` — or, on platforms that
+  update manually, a `Download` link to the release page. "Later" dismisses it;
+  Settings → About keeps the update, its release notes, and the same buttons.
+- **In the tray**, the menu gains an entry for the pending update — `Restart to
+  update to v1.5.0` once it is downloaded, `Update available: v1.5.0` before
+  that — and the tray icon's tooltip says the same. This is what tells you
+  about an update when PlexCord is running in the background with no window
+  open. Clicking the entry restarts PlexCord when the update is ready to apply,
+  and otherwise opens the window so you can read the release notes first.
+
 ## System Requirements
 
 - **Operating System**: Windows 10+, macOS 11+, or Linux (Ubuntu 20.04+)

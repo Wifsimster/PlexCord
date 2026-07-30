@@ -317,6 +317,14 @@ onBeforeUnmount(() => {
     padding: 0 0 0 var(--pc-page-gutter);
     background: var(--pc-overlay);
     border-bottom: 1px solid var(--pc-border);
+
+    /* Width of the right cluster — the wider of the two flanks the centered
+       signal path must not run into: 3×32px actions + 2×8px gaps + the 24px
+       gutter before the divider + 4px + 1px rule + 3×46px caption buttons.
+       Kept here (not inlined in the calc below) so the two stay in step. */
+    --topbar-flank: 279px;
+    /* Breathing room between the signal path and either flank. */
+    --topbar-flank-gap: 12px;
 }
 
 .topbar-brand {
@@ -337,7 +345,12 @@ onBeforeUnmount(() => {
     transform: translate(-50%, -50%);
     display: flex;
     align-items: center;
-    max-width: min(60vw, 640px);
+    /* Centered on the window, so the flanks are not part of its layout — the
+       third term is what keeps it from growing into them (the headline title
+       ellipsizes instead). 100% is the header's padding box, hence one flank
+       plus gap on each side. Binds below ~1200px; above that the 640px spec
+       cap wins. */
+    max-width: min(60vw, 640px, calc(100% - 2 * (var(--topbar-flank) + var(--topbar-flank-gap))));
 }
 
 .signal-node {

@@ -125,7 +125,13 @@
     },
     "layout": {
         "nothingToRetry": "Nichts zu wiederholen",
-        "connectionsHealthy": "Beide Verbindungen sind in Ordnung."
+        "connectionsHealthy": "Beide Verbindungen sind in Ordnung.",
+        "updateReadySummary": "Update bereit",
+        "updateReadyDetail": "PlexCord {version} wurde heruntergeladen — zum Anwenden neu starten.",
+        "updateAvailableSummary": "Update verfügbar",
+        "updateAvailableDetail": "PlexCord {version} ist erschienen. Diese Plattform wird manuell aktualisiert — lade es von der Releases-Seite herunter.",
+        "updateViewInSettings": "In den Einstellungen ansehen",
+        "updateLater": "Später"
     },
     "notFound": {
         "caption": "Diese Route existiert nicht.",

@@ -3,6 +3,7 @@ package updater
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -364,5 +365,197 @@ func TestDownloadEmitsProgressAndReady(t *testing.T) {
 		if p.Percent <= 0 || p.Percent > 100 {
 			t.Errorf("progress percent = %v, want within (0,100]", p.Percent)
 		}
+	}
+}
+
+// TestOnStatusChangeReportsTransitions verifies the in-process listener (used by
+// the system tray, which cannot see the frontend events) sees each lifecycle
+// transition and not the download progress in between.
+func TestOnStatusChangeReportsTransitions(t *testing.T) {
+	bus := events.NewRecordingBus()
+	u := newTestUpdater(bus)
+
+	var mu sync.Mutex
+	var states []State
+	u.OnStatusChange(func(s Status) {
+		mu.Lock()
+		states = append(states, s.State)
+		mu.Unlock()
+	})
+
+	// Registering delivers the current state immediately, so a listener wired
+	// up after an early transition is not left behind.
+	mu.Lock()
+	initial := append([]State(nil), states...)
+	mu.Unlock()
+	if len(initial) != 1 || initial[0] != StateIdle {
+		t.Fatalf("states after registering = %v, want [idle]", initial)
+	}
+
+	u.check = func() (*version.UpdateInfo, error) { return updateInfo("v9.9.9"), nil }
+	u.download = func(_ context.Context, progress version.ProgressFunc) (*version.UpdateInfo, error) {
+		// Progress is not a state change and must not notify.
+		progress(50, 100)
+		progress(100, 100)
+		return &version.UpdateInfo{LatestVersion: "v9.9.9"}, nil
+	}
+
+	u.StartChecker(context.Background())
+	defer u.StopChecker()
+
+	waitFor(t, func() bool {
+		return u.GetStatus().State == StateReady
+	}, "updater to reach ready")
+
+	waitFor(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(states) == 4
+	}, "four status notifications")
+
+	mu.Lock()
+	got := append([]State(nil), states...)
+	mu.Unlock()
+
+	want := []State{StateIdle, StateAvailable, StateDownloading, StateReady}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("states = %v, want %v", got, want)
+		}
+	}
+}
+
+// TestOnStatusChangeReportsFailedDownload verifies a failed download reports the
+// state it fell back to, so the tray stops advertising a download in progress.
+func TestOnStatusChangeReportsFailedDownload(t *testing.T) {
+	u := newTestUpdater(events.NewRecordingBus())
+
+	var mu sync.Mutex
+	var last Status
+	u.OnStatusChange(func(s Status) {
+		mu.Lock()
+		last = s
+		mu.Unlock()
+	})
+
+	u.mu.Lock()
+	u.status = Status{State: StateAvailable, Info: updateInfo("v9.9.9")}
+	u.mu.Unlock()
+
+	u.download = func(context.Context, version.ProgressFunc) (*version.UpdateInfo, error) {
+		return nil, errors.New("network down")
+	}
+
+	if _, err := u.StartDownload(context.Background(), false); err == nil {
+		t.Fatal("StartDownload() = nil error, want the injected failure")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if last.State != StateAvailable {
+		t.Errorf("last notified state = %q, want %q", last.State, StateAvailable)
+	}
+	if last.Progress != 0 {
+		t.Errorf("last notified progress = %v, want 0", last.Progress)
+	}
+}
+
+// TestManualCheckRecordsTheUpdate verifies a user-initiated check lands in the
+// shared status — so it survives a page reload, reaches the system tray, and
+// primes the dedup — without starting a download.
+func TestManualCheckRecordsTheUpdate(t *testing.T) {
+	u := newTestUpdater(events.NewRecordingBus())
+
+	var notified atomic.Int32
+	u.OnStatusChange(func(Status) { notified.Add(1) })
+
+	var downloads atomic.Int32
+	u.download = func(context.Context, version.ProgressFunc) (*version.UpdateInfo, error) {
+		downloads.Add(1)
+		return &version.UpdateInfo{LatestVersion: "v9.9.9"}, nil
+	}
+	u.check = func() (*version.UpdateInfo, error) { return updateInfo("v9.9.9"), nil }
+
+	info, err := u.Check()
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if info.LatestVersion != "v9.9.9" {
+		t.Fatalf("Check() returned %q, want v9.9.9", info.LatestVersion)
+	}
+
+	status := u.GetStatus()
+	if status.State != StateAvailable {
+		t.Errorf("state after a manual check = %q, want %q", status.State, StateAvailable)
+	}
+	if status.Auto {
+		t.Error("status marked automatic, want it attributed to the user")
+	}
+	if got := downloads.Load(); got != 0 {
+		t.Errorf("downloads = %d, want 0 — the user decides when to install", got)
+	}
+	// One notification when the listener registered, one for the transition.
+	if got := notified.Load(); got != 2 {
+		t.Errorf("status notifications = %d, want 2", got)
+	}
+}
+
+// TestManualCheckPrimesAnnouncementDedup verifies the background checker does not
+// re-announce a version the user already saw in Settings.
+func TestManualCheckPrimesAnnouncementDedup(t *testing.T) {
+	bus := events.NewRecordingBus()
+	u := newTestUpdater(bus)
+	u.check = func() (*version.UpdateInfo, error) { return updateInfo("v9.9.9"), nil }
+	u.canSelf = func() bool { return false } // notify-only: no download to confuse the count
+
+	if _, err := u.Check(); err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	u.StartChecker(context.Background())
+	defer u.StopChecker()
+
+	// Let the checker run at least two cycles.
+	waitFor(t, func() bool { return u.GetStatus().State == StateAvailable }, "checker to settle")
+	time.Sleep(60 * time.Millisecond)
+
+	if got := bus.Count(events.UpdateAvailable); got != 0 {
+		t.Errorf("UpdateAvailable emissions = %d, want 0 — the user already saw this version", got)
+	}
+}
+
+// TestManualCheckLeavesAppliedUpdateAlone verifies a check that finds nothing new
+// does not retract an update already downloaded and waiting for a restart.
+func TestManualCheckLeavesAppliedUpdateAlone(t *testing.T) {
+	u := newTestUpdater(events.NewRecordingBus())
+
+	u.mu.Lock()
+	u.status = Status{State: StateReady, Info: updateInfo("v9.9.9"), Progress: 100}
+	u.mu.Unlock()
+
+	u.check = func() (*version.UpdateInfo, error) {
+		return &version.UpdateInfo{Available: false, CurrentVersion: "v1.0.0"}, nil
+	}
+
+	if _, err := u.Check(); err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	if got := u.GetStatus().State; got != StateReady {
+		t.Errorf("state = %q, want %q — the pending restart is still pending", got, StateReady)
+	}
+}
+
+// TestManualCheckPropagatesFailure verifies a failing check does not touch the
+// status.
+func TestManualCheckPropagatesFailure(t *testing.T) {
+	u := newTestUpdater(events.NewRecordingBus())
+	u.check = func() (*version.UpdateInfo, error) { return nil, errors.New("offline") }
+
+	if _, err := u.Check(); err == nil {
+		t.Fatal("Check() = nil error, want the injected failure")
+	}
+	if got := u.GetStatus().State; got != StateIdle {
+		t.Errorf("state = %q, want %q", got, StateIdle)
 	}
 }
