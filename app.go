@@ -182,6 +182,16 @@ func (a *App) startup(ctx context.Context) {
 		log.Printf("Warning: failed to refresh auto-start registration: %v", err)
 	}
 
+	// Same idea for an installed copy on Windows: a self-update replaces the
+	// executable without running the installer, so the version shown in
+	// "Apps & features" is refreshed here. No-op for portable and non-Windows
+	// builds, and for dev builds, which have no release version to advertise.
+	if !version.IsDevBuild() {
+		if err := platform.SyncInstalledVersion(version.GetInfo().Version); err != nil {
+			log.Printf("Warning: failed to refresh the installed version registration: %v", err)
+		}
+	}
+
 	// Start the system tray. This is the visible affordance for restoring the
 	// window (or quitting) once the app is running in the background, so it
 	// runs regardless of the "Minimize to tray" setting.

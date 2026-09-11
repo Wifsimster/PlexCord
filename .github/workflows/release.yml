@@ -116,23 +116,57 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
 
+      # The windows-latest image has no NSIS on PATH, and `wails build -nsis`
+      # only warns before exiting 0 when makensis is missing.
+      - name: Install NSIS
+        run: |
+          choco install nsis --no-progress -y
+          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+
+      - name: Verify makensis is on PATH
+        run: makensis /VERSION
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Build application
+      # wails.json carries a placeholder version; the installer shows this one
+      # in its file properties and writes it as DisplayVersion in the
+      # "Apps & features" entry, so stamp the release version in first.
+      - name: Stamp the release version into wails.json
         shell: bash
         run: |
-          wails build -clean -platform windows/amd64 -ldflags "-X plexcord/internal/version.Version=${{ needs.resolve.outputs.tag }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          jq --arg v "${{ needs.resolve.outputs.version }}" '.info.productVersion = $v' wails.json > wails.json.tmp
+          mv wails.json.tmp wails.json
 
-      - name: Rename binary
+      # -nsis produces the per-user installer alongside the portable binary, so
+      # one build yields both release assets (see build/windows/installer).
+      - name: Build application and installer
+        shell: bash
         run: |
-          mv build/bin/PlexCord.exe build/bin/PlexCord-windows-amd64.exe
+          wails build -clean -nsis -platform windows/amd64 -ldflags "-X plexcord/internal/version.Version=${{ needs.resolve.outputs.tag }} -X plexcord/internal/version.Commit=${{ github.sha }} -X plexcord/internal/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-      - name: Generate checksum
+      - name: Rename binary and installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv build/bin/PlexCord.exe build/bin/PlexCord-windows-amd64.exe
+          # NSIS names the installer from wails.json's lowercase project name
+          # ("plexcord-amd64-installer.exe"); match it without depending on the
+          # exact spelling, and fail loudly if the -nsis step produced nothing.
+          installer="$(find build/bin -maxdepth 1 -iname '*installer*.exe' | head -n 1)"
+          if [ -z "$installer" ]; then
+            echo "No NSIS installer found in build/bin" >&2
+            ls -la build/bin >&2
+            exit 1
+          fi
+          mv "$installer" build/bin/PlexCord-windows-amd64-installer.exe
+
+      - name: Generate checksums
         run: |
           cd build/bin
           certutil -hashfile PlexCord-windows-amd64.exe SHA256 > PlexCord-windows-amd64.exe.sha256
+          certutil -hashfile PlexCord-windows-amd64-installer.exe SHA256 > PlexCord-windows-amd64-installer.exe.sha256
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -141,6 +175,8 @@ jobs:
           path: |
             build/bin/PlexCord-windows-amd64.exe
             build/bin/PlexCord-windows-amd64.exe.sha256
+            build/bin/PlexCord-windows-amd64-installer.exe
+            build/bin/PlexCord-windows-amd64-installer.exe.sha256
 
   build-macos:
     name: Build macOS
@@ -332,8 +368,9 @@ jobs:
 
           ### Installation
 
-          Download the appropriate binary for your platform:
-          - **Windows**: \`PlexCord-windows-amd64.exe\`
+          Download the appropriate file for your platform:
+          - **Windows (recommended)**: \`PlexCord-windows-amd64-installer.exe\` — installs PlexCord for the current user (no admin rights), with Start menu and desktop shortcuts and an entry in *Apps & features*. Updates install themselves in the background.
+          - **Windows (portable)**: \`PlexCord-windows-amd64.exe\` — the bare executable, run it from anywhere. It updates itself too.
           - **macOS**: \`PlexCord-darwin-universal.dmg\`
           - **Linux**: \`PlexCord-linux-amd64.AppImage\`
 

@@ -43,6 +43,11 @@ A guided, two-minute setup connects Plex and Discord.
 
 **[Download the latest release](../../releases)** for your platform, run the app, and follow the setup wizard to connect Plex and Discord.
 
+On Windows, `PlexCord-windows-amd64-installer.exe` installs PlexCord for the
+current user (no administrator rights, shortcuts and an uninstall entry
+included); `PlexCord-windows-amd64.exe` is the same app as a portable
+executable. Both keep themselves up to date.
+
 **Requirements:** Plex Media Server with music library + Discord Desktop App
 
 📖 **Detailed instructions:** [Getting Started Guide](docs/getting-started.md)

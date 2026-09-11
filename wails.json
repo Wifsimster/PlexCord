@@ -12,5 +12,12 @@
   "author": {
     "name": "",
     "email": ""
+  },
+  "info": {
+    "companyName": "PlexCord",
+    "productName": "PlexCord",
+    "productVersion": "0.0.0",
+    "copyright": "Copyright © 2026 PlexCord contributors",
+    "comments": "Plex to Discord Rich Presence"
   }
 }

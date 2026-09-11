@@ -165,6 +165,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
 
+      # The windows-latest image has no NSIS on PATH, and `wails build -nsis`
+      # only warns ("Cannot create installer: makensis not found") before
+      # exiting 0 — so without this the installer is silently skipped and the
+      # job goes green having built nothing.
+      - name: Install NSIS (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          choco install nsis --no-progress -y
+          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+
+      - name: Verify makensis is on PATH (Windows)
+        if: matrix.platform == 'windows'
+        run: makensis /VERSION
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
@@ -176,9 +190,30 @@ jobs:
         if: matrix.platform == 'linux'
         run: wails build -clean -tags webkit2_41 -platform ${{ matrix.platform }}/${{ matrix.arch }}
 
+      # Windows also builds the NSIS installer, which is what the release
+      # publishes: building it here is how a mistake in
+      # build/windows/installer/project.nsi surfaces on the PR instead of
+      # during a release.
+      - name: Build application and installer (Windows)
+        if: matrix.platform == 'windows'
+        run: wails build -clean -nsis -platform ${{ matrix.platform }}/${{ matrix.arch }}
+
       - name: Build application
-        if: matrix.platform != 'linux'
+        if: matrix.platform == 'darwin'
         run: wails build -clean -platform ${{ matrix.platform }}/${{ matrix.arch }}
+
+      # Wails' warning-and-continue behavior means the build step alone cannot
+      # prove the installer exists; this is what actually guards project.nsi.
+      - name: Verify the installer was produced (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la build/bin
+          if [ -z "$(find build/bin -maxdepth 1 -iname '*installer*.exe')" ]; then
+            echo "No NSIS installer in build/bin" >&2
+            exit 1
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
