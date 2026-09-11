@@ -64,6 +64,7 @@ func (m *AutoStartManager) Enable() error {
 	}
 
 	plistContent := m.launchAgentPlist()
+	//nolint:gosec // plistPath is derived from the user home dir, not user input
 	if current, err := os.ReadFile(plistPath); err == nil && string(current) == plistContent {
 		log.Printf("Auto-start already enabled")
 		return nil
