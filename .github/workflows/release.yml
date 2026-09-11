@@ -116,6 +116,16 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
 
+      # The windows-latest image has no NSIS on PATH, and `wails build -nsis`
+      # only warns before exiting 0 when makensis is missing.
+      - name: Install NSIS
+        run: |
+          choco install nsis --no-progress -y
+          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+
+      - name: Verify makensis is on PATH
+        run: makensis /VERSION
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
