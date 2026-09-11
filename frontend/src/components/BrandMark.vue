@@ -1,7 +1,16 @@
 <script setup>
-// Single logo lockup (spec §5.0.5): the Plexamp polyline glyph recolored
-// to the Plex brand pigment + the "PlexCord" wordmark. Kills the duplicated
-// inline SVGs in AppTopbar/SetupWizard.
+// Single logo lockup (spec §5.0.5): the PlexCord symbol + the "PlexCord"
+// wordmark. Kills the duplicated inline SVGs in AppTopbar/SetupWizard.
+//
+// The symbol is the signal path compressed to three masses — two ends and the
+// relay between them (see docs/brand.md). It renders in --pc-text, not in a
+// brand pigment: gold and blurple identify the two ENDPOINTS of the path, so
+// spending either on the product's own mark would break the color contract
+// (§1.2) and make PlexCord look like the thing it connects to.
+//
+// This is the small optical size of the mark (shorter, thicker masses), which
+// is the one that survives at the 18px the topbar renders it at; the regular
+// geometry lives in build/brand/plexcord-mark.svg.
 defineProps({
     /** Optional uppercase suffix after the wordmark (e.g. 'SETUP'). */
     suffix: { type: String, default: '' }
@@ -10,15 +19,10 @@ defineProps({
 
 <template>
     <span class="pc-brandmark">
-        <svg class="pc-brandmark-glyph" width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <polyline
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2.5"
-                points="4.5 24 23.444 24 12.808 9.342 16.883 9.342 27.519 24 16.883 38.658 20.957 38.658 31.594 24 20.957 9.342 25.032 9.342 35.668 24 25.032 38.658 29.107 38.658 39.743 24 43.5 24"
-            />
+        <svg class="pc-brandmark-glyph" width="18" height="18" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="2" y="26.5" width="13" height="11" rx="5.5" fill="currentColor" />
+            <circle cx="32" cy="32" r="10.5" fill="currentColor" />
+            <rect x="49" y="26.5" width="13" height="11" rx="5.5" fill="currentColor" />
         </svg>
         <span class="pc-brandmark-name">PlexCord</span>
         <span v-if="suffix" class="pc-brandmark-suffix">{{ suffix }}</span>
@@ -33,7 +37,7 @@ defineProps({
     line-height: 1;
 }
 .pc-brandmark-glyph {
-    color: var(--pc-plex);
+    color: var(--pc-text);
     flex: none;
 }
 .pc-brandmark-name {

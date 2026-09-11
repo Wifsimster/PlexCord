@@ -1,3 +1,5 @@
+![PlexCord](docs/images/banner.svg)
+
 # PlexCord
 
 > Display your Plex music playback as Discord Rich Presence
@@ -55,6 +57,7 @@ executable. Both keep themselves up to date.
 ## Documentation
 
 - **[Getting Started](docs/getting-started.md)** - Installation, setup wizard, and troubleshooting
+- **[Brand](docs/brand.md)** - The mark, the wordmark, and where the brand assets live
 - **[Architecture](docs/architecture.md)** - System design, technology stack, and project structure
 - **[API Reference](docs/api.md)** - Backend API documentation and error codes
 - **[Development](docs/development.md)** - Build from source, development workflow, and testing
