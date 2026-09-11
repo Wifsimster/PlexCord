@@ -174,6 +174,14 @@ func (a *App) startup(ctx context.Context) {
 	configDir := config.GetConfigDir()
 	a.history = history.NewStore(configDir, 200)
 
+	// Bring an existing auto-start registration up to date with what this build
+	// registers: entries written by older versions launch the bare executable,
+	// with no flag marking the launch as one the OS performed at login, so
+	// PlexCord would open its window on every boot (see EnsureRegistered).
+	if err := a.autostart.EnsureRegistered(); err != nil {
+		log.Printf("Warning: failed to refresh auto-start registration: %v", err)
+	}
+
 	// Start the system tray. This is the visible affordance for restoring the
 	// window (or quitting) once the app is running in the background, so it
 	// runs regardless of the "Minimize to tray" setting.

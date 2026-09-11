@@ -254,6 +254,7 @@ type Config struct {
     AutoStart        bool   `json:"autoStart"`
     MinimizeToTray   bool   `json:"minimizeToTray"`
     StartMinimized   bool   `json:"startMinimized"`
+    StartMinimizedOnLogin *bool `json:"startMinimizedOnLogin,omitempty"`
     SetupComplete    bool   `json:"setupComplete"`
 }
 ```

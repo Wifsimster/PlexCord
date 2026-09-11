@@ -8,17 +8,19 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"plexcord/internal/config"
+	"plexcord/internal/platform"
 )
 
 // TestResolveWindowLaunchState covers how the "Start minimized" and "Minimize
-// to tray" settings combine into Wails' window start options.
+// to tray" settings, and how PlexCord was launched, combine into Wails' window
+// start options.
 func TestResolveWindowLaunchState(t *testing.T) {
 	tests := []struct {
-		name             string
-		cfg              *config.Config
-		isUpdateRelaunch bool
-		wantHidden       bool
-		wantState        options.WindowStartState
+		name       string
+		cfg        *config.Config
+		launch     launchContext
+		wantHidden bool
+		wantState  options.WindowStartState
 	}{
 		{
 			name:       "start minimized off shows the window",
@@ -41,11 +43,60 @@ func TestResolveWindowLaunchState(t *testing.T) {
 			wantState:  options.Minimised,
 		},
 		{
-			name:             "update relaunch always shows the window",
-			cfg:              &config.Config{StartMinimized: true, MinimizeToTray: true},
-			isUpdateRelaunch: true,
-			wantHidden:       false,
-			wantState:        options.Normal,
+			name: "login launch starts in the tray even without start minimized",
+			// Nobody asked for a window at boot: the OS started PlexCord, and
+			// an unset StartMinimizedOnLogin means the default, which is on.
+			cfg:        &config.Config{StartMinimized: false, MinimizeToTray: true},
+			launch:     launchContext{IsAutoStart: true},
+			wantHidden: true,
+			wantState:  options.Normal,
+		},
+		{
+			name:       "login launch without tray minimizes to the taskbar",
+			cfg:        &config.Config{StartMinimized: false, MinimizeToTray: false},
+			launch:     launchContext{IsAutoStart: true},
+			wantHidden: false,
+			wantState:  options.Minimised,
+		},
+		{
+			name: "login launch shows the window when the toggle is off",
+			cfg: &config.Config{
+				StartMinimized:        false,
+				MinimizeToTray:        true,
+				StartMinimizedOnLogin: boolPtr(false),
+			},
+			launch:     launchContext{IsAutoStart: true},
+			wantHidden: false,
+			wantState:  options.Normal,
+		},
+		{
+			name: "start minimized still applies with the login toggle off",
+			// The two settings cover different launches; turning off the login
+			// one does not undo "Start minimized".
+			cfg: &config.Config{
+				StartMinimized:        true,
+				MinimizeToTray:        true,
+				StartMinimizedOnLogin: boolPtr(false),
+			},
+			launch:     launchContext{IsAutoStart: true},
+			wantHidden: true,
+			wantState:  options.Normal,
+		},
+		{
+			name:       "update relaunch always shows the window",
+			cfg:        &config.Config{StartMinimized: true, MinimizeToTray: true},
+			launch:     launchContext{IsUpdateRelaunch: true},
+			wantHidden: false,
+			wantState:  options.Normal,
+		},
+		{
+			name: "update relaunch wins over a login launch",
+			// An update that restarted into the tray would read as a crash,
+			// even if the flag came along from the entry that started it.
+			cfg:        &config.Config{StartMinimized: false, MinimizeToTray: true},
+			launch:     launchContext{IsUpdateRelaunch: true, IsAutoStart: true},
+			wantHidden: false,
+			wantState:  options.Normal,
 		},
 		{
 			name:       "nil config falls back to a normal window",
@@ -57,7 +108,7 @@ func TestResolveWindowLaunchState(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resolveWindowLaunchState(tt.cfg, tt.isUpdateRelaunch)
+			got := resolveWindowLaunchState(tt.cfg, tt.launch)
 			if got.StartHidden != tt.wantHidden {
 				t.Errorf("StartHidden = %v, want %v", got.StartHidden, tt.wantHidden)
 			}
@@ -68,11 +119,40 @@ func TestResolveWindowLaunchState(t *testing.T) {
 	}
 }
 
-// TestDefaultConfigStartsVisible verifies PlexCord opens its window by default:
-// starting in the background is opt-in.
+// TestDefaultConfigStartsVisible verifies PlexCord opens its window when the
+// user launches it themselves: starting in the background is opt-in, except at
+// login (covered above).
 func TestDefaultConfigStartsVisible(t *testing.T) {
-	if got := resolveWindowLaunchState(config.DefaultConfig(), false); got.StartHidden || got.StartState != options.Normal {
+	if got := resolveWindowLaunchState(config.DefaultConfig(), launchContext{}); got.StartHidden || got.StartState != options.Normal {
 		t.Fatalf("default config launch state = %+v, want a normal visible window", got)
+	}
+}
+
+// boolPtr mirrors the config package's helper for the optional bool fields.
+func boolPtr(b bool) *bool { return &b }
+
+// TestIsAutoStartLaunch covers recognizing the flag the auto-start entries are
+// registered with — the only thing that tells a login launch apart from the
+// user opening PlexCord.
+func TestIsAutoStartLaunch(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "no arguments", args: nil, want: false},
+		{name: "double dash", args: []string{platform.AutoStartFlag}, want: true},
+		{name: "single dash", args: []string{"-autostart"}, want: true},
+		{name: "alongside other arguments", args: []string{"--verbose", platform.AutoStartFlag}, want: true},
+		{name: "unrelated argument", args: []string{"--autostartle"}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isAutoStartLaunch(tt.args); got != tt.want {
+				t.Errorf("isAutoStartLaunch(%q) = %v, want %v", tt.args, got, tt.want)
+			}
+		})
 	}
 }
 

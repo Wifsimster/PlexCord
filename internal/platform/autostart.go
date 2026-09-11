@@ -45,3 +45,23 @@ func (m *AutoStartManager) SetEnabled(enabled bool) error {
 	}
 	return m.Disable()
 }
+
+// AutoStartFlag marks a launch the operating system started at login: it is
+// appended to the command every auto-start registration below runs, so the app
+// can tell a login launch from the user opening PlexCord themselves and come
+// up in the background rather than on screen.
+const AutoStartFlag = "--autostart"
+
+// EnsureRegistered refreshes an existing auto-start registration so it matches
+// what this build registers today, and does nothing when auto-start is off.
+//
+// Registrations survive upgrades untouched, so an entry written by an older
+// version still points at the bare executable with no AutoStartFlag — and one
+// written before the binary moved points at the old path. Rewriting it on
+// startup keeps both current without the user toggling the setting again.
+func (m *AutoStartManager) EnsureRegistered() error {
+	if !m.IsEnabled() {
+		return nil
+	}
+	return m.Enable()
+}

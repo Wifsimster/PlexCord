@@ -28,26 +28,11 @@ func (m *AutoStartManager) IsEnabled() bool {
 	return err == nil
 }
 
-// Enable creates a LaunchAgent plist to start PlexCord on login.
-func (m *AutoStartManager) Enable() error {
-	if m.IsEnabled() {
-		log.Printf("Auto-start already enabled")
-		return nil
-	}
-
-	plistPath := m.getLaunchAgentPath()
-	if plistPath == "" {
-		return fmt.Errorf("could not determine home directory")
-	}
-
-	// Ensure LaunchAgents directory exists
-	if err := os.MkdirAll(filepath.Dir(plistPath), 0755); err != nil {
-		log.Printf("ERROR: Failed to create LaunchAgents directory: %v", err)
-		return err
-	}
-
-	// Create plist content
-	plistContent := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+// launchAgentPlist is the LaunchAgent loaded at login. Its arguments carry
+// AutoStartFlag so the launched process knows launchd started it rather than
+// the user opening PlexCord.
+func (m *AutoStartManager) launchAgentPlist() string {
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -56,6 +41,7 @@ func (m *AutoStartManager) Enable() error {
     <key>ProgramArguments</key>
     <array>
         <string>%s</string>
+        <string>%s</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -63,7 +49,32 @@ func (m *AutoStartManager) Enable() error {
     <false/>
 </dict>
 </plist>
-`, m.executable)
+`, m.executable, AutoStartFlag)
+}
+
+// Enable creates a LaunchAgent plist to start PlexCord on login.
+//
+// An existing plist is rewritten unless it already matches, so an agent left by
+// an older version (or by the executable at a previous path) is brought up to
+// date instead of being left as it was.
+func (m *AutoStartManager) Enable() error {
+	plistPath := m.getLaunchAgentPath()
+	if plistPath == "" {
+		return fmt.Errorf("could not determine home directory")
+	}
+
+	plistContent := m.launchAgentPlist()
+	// #nosec G304 -- plistPath is the fixed LaunchAgent path under the user home dir, not untrusted input
+	if current, err := os.ReadFile(plistPath); err == nil && string(current) == plistContent { //nolint:gosec
+		log.Printf("Auto-start already enabled")
+		return nil
+	}
+
+	// Ensure LaunchAgents directory exists
+	if err := os.MkdirAll(filepath.Dir(plistPath), 0755); err != nil {
+		log.Printf("ERROR: Failed to create LaunchAgents directory: %v", err)
+		return err
+	}
 
 	if err := os.WriteFile(plistPath, []byte(plistContent), 0644); err != nil {
 		log.Printf("ERROR: Failed to write LaunchAgent plist: %v", err)

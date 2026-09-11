@@ -28,6 +28,8 @@ import {
     SetMinimizeToTray,
     GetStartMinimized,
     SetStartMinimized,
+    GetStartMinimizedOnLogin,
+    SetStartMinimizedOnLogin,
     GetAutoUpdateCheck,
     SetAutoUpdateCheck,
     GetDiscordClientID,
@@ -85,6 +87,7 @@ const pollingInterval = ref(2);
 const autoStart = ref(false);
 const minimizeToTray = ref(true);
 const startMinimized = ref(false);
+const startMinimizedOnLogin = ref(true);
 const autoUpdateCheck = ref(true);
 const hideWhenPaused = ref(false);
 const hideWhenPausedDelay = ref(0);
@@ -203,6 +206,7 @@ onMounted(async () => {
         autoStart.value = await GetAutoStart();
         minimizeToTray.value = await GetMinimizeToTray();
         startMinimized.value = await GetStartMinimized();
+        startMinimizedOnLogin.value = await GetStartMinimizedOnLogin();
         autoUpdateCheck.value = await GetAutoUpdateCheck();
         discordClientId.value = await GetDiscordClientID();
         defaultClientId.value = await GetDefaultDiscordClientID();
@@ -596,10 +600,17 @@ function updateArtworkLookup(value) {
 const autoStartSaving = ref(false);
 const minimizeToTraySaving = ref(false);
 const startMinimizedSaving = ref(false);
+const startMinimizedOnLoginSaving = ref(false);
 
 // Caption depends on where "minimized" lands: the tray when closing to the
 // tray is enabled, the taskbar otherwise. Mirrors resolveWindowLaunchState.
 const startMinimizedCaption = computed(() => (minimizeToTray.value ? t('settings.startMinimizedCaptionTray') : t('settings.startMinimizedCaptionTaskbar')));
+
+// Same split for the login launch: the tray when closing to the tray is
+// enabled, the taskbar otherwise.
+const startMinimizedOnLoginCaption = computed(() =>
+    minimizeToTray.value ? t('settings.startMinimizedOnLoginCaptionTray') : t('settings.startMinimizedOnLoginCaptionTaskbar')
+);
 
 async function updateAutoStart(value) {
     autoStartSaving.value = true;
@@ -640,6 +651,20 @@ async function updateStartMinimized(value) {
         toastFailure(t('settings.toast.startMinimizedFailed'), error, t('settings.toast.settingFailedDetail'));
     } finally {
         startMinimizedSaving.value = false;
+    }
+}
+
+async function updateStartMinimizedOnLogin(value) {
+    startMinimizedOnLoginSaving.value = true;
+    startMinimizedOnLogin.value = value;
+    try {
+        await SetStartMinimizedOnLogin(value);
+        flashSaved('startMinimizedOnLogin');
+    } catch (error) {
+        startMinimizedOnLogin.value = !value;
+        toastFailure(t('settings.toast.startMinimizedOnLoginFailed'), error, t('settings.toast.settingFailedDetail'));
+    } finally {
+        startMinimizedOnLoginSaving.value = false;
     }
 }
 
@@ -1027,6 +1052,21 @@ async function executeReset() {
                             <div class="row-control">
                                 <SavedIndicator :visible="!!savedFlags.autoStart" />
                                 <ToggleSwitch :modelValue="autoStart" :disabled="autoStartSaving" aria-labelledby="lbl-autostart" @update:modelValue="updateAutoStart" />
+                            </div>
+                        </div>
+                        <div v-if="autoStart" class="setting-row sub-row">
+                            <div class="row-text">
+                                <span class="row-label" id="lbl-start-minimized-login">{{ $t('settings.startMinimizedOnLogin') }}</span>
+                                <p class="row-caption">{{ startMinimizedOnLoginCaption }}</p>
+                            </div>
+                            <div class="row-control">
+                                <SavedIndicator :visible="!!savedFlags.startMinimizedOnLogin" />
+                                <ToggleSwitch
+                                    :modelValue="startMinimizedOnLogin"
+                                    :disabled="startMinimizedOnLoginSaving"
+                                    aria-labelledby="lbl-start-minimized-login"
+                                    @update:modelValue="updateStartMinimizedOnLogin"
+                                />
                             </div>
                         </div>
                         <div class="setting-row">

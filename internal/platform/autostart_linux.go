@@ -33,16 +33,38 @@ func (m *AutoStartManager) IsEnabled() bool {
 	return err == nil
 }
 
-// Enable creates an XDG autostart .desktop file.
-func (m *AutoStartManager) Enable() error {
-	if m.IsEnabled() {
-		log.Printf("Auto-start already enabled")
-		return nil
-	}
+// desktopEntry is the .desktop file the session autostarts. Exec carries
+// AutoStartFlag so the launched process knows the session started it at login
+// rather than the user opening PlexCord.
+func (m *AutoStartManager) desktopEntry() string {
+	return fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=PlexCord
+Comment=Plex to Discord Rich Presence
+Exec=%s %s
+Icon=plexcord
+Terminal=false
+Categories=AudioVideo;Audio;
+X-GNOME-Autostart-enabled=true
+`, m.executable, AutoStartFlag)
+}
 
+// Enable creates an XDG autostart .desktop file.
+//
+// An existing file is rewritten unless it already matches, so an entry left by
+// an older version (or by the executable at a previous path) is brought up to
+// date instead of being left as it was.
+func (m *AutoStartManager) Enable() error {
 	desktopPath := m.getDesktopFilePath()
 	if desktopPath == "" {
 		return fmt.Errorf("could not determine config directory")
+	}
+
+	desktopContent := m.desktopEntry()
+	// #nosec G304 -- desktopPath is the fixed autostart path under the user config dir, not untrusted input
+	if current, err := os.ReadFile(desktopPath); err == nil && string(current) == desktopContent { //nolint:gosec
+		log.Printf("Auto-start already enabled")
+		return nil
 	}
 
 	// Ensure autostart directory exists
@@ -50,18 +72,6 @@ func (m *AutoStartManager) Enable() error {
 		log.Printf("ERROR: Failed to create autostart directory: %v", err)
 		return err
 	}
-
-	// Create .desktop file content
-	desktopContent := fmt.Sprintf(`[Desktop Entry]
-Type=Application
-Name=PlexCord
-Comment=Plex to Discord Rich Presence
-Exec=%s
-Icon=plexcord
-Terminal=false
-Categories=AudioVideo;Audio;
-X-GNOME-Autostart-enabled=true
-`, m.executable)
 
 	if err := os.WriteFile(desktopPath, []byte(desktopContent), 0600); err != nil {
 		log.Printf("ERROR: Failed to write .desktop file: %v", err)

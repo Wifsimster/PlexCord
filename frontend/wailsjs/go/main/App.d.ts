@@ -77,6 +77,8 @@ export function GetServers():Promise<Array<config.ServerConfig>>;
 
 export function GetStartMinimized():Promise<boolean>;
 
+export function GetStartMinimizedOnLogin():Promise<boolean>;
+
 export function GetUpdateStatus():Promise<updater.Status>;
 
 export function GetVersion():Promise<version.Info>;
@@ -138,6 +140,8 @@ export function SetPresenceOptions(arg1:main.PresenceOptions):Promise<void>;
 export function SetServerActive(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetStartMinimized(arg1:boolean):Promise<void>;
+
+export function SetStartMinimizedOnLogin(arg1:boolean):Promise<void>;
 
 export function ShowWindow():Promise<void>;
 
