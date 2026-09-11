@@ -22,6 +22,14 @@ var icon []byte
 //go:embed build/windows/icon.ico
 var iconWindows []byte
 
+// Badged variants, shown in the tray while an update waits to be applied.
+//
+//go:embed build/appicon-update.png
+var iconUpdate []byte
+
+//go:embed build/windows/icon-update.ico
+var iconWindowsUpdate []byte
+
 func main() {
 	// When this process was spawned by an in-app update relaunch, wait for the
 	// old instance to fully exit before wails.Run acquires the single-instance
@@ -47,6 +55,8 @@ func main() {
 	// layer can render the system tray without importing embedded assets.
 	app.trayIconPNG = icon
 	app.trayIconICO = iconWindows
+	app.trayIconUpdatePNG = iconUpdate
+	app.trayIconUpdateICO = iconWindowsUpdate
 
 	// Create application with options
 	// Note: Removed MaxWidth and MaxHeight

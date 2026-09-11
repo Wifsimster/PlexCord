@@ -62,6 +62,25 @@ Gold and blurple may still appear *beside* the mark as endpoint pins — the
 README banner does exactly that, one dot per end of the line — but never
 *inside* it.
 
+### The update badge
+
+While an update is waiting to be applied, the tray icon carries an amber dot in
+its bottom-right corner (`--pc-warn`, the app's "something wants your
+attention" register). It exists because the rest of the update notice is
+passive: the tray menu item has to be opened to be read and the tooltip has to
+be hovered, while a badged icon is visible at rest — which is the whole point
+for an app built to run minimized.
+
+Two details are load-bearing:
+
+- **The gap around the dot is erased, not filled with the tile color**, so the
+  badge reads the same whatever the icon sits on.
+- **The badge is sized optically too** — `r` 0.105 of the tile above 32px,
+  0.150 at and below it. One that still registers at 16px would dominate the
+  mark at 128px. It is placed at 0.78 of the tile on both axes: far enough into
+  the corner to clear the symbol's right dash, close enough that its gap stays
+  inside the tile's rounded silhouette rather than hanging a crescent off it.
+
 ### Clear space and minimum size
 
 - **Clear space**: the height of the dot, on all four sides.
@@ -88,8 +107,11 @@ then the word. The optional uppercase suffix (`SETUP`) is a third element in
 | `build/brand/plexcord-icon.svg` | App icon master: tile + symbol |
 | `build/brand/plexcord-icon-small.svg` | App icon, small optical geometry |
 | `build/brand/plexcord-lockup.svg` | Symbol + wordmark |
+| `build/brand/plexcord-icon-update.svg` | App icon with the update badge |
 | `build/appicon.png` | 1024px app icon (macOS, Linux, tray) |
+| `build/appicon-update.png` | Badged tray icon (macOS, Linux) |
 | `build/windows/icon.ico` | 16/24/32/48/64/128/256, optical variant below 48 |
+| `build/windows/icon-update.ico` | Badged tray icon (Windows), same sizes |
 | `docs/images/banner.svg` | README banner |
 | `frontend/src/components/BrandMark.vue` | The in-app lockup |
 
@@ -106,3 +128,5 @@ icon; on a light one the tile reads as a dark squircle.
 - Don't join the three masses with a connecting line. The gaps are the drawing.
 - Don't rebuild the mark by hand at a new size — use the SVG, or the small
   geometry under 32px.
+- Don't put the badge on anything but the tray icon. It is a transient state,
+  not part of the mark.

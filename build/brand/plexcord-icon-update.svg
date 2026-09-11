@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PlexCord symbol. See docs/brand.md. -->
+<!-- Tray icon while an update waits to be applied. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="PlexCord — update ready">
+  <mask id="badge-gap">
+    <rect width="64" height="64" fill="#fff"/>
+    <circle cx="49.92" cy="49.92" r="9.28" fill="#000"/>
+  </mask>
+  <g mask="url(#badge-gap)">
+  <rect width="64" height="64" rx="14.4" fill="#17181D"/>
+  <g transform="translate(8.320 8.320) scale(0.74000)">
+    <rect x="3.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="#EDEDF0"/>
+    <circle cx="32.0" cy="32.0" r="8.5" fill="#EDEDF0"/>
+    <rect x="46.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="#EDEDF0"/>
+  </g>
+  </g>
+  <circle cx="49.92" cy="49.92" r="6.72" fill="#F5B944"/>
+</svg>

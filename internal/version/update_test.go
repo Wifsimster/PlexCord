@@ -144,3 +144,60 @@ func TestFindAsset(t *testing.T) {
 		t.Errorf("findAsset missing: expected ok=false")
 	}
 }
+
+// TestReleaseIsInstallable covers the window between a release being
+// published and its binaries being attached: semantic-release creates the
+// release, the build workflow uploads the assets minutes later, and in
+// between PlexCord must not offer an update it cannot install.
+func TestReleaseIsInstallable(t *testing.T) {
+	assetName, supported := updatableAssetName()
+
+	if !supported {
+		// Platforms without in-place update (macOS, other architectures)
+		// only need the release to carry something to download.
+		if releaseIsInstallable(&GitHubRelease{}) {
+			t.Error("a release with no assets should not be installable")
+		}
+		if !releaseIsInstallable(&GitHubRelease{Assets: []ReleaseAsset{{Name: "PlexCord-darwin-universal.dmg"}}}) {
+			t.Error("a release with an asset should be installable where self-update is unsupported")
+		}
+		return
+	}
+
+	tests := []struct {
+		name   string
+		assets []ReleaseAsset
+		want   bool
+	}{
+		{
+			name:   "freshly published, nothing uploaded yet",
+			assets: nil,
+			want:   false,
+		},
+		{
+			name:   "binary present, checksum still uploading",
+			assets: []ReleaseAsset{{Name: assetName}},
+			// DownloadAndApplyUpdate verifies the digest before writing, so a
+			// release without it is just as uninstallable.
+			want: false,
+		},
+		{
+			name:   "another platform's assets only",
+			assets: []ReleaseAsset{{Name: "PlexCord-darwin-universal.dmg"}, {Name: "PlexCord-darwin-universal.dmg.sha256"}},
+			want:   false,
+		},
+		{
+			name:   "binary and checksum both there",
+			assets: []ReleaseAsset{{Name: assetName}, {Name: assetName + ".sha256"}},
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := releaseIsInstallable(&GitHubRelease{Assets: tt.assets}); got != tt.want {
+				t.Errorf("releaseIsInstallable() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

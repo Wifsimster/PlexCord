@@ -45,11 +45,21 @@ func (n UpdateNotice) active() bool {
 	return n.Label != ""
 }
 
+// TrayIcons carries the icon variants the tray renders. PNG is used on
+// macOS/Linux and ICO on Windows; the Update* variants carry the badge shown
+// while an update is waiting, and any of them may be empty, in which case the
+// icon is simply not set (or, for the badged pair, the plain icon stays).
+type TrayIcons struct {
+	PNG       []byte
+	ICO       []byte
+	UpdatePNG []byte
+	UpdateICO []byte
+}
+
 // TrayManager manages the system tray icon and its menu.
 type TrayManager struct {
 	callbacks  TrayCallbacks
-	iconPNG    []byte // PNG icon bytes (macOS/Linux)
-	iconICO    []byte // ICO icon bytes (Windows)
+	icons      TrayIcons
 	tooltip    string
 	notice     UpdateNotice      // desired update notice, applied on/after onReady
 	noticeItem *systray.MenuItem // nil until the menu is built
@@ -62,13 +72,11 @@ type TrayManager struct {
 }
 
 // NewTrayManager creates a new TrayManager with the provided callbacks and
-// icon data. iconPNG is used on macOS/Linux and iconICO on Windows; either
-// may be empty, in which case the icon is simply not set.
-func NewTrayManager(callbacks TrayCallbacks, iconPNG, iconICO []byte) *TrayManager {
+// icons.
+func NewTrayManager(callbacks TrayCallbacks, icons TrayIcons) *TrayManager {
 	return &TrayManager{
 		callbacks: callbacks,
-		iconPNG:   iconPNG,
-		iconICO:   iconICO,
+		icons:     icons,
 		tooltip:   "PlexCord",
 	}
 }
@@ -94,7 +102,9 @@ func (tm *TrayManager) Start() {
 
 // onReady builds the tray icon and menu once systray has initialized.
 func (tm *TrayManager) onReady() {
-	if icon := tm.icon(); len(icon) > 0 {
+	// Plain to begin with; the replay at the end of this function puts the
+	// badge on when an update was already found during startup.
+	if icon := tm.icon(false); len(icon) > 0 {
 		systray.SetIcon(icon)
 	}
 	systray.SetTitle("PlexCord")
@@ -128,6 +138,9 @@ func (tm *TrayManager) onReady() {
 	tm.mu.Unlock()
 
 	systray.SetTooltip(tooltip)
+	if icon := tm.icon(notice.active()); len(icon) > 0 {
+		systray.SetIcon(icon)
+	}
 	applyUpdateNotice(noticeItem, notice)
 
 	log.Printf("System tray: ready")
@@ -181,12 +194,30 @@ func (tm *TrayManager) handleUpdate() {
 	}
 }
 
-// icon returns the icon bytes appropriate for the current OS.
-func (tm *TrayManager) icon() []byte {
-	if runtime.GOOS == "windows" && len(tm.iconICO) > 0 {
-		return tm.iconICO
+// icon returns the icon bytes appropriate for the current OS, badged when an
+// update is pending.
+//
+// The badge is the only cue that reaches a user who is not looking at the tray
+// menu: the notice item has to be opened to be read and the tooltip has to be
+// hovered, whereas a badged icon is visible at rest. It falls back to the plain
+// icon whenever the badged variant is missing, so a build without it degrades
+// to the previous behavior instead of losing its tray icon.
+//
+// Reads only fields fixed at construction, so it needs no lock.
+func (tm *TrayManager) icon(badged bool) []byte {
+	png, ico := tm.icons.PNG, tm.icons.ICO
+	if badged {
+		if len(tm.icons.UpdatePNG) > 0 {
+			png = tm.icons.UpdatePNG
+		}
+		if len(tm.icons.UpdateICO) > 0 {
+			ico = tm.icons.UpdateICO
+		}
 	}
-	return tm.iconPNG
+	if runtime.GOOS == "windows" && len(ico) > 0 {
+		return ico
+	}
+	return png
 }
 
 // Stop removes the system tray icon and stops its event loop.
@@ -238,6 +269,9 @@ func (tm *TrayManager) SetUpdateNotice(notice UpdateNotice) {
 		return
 	}
 	systray.SetTooltip(tooltip)
+	if icon := tm.icon(notice.active()); len(icon) > 0 {
+		systray.SetIcon(icon)
+	}
 	applyUpdateNotice(item, notice)
 }
 

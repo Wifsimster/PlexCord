@@ -82,7 +82,7 @@ func TestPublishUpdateNoticeWithoutTray(t *testing.T) {
 // TestPublishUpdateNoticeReachesTray verifies the mapping is what the tray ends
 // up holding.
 func TestPublishUpdateNoticeReachesTray(t *testing.T) {
-	app := &App{tray: platform.NewTrayManager(platform.TrayCallbacks{}, nil, nil)}
+	app := &App{tray: platform.NewTrayManager(platform.TrayCallbacks{}, platform.TrayIcons{})}
 
 	app.publishUpdateNotice(updater.Status{
 		State: updater.StateReady,
