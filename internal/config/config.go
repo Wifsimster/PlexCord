@@ -62,6 +62,12 @@ type Config struct {
 	// Pointer so the field being absent from existing config files means
 	// enabled (nil == true) rather than false.
 	AutoUpdateCheck *bool `json:"autoUpdateCheck,omitempty"`
+
+	// StartMinimizedOnLogin keeps the window closed when the OS starts
+	// PlexCord at login (AutoStart), independently of StartMinimized, which
+	// covers the launches the user starts themselves. Pointer so an absent
+	// field means the default (nil == true) rather than false.
+	StartMinimizedOnLogin *bool `json:"startMinimizedOnLogin,omitempty"`
 }
 
 // IsAutoUpdateCheckEnabled reports whether automatic update checks are
@@ -77,6 +83,15 @@ func boolPtr(b bool) *bool { return &b }
 // defaulting to true when the field is unset (legacy configs).
 func (c *Config) ArtworkLookupEnabled() bool {
 	return c.PresenceArtworkLookup == nil || *c.PresenceArtworkLookup
+}
+
+// LoginStartsMinimized reports whether a launch the OS performs at login
+// should come up in the background, defaulting to true when the field is unset
+// (legacy configs): nobody asked for a window at boot, so that is the behavior
+// people expect from "Start on login" — the toggle is there for the ones who
+// want the window anyway.
+func (c *Config) LoginStartsMinimized() bool {
+	return c.StartMinimizedOnLogin == nil || *c.StartMinimizedOnLogin
 }
 
 // DefaultConfig returns a configuration with default values.
@@ -95,6 +110,7 @@ func DefaultConfig() *Config {
 		PresenceActivityStyle: "media",
 		PresenceStatusDisplay: "state",
 		PresenceArtworkLookup: boolPtr(true),
+		StartMinimizedOnLogin: boolPtr(true),
 	}
 }
 

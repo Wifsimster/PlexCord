@@ -134,6 +134,25 @@ func (a *App) SetStartMinimized(enabled bool) error {
 	return nil
 }
 
+// GetStartMinimizedOnLogin returns whether a launch the OS performs at login
+// should come up in the background instead of opening the window.
+func (a *App) GetStartMinimizedOnLogin() bool {
+	return a.config.LoginStartsMinimized()
+}
+
+// SetStartMinimizedOnLogin updates that setting. Like SetStartMinimized it
+// takes effect on the next launch: the window state is decided before Wails
+// starts, in resolveWindowLaunchState.
+func (a *App) SetStartMinimizedOnLogin(enabled bool) error {
+	a.config.StartMinimizedOnLogin = &enabled
+	if err := a.saveConfig(); err != nil {
+		log.Printf("ERROR: Failed to save start minimized on login setting: %v", err)
+		return err
+	}
+	log.Printf("Start minimized on login set to: %v", enabled)
+	return nil
+}
+
 // GetAutoStart returns whether auto-start on login is enabled.
 // This checks the actual OS registration, not just the config value.
 func (a *App) GetAutoStart() bool {

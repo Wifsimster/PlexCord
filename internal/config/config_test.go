@@ -128,3 +128,30 @@ func TestIsAutoUpdateCheckEnabled(t *testing.T) {
 		t.Error("explicit false should be disabled")
 	}
 }
+
+// TestLoginStartsMinimized verifies the nil-means-enabled default: a login
+// launch comes up in the background unless the user turned that off, including
+// for config files written before the setting existed.
+func TestLoginStartsMinimized(t *testing.T) {
+	if !DefaultConfig().LoginStartsMinimized() {
+		t.Error("a login launch should default to starting minimized")
+	}
+
+	// Old config file without the startMinimizedOnLogin key -> enabled.
+	var legacy Config
+	if err := json.Unmarshal([]byte(`{"serverUrl":"http://plex:32400"}`), &legacy); err != nil {
+		t.Fatalf("unmarshal legacy config: %v", err)
+	}
+	if !legacy.LoginStartsMinimized() {
+		t.Error("configs without the startMinimizedOnLogin key should start minimized on login")
+	}
+
+	enabled := true
+	disabled := false
+	if !(&Config{StartMinimizedOnLogin: &enabled}).LoginStartsMinimized() {
+		t.Error("explicit true should start minimized on login")
+	}
+	if (&Config{StartMinimizedOnLogin: &disabled}).LoginStartsMinimized() {
+		t.Error("explicit false should open the window on login")
+	}
+}

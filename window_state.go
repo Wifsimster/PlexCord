@@ -103,11 +103,13 @@ type launchContext struct {
 //     it outright would leave the user no way back: closing to the tray is
 //     disabled, so the taskbar button is the only restore affordance.
 //
-// Two things put PlexCord in the background. "Start minimized" does it for
-// every launch. A login launch does it on its own, whatever that setting says:
-// nobody asked for a window at that moment — the OS started PlexCord, not the
-// user — and a presence bridge that pops a window over the desktop on every
-// boot is the reason people turn "Start on login" back off.
+// Two settings put PlexCord in the background, one per kind of launch.
+// "Start minimized" covers the launches the user starts themselves. "Start
+// minimized on login" covers the ones the OS performs at login, and is on by
+// default: nobody asked for a window at that moment — the OS started PlexCord,
+// not the user — and a presence bridge that pops a window over the desktop on
+// every boot is the reason people turn "Start on login" back off. Turning it
+// off gives the window back at boot without giving up auto-start.
 //
 // An update relaunch is the mirror image and wins over both: the user just
 // clicked "restart to apply", and a restart that vanished into the tray would
@@ -116,7 +118,8 @@ func resolveWindowLaunchState(cfg *config.Config, launch launchContext) windowLa
 	if cfg == nil || launch.IsUpdateRelaunch {
 		return windowLaunchState{StartState: options.Normal}
 	}
-	if !cfg.StartMinimized && !launch.IsAutoStart {
+	background := cfg.StartMinimized || (launch.IsAutoStart && cfg.LoginStartsMinimized())
+	if !background {
 		return windowLaunchState{StartState: options.Normal}
 	}
 	if cfg.MinimizeToTray {

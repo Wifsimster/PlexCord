@@ -138,6 +138,10 @@ export function GetStartMinimized() {
   return window['go']['main']['App']['GetStartMinimized']();
 }
 
+export function GetStartMinimizedOnLogin() {
+  return window['go']['main']['App']['GetStartMinimizedOnLogin']();
+}
+
 export function GetUpdateStatus() {
   return window['go']['main']['App']['GetUpdateStatus']();
 }
@@ -260,6 +264,10 @@ export function SetServerActive(arg1, arg2) {
 
 export function SetStartMinimized(arg1) {
   return window['go']['main']['App']['SetStartMinimized'](arg1);
+}
+
+export function SetStartMinimizedOnLogin(arg1) {
+  return window['go']['main']['App']['SetStartMinimizedOnLogin'](arg1);
 }
 
 export function ShowWindow() {
