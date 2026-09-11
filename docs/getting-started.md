@@ -6,11 +6,28 @@ PlexCord bridges your Plex Media Server and Discord, displaying your music playb
 
 ### 1. Download & Install
 
-Download the latest release for your platform from the [Releases](https://github.com/yourusername/PlexCord/releases) page:
+Download the latest release for your platform from the [Releases](https://github.com/Wifsimster/PlexCord/releases) page:
 
-- **Windows**: `PlexCord.exe`
-- **macOS**: `PlexCord.app`
-- **Linux**: `plexcord`
+- **Windows (recommended)**: `PlexCord-windows-amd64-installer.exe` — the installer.
+  It installs PlexCord for the current user only, under
+  `%LOCALAPPDATA%\Programs\PlexCord`, so it never asks for administrator
+  rights, and it adds Start menu and desktop shortcuts plus an entry in
+  *Apps & features* for uninstalling. Installing over an existing copy closes
+  the running PlexCord first and upgrades it in place, keeping your settings.
+- **Windows (portable)**: `PlexCord-windows-amd64.exe` — the bare executable if
+  you would rather not install anything. Put it wherever you like and run it.
+- **macOS**: `PlexCord-darwin-universal.dmg`
+- **Linux**: `PlexCord-linux-amd64.AppImage`
+
+Windows may warn that the file is unrecognized: the binaries are not
+code-signed, so SmartScreen shows "Windows protected your PC" — choose *More
+info → Run anyway*. The SHA256 checksum published next to each file lets you
+verify the download.
+
+Both Windows options update themselves: PlexCord replaces its own executable in
+the background and applies the update on the next restart (see
+[Updates](#updates)). Because the installer puts PlexCord in your own profile
+rather than in Program Files, that update needs no administrator prompt.
 
 ### 2. First Launch
 

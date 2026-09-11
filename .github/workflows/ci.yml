@@ -176,8 +176,16 @@ jobs:
         if: matrix.platform == 'linux'
         run: wails build -clean -tags webkit2_41 -platform ${{ matrix.platform }}/${{ matrix.arch }}
 
+      # Windows also builds the NSIS installer, which is what the release
+      # publishes: building it here is how a mistake in
+      # build/windows/installer/project.nsi surfaces on the PR instead of
+      # during a release.
+      - name: Build application and installer (Windows)
+        if: matrix.platform == 'windows'
+        run: wails build -clean -nsis -platform ${{ matrix.platform }}/${{ matrix.arch }}
+
       - name: Build application
-        if: matrix.platform != 'linux'
+        if: matrix.platform == 'darwin'
         run: wails build -clean -platform ${{ matrix.platform }}/${{ matrix.arch }}
 
       - name: Upload build artifacts
