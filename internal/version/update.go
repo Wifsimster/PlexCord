@@ -162,6 +162,31 @@ func findAsset(assets []ReleaseAsset, name string) (ReleaseAsset, bool) {
 	return ReleaseAsset{}, false
 }
 
+// releaseIsInstallable reports whether a release carries the files this
+// platform needs in order to install it.
+//
+// A GitHub release exists several minutes before its binaries do:
+// semantic-release publishes the release and its notes, and the build
+// workflow attaches the assets when it finishes. In that window the release
+// is real, newer, and completely uninstallable — which is exactly when
+// PlexCord used to announce it.
+func releaseIsInstallable(release *GitHubRelease) bool {
+	assetName, supported := updatableAssetName()
+	if !supported {
+		// No in-place update here (macOS, other architectures): the user
+		// downloads from the releases page, so any attached asset means the
+		// release is ready to be offered.
+		return len(release.Assets) > 0
+	}
+	if _, ok := findAsset(release.Assets, assetName); !ok {
+		return false
+	}
+	// DownloadAndApplyUpdate verifies the SHA-256 companion before it writes
+	// anything, so a release missing that file cannot be applied either.
+	_, ok := findAsset(release.Assets, assetName+".sha256")
+	return ok
+}
+
 // downloadBody performs a GET and returns the response for streaming. The
 // caller is responsible for closing resp.Body.
 func downloadBody(ctx context.Context, client *http.Client, url string) (*http.Response, error) {
@@ -209,7 +234,10 @@ func DownloadAndApplyUpdate(ctx context.Context, progress ProgressFunc) (*Update
 
 	asset, ok := findAsset(release.Assets, assetName)
 	if !ok {
-		return nil, fmt.Errorf("release %s has no asset named %s", release.TagName, assetName)
+		// Reachable when the release was published moments ago and its build
+		// has not finished uploading (see releaseIsInstallable), so say that
+		// rather than naming a file the user cannot do anything about.
+		return nil, fmt.Errorf("release %s is published but its downloads are not ready yet; try again in a few minutes", release.TagName)
 	}
 
 	client := &http.Client{Timeout: 5 * time.Minute}

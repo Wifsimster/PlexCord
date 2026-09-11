@@ -148,6 +148,16 @@ func CheckForUpdate() (*UpdateInfo, error) {
 	// Compare versions
 	available := isNewerVersion(release.TagName, Version)
 
+	// A newer tag is not yet an update while its binaries are still being
+	// built and uploaded: offering one in that window produces a download
+	// that fails, and on the platforms that download in the background it
+	// fails without anyone having asked. Report "up to date" and pick the
+	// release up on the next check instead.
+	if available && !releaseIsInstallable(release) {
+		log.Printf("Release %s is published but has no downloads yet; not offering it", release.TagName)
+		return upToDate(), nil
+	}
+
 	return &UpdateInfo{
 		Available:      available,
 		CurrentVersion: Version,
