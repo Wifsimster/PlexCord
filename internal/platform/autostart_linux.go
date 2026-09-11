@@ -61,8 +61,8 @@ func (m *AutoStartManager) Enable() error {
 	}
 
 	desktopContent := m.desktopEntry()
-	//nolint:gosec // desktopPath is derived from the user config dir, not user input
-	if current, err := os.ReadFile(desktopPath); err == nil && string(current) == desktopContent {
+	// #nosec G304 -- desktopPath is the fixed autostart path under the user config dir, not untrusted input
+	if current, err := os.ReadFile(desktopPath); err == nil && string(current) == desktopContent { //nolint:gosec
 		log.Printf("Auto-start already enabled")
 		return nil
 	}
