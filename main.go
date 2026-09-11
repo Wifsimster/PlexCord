@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/logger"
@@ -31,9 +32,13 @@ func main() {
 
 	// Decide how the window comes up before handing the options to Wails: the
 	// "Start minimized" setting lives in the config file, which the app itself
-	// only loads later, in OnStartup. An update relaunch ignores the setting
-	// and always shows the window.
-	launch := resolveWindowLaunchState(loadLaunchConfig(), isUpdateRelaunch)
+	// only loads later, in OnStartup. A login launch starts in the background
+	// whatever that setting says, and an update relaunch always shows the
+	// window (see resolveWindowLaunchState).
+	launch := resolveWindowLaunchState(loadLaunchConfig(), launchContext{
+		IsUpdateRelaunch: isUpdateRelaunch,
+		IsAutoStart:      isAutoStartLaunch(os.Args[1:]),
+	})
 
 	// Create an instance of the app structure
 	app := NewApp()
@@ -59,8 +64,9 @@ func main() {
 		DisableResize: false,
 		Fullscreen:    false,
 		Frameless:     true, // Custom in-app title bar (single merged header)
-		// Start hidden when "Start minimized" runs PlexCord straight into the
-		// tray; the tray icon and relaunching the app both restore it.
+		// Start hidden when PlexCord runs straight into the tray ("Start
+		// minimized", or a launch the OS performed at login); the tray icon and
+		// relaunching the app both restore it.
 		StartHidden: launch.StartHidden,
 		// Close behavior is handled dynamically in app.beforeClose so it can
 		// honor the user's "Minimize to tray" setting: hide to the background
@@ -77,7 +83,7 @@ func main() {
 		OnDomReady:    app.domReady,
 		OnBeforeClose: app.beforeClose,
 		OnShutdown:    app.shutdown,
-		// Normal, or Minimised when "Start minimized" is on without
+		// Normal, or Minimised when PlexCord starts in the background without
 		// "Minimize to tray" (see resolveWindowLaunchState).
 		WindowStartState: launch.StartState,
 		// A single-instance lock complements the system tray: it prevents

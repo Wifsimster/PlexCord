@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"plexcord/internal/config"
+	"plexcord/internal/platform"
 )
 
 // Window geometry, derived from what the UI actually lays out rather than from
@@ -77,10 +79,22 @@ type windowLaunchState struct {
 	StartHidden bool
 }
 
-// resolveWindowLaunchState maps the user's preferences onto those options.
+// launchContext describes how this process came to be running. Both cases
+// override what the settings alone would decide, so they travel together.
+type launchContext struct {
+	// IsUpdateRelaunch marks the instance the in-app updater spawned after
+	// installing a new version.
+	IsUpdateRelaunch bool
+	// IsAutoStart marks a launch the OS performed at login, recognized by the
+	// flag PlexCord registers its auto-start entry with.
+	IsAutoStart bool
+}
+
+// resolveWindowLaunchState maps the user's preferences, and how PlexCord was
+// launched, onto those options.
 //
-// "Start minimized" has two flavors, mirroring what closing the window already
-// does:
+// Starting in the background has two flavors, mirroring what closing the
+// window already does:
 //   - with "Minimize to tray" on, PlexCord starts hidden — no window and no
 //     taskbar button, just the tray icon. Restoring goes through the tray or
 //     through relaunching PlexCord, which the single-instance lock turns into
@@ -89,17 +103,43 @@ type windowLaunchState struct {
 //     it outright would leave the user no way back: closing to the tray is
 //     disabled, so the taskbar button is the only restore affordance.
 //
-// An update relaunch always comes up normally, whatever the setting says: the
-// user just clicked "restart to apply", and a restart that vanished into the
-// tray would read as a crash.
-func resolveWindowLaunchState(cfg *config.Config, isUpdateRelaunch bool) windowLaunchState {
-	if cfg == nil || !cfg.StartMinimized || isUpdateRelaunch {
+// Two things put PlexCord in the background. "Start minimized" does it for
+// every launch. A login launch does it on its own, whatever that setting says:
+// nobody asked for a window at that moment — the OS started PlexCord, not the
+// user — and a presence bridge that pops a window over the desktop on every
+// boot is the reason people turn "Start on login" back off.
+//
+// An update relaunch is the mirror image and wins over both: the user just
+// clicked "restart to apply", and a restart that vanished into the tray would
+// read as a crash.
+func resolveWindowLaunchState(cfg *config.Config, launch launchContext) windowLaunchState {
+	if cfg == nil || launch.IsUpdateRelaunch {
+		return windowLaunchState{StartState: options.Normal}
+	}
+	if !cfg.StartMinimized && !launch.IsAutoStart {
 		return windowLaunchState{StartState: options.Normal}
 	}
 	if cfg.MinimizeToTray {
 		return windowLaunchState{StartState: options.Normal, StartHidden: true}
 	}
 	return windowLaunchState{StartState: options.Minimised}
+}
+
+// isAutoStartLaunch reports whether the process was started by the OS at
+// login, which every auto-start registration marks with
+// platform.AutoStartFlag (see internal/platform/autostart.go). Both the
+// double- and single-dash spellings are accepted, since Go's own flag package
+// treats them as the same flag.
+//
+// Nothing else passes this flag: the update relaunch spawns the executable
+// with no arguments at all, so a login launch is the only way it arrives.
+func isAutoStartLaunch(args []string) bool {
+	for _, arg := range args {
+		if arg == platform.AutoStartFlag || arg == strings.TrimPrefix(platform.AutoStartFlag, "-") {
+			return true
+		}
+	}
+	return false
 }
 
 // fitWindowToScreen shrinks the preferred window size to something that fits

@@ -59,12 +59,15 @@ Once setup is complete:
 
 Settings → App controls how PlexCord behaves around the window:
 
-- **Start on login** launches PlexCord automatically when you log in.
+- **Start on login** launches PlexCord automatically when you log in. A login
+  launch always comes up in the background — into the tray when "Minimize to
+  tray" is on, otherwise minimized to the taskbar — so PlexCord starts bridging
+  your presence without a window opening over your desktop at boot.
 - **Minimize to tray** keeps PlexCord running in the tray when you close the
   window, instead of quitting.
-- **Start minimized** launches PlexCord without opening the window — into the
-  tray when "Minimize to tray" is on, otherwise minimized to the taskbar.
-  It takes effect on the next launch.
+- **Start minimized** does the same for the launches you start yourself:
+  PlexCord opens without a window, into the tray when "Minimize to tray" is on
+  and minimized to the taskbar otherwise. It takes effect on the next launch.
 
 To bring the window back, click the tray icon (or its "Show PlexCord" menu
 entry), or simply open PlexCord again: launching it while it is already running
