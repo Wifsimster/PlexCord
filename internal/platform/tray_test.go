@@ -1,13 +1,16 @@
 package platform
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 // TestUpdateNoticeStoredBeforeMenuIsBuilt verifies a notice that arrives before
 // systray has built the menu is remembered rather than dropped. This is the
 // realistic ordering: the tray starts on its own goroutine, while an update
 // found at startup can land at any point after that.
 func TestUpdateNoticeStoredBeforeMenuIsBuilt(t *testing.T) {
-	tm := NewTrayManager(TrayCallbacks{}, nil, nil)
+	tm := NewTrayManager(TrayCallbacks{}, TrayIcons{})
 
 	notice := UpdateNotice{Label: "Restart to update to v1.5.0", Tooltip: "PlexCord v1.5.0 is installed", Actionable: true}
 	tm.SetUpdateNotice(notice)
@@ -20,7 +23,7 @@ func TestUpdateNoticeStoredBeforeMenuIsBuilt(t *testing.T) {
 // TestUpdateNoticeOwnsTheTooltip verifies a pending update takes over the tray
 // tooltip, and hands it back once cleared.
 func TestUpdateNoticeOwnsTheTooltip(t *testing.T) {
-	tm := NewTrayManager(TrayCallbacks{}, nil, nil)
+	tm := NewTrayManager(TrayCallbacks{}, TrayIcons{})
 	tm.SetTooltip("PlexCord — Live")
 
 	tm.mu.Lock()
@@ -77,7 +80,7 @@ func TestApplyUpdateNoticeWithoutMenuItem(t *testing.T) {
 // TestTrayUpdateCallback verifies a click on the update item reaches the app.
 func TestTrayUpdateCallback(t *testing.T) {
 	clicked := false
-	tm := NewTrayManager(TrayCallbacks{OnUpdate: func() { clicked = true }}, nil, nil)
+	tm := NewTrayManager(TrayCallbacks{OnUpdate: func() { clicked = true }}, TrayIcons{})
 
 	tm.handleUpdate()
 
@@ -88,5 +91,40 @@ func TestTrayUpdateCallback(t *testing.T) {
 
 // TestTrayUpdateCallbackUnset verifies a click with no callback wired is safe.
 func TestTrayUpdateCallbackUnset(t *testing.T) {
-	NewTrayManager(TrayCallbacks{}, nil, nil).handleUpdate()
+	NewTrayManager(TrayCallbacks{}, TrayIcons{}).handleUpdate()
+}
+
+// TestTrayIconBadging covers the icon the tray shows for each state: the badge
+// is the only cue a user gets without opening the tray menu, and a build
+// missing the badged variant must still get an icon.
+func TestTrayIconBadging(t *testing.T) {
+	plainPNG := []byte("png")
+	plainICO := []byte("ico")
+	badgedPNG := []byte("png-badged")
+	badgedICO := []byte("ico-badged")
+
+	full := NewTrayManager(TrayCallbacks{}, TrayIcons{
+		PNG: plainPNG, ICO: plainICO, UpdatePNG: badgedPNG, UpdateICO: badgedICO,
+	})
+	wantIdle, wantPending := plainPNG, badgedPNG
+	if runtime.GOOS == "windows" {
+		wantIdle, wantPending = plainICO, badgedICO
+	}
+	if got := full.icon(false); string(got) != string(wantIdle) {
+		t.Errorf("icon(false) = %q, want %q", got, wantIdle)
+	}
+	if got := full.icon(true); string(got) != string(wantPending) {
+		t.Errorf("icon(true) = %q, want %q", got, wantPending)
+	}
+
+	// No badged variant: keep showing the plain icon rather than none.
+	bare := NewTrayManager(TrayCallbacks{}, TrayIcons{PNG: plainPNG, ICO: plainICO})
+	if got := bare.icon(true); string(got) != string(wantIdle) {
+		t.Errorf("icon(true) without a badged variant = %q, want the plain icon %q", got, wantIdle)
+	}
+
+	// No icons at all: nothing to set, and no panic reaching for it.
+	if got := NewTrayManager(TrayCallbacks{}, TrayIcons{}).icon(true); len(got) != 0 {
+		t.Errorf("icon(true) with no icons = %q, want empty", got)
+	}
 }

@@ -60,8 +60,10 @@ type App struct {
 
 	// Tray icon data, injected from main so the platform layer stays
 	// asset-agnostic. iconPNG is used on macOS/Linux, iconICO on Windows.
-	trayIconPNG []byte
-	trayIconICO []byte
+	trayIconPNG       []byte
+	trayIconICO       []byte
+	trayIconUpdatePNG []byte // badged variants, shown while an update is pending
+	trayIconUpdateICO []byte
 
 	// Retry managers (Story 6.4)
 	plexRetry    *retry.Manager
@@ -199,7 +201,12 @@ func (a *App) startup(ctx context.Context) {
 		OnShow:   a.ShowWindow,
 		OnQuit:   a.QuitApp,
 		OnUpdate: a.onTrayUpdateClick,
-	}, a.trayIconPNG, a.trayIconICO)
+	}, platform.TrayIcons{
+		PNG:       a.trayIconPNG,
+		ICO:       a.trayIconICO,
+		UpdatePNG: a.trayIconUpdatePNG,
+		UpdateICO: a.trayIconUpdateICO,
+	})
 	a.tray.Start()
 
 	// Setup retry callbacks for automatic reconnection
