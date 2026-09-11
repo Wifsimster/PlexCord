@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PlexCord symbol. See docs/brand.md. -->
+<!-- Horizontal lockup. The wordmark is a system stack: it composes with the
+     font of the host, as in the app (no webfonts, see design-system.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" width="220" height="48" role="img" aria-label="PlexCord">
+  <g transform="translate(0 8) scale(0.5)">
+    <rect x="3.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="#EDEDF0"/>
+    <circle cx="32.0" cy="32.0" r="8.5" fill="#EDEDF0"/>
+    <rect x="46.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="#EDEDF0"/>
+  </g>
+  <text x="45" y="31" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI',system-ui,Roboto,'Helvetica Neue',Arial,sans-serif" font-size="26" font-weight="600" letter-spacing="-0.52" fill="#EDEDF0">PlexCord</text>
+</svg>

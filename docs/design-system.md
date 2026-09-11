@@ -414,7 +414,7 @@ Loading: label persists at 40% opacity, 12px spinner absolutely positioned (no w
 
 It renders the **user's real format strings** via a new shared util `frontend/src/utils/presenceFormat.js` → `renderPresenceFormat(format, track)` supporting `{track} {artist} {album} {year} {player}` (fixes F2/F11 at the root). Props: `track` (null → ghost idle), `formats {details, state}`, `paused`, `sample`. States: idle ghost (dashed 1px `--pc-border` frame, centered `–` glyph, caption per page spec); paused (M13 + `PAUSED` badge); track change (M10); skeleton (M20). Framed in the `.pc-specimen-well` inset (bg `--pc-bg`, 1px `--pc-border-subtle`, radius-md, 16px padding) with caption beneath: `Exactly what your Discord profile shows.` Pure renderer: no store init/cleanup of its own (F35).
 
-**5.0.5 `<BrandMark>`** — single logo lockup (kills duplicated inline SVGs in AppTopbar + SetupWizard): Plexamp glyph recolored `--pc-plex` (replaces `#CC7B19`), 18px, + "PlexCord" 13px/600 `--pc-text`.
+**5.0.5 `<BrandMark>`** — single logo lockup (kills duplicated inline SVGs in AppTopbar + SetupWizard): the PlexCord symbol in `--pc-text` (small optical geometry), 18px, + "PlexCord" 13px/600 `--pc-text`. The symbol is neutral by contract — gold and blurple identify the endpoints of the path, never the product that relays it; see [`brand.md`](brand.md).
 
 **5.0.6 Composables:** `useVersion()` (module-level cached `GetVersion()` — deletes the 3 duplicate calls), `usePresenceStatus()` (computed over playback + both connection stores + `IsPresencePaused` → the headline state machine in §5.1), `usePlayback()` (Dashboard-level playback event init/cleanup — F35).
 

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PlexCord symbol. See docs/brand.md. -->
+<!-- Optical size: use at 32px and below. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="32" height="32" role="img" aria-label="PlexCord">
+  <rect x="2.0" y="26.5" width="13.0" height="11.0" rx="5.5" fill="currentColor"/>
+  <circle cx="32.0" cy="32.0" r="10.5" fill="currentColor"/>
+  <rect x="49.0" y="26.5" width="13.0" height="11.0" rx="5.5" fill="currentColor"/>
+</svg>
