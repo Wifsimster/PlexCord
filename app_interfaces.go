@@ -158,3 +158,11 @@ type UpdateService interface {
 	Check() (*version.UpdateInfo, error)
 	StartDownload(ctx context.Context, auto bool) (*version.UpdateInfo, error)
 }
+
+// AppRelauncher starts a fresh copy of the application binary, for applying an
+// update that has already been written to disk. Abstracted so the restart path
+// — which otherwise spawns a real process and quits this one — can be verified.
+type AppRelauncher interface {
+	// Relaunch spawns the updated binary and returns once it has started.
+	Relaunch() error
+}

@@ -300,15 +300,6 @@ func (a *App) SaveServerURL(serverURL string) error {
 // Each poll completes within 500ms (NFR5).
 // Returns an error if required configuration is missing.
 func (a *App) StartSessionPolling() error {
-	a.pollerMu.Lock()
-	defer a.pollerMu.Unlock()
-
-	// Check if already polling
-	if a.poller != nil && a.poller.IsRunning() {
-		log.Printf("Session polling already running")
-		return nil
-	}
-
 	// Validate configuration
 	serverURL := a.activePlexServerURL()
 	if serverURL == "" {
@@ -330,62 +321,73 @@ func (a *App) StartSessionPolling() error {
 		return errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
 	}
 
-	// Create the Plex client through the injected factory, the same path
-	// validation and user lookup use, so polling can be driven by a fake.
-	client := a.plexFactory(token, serverURL)
-
-	// Get polling interval from config (default 2 seconds for NFR4 compliance)
-	interval := time.Duration(a.config.PollingInterval) * time.Second
-	if interval < time.Second {
-		interval = 2 * time.Second // Default to 2 seconds per NFR4: state changes detected within 2s
+	// Build the client through the injected factory, the same path validation
+	// and user lookup use, so polling can be driven by a fake in tests.
+	client, ok := a.plexFactory(token, serverURL).(plex.SessionSource)
+	if !ok {
+		return errors.New(errors.PLEX_CONN_FAILED, "plex client cannot supply sessions")
 	}
 
-	// Create poller
-	a.poller = plex.NewPoller(client, a.config.SelectedPlexUserID, interval)
+	sessionCh := a.polling.Start(pollingConfig{
+		Source:      client,
+		UserID:      a.config.SelectedPlexUserID,
+		Interval:    a.pollingInterval(),
+		OnError:     a.onPlexPollError,
+		OnRecovered: a.onPlexPollRecovered,
+	})
+	if sessionCh == nil {
+		// Already polling; the running loop keeps serving updates.
+		return nil
+	}
 
-	// Setup error callbacks for graceful Plex unavailability handling (Story 6.5)
-	a.poller.SetErrorCallbacks(
-		// onError: Called when Plex connection fails
-		func(err error) {
-			log.Printf("Plex connection error detected, starting recovery...")
-
-			// Clear Discord presence so it doesn't show stale data
-			a.clearDiscordOnStop()
-
-			// Emit event for frontend to show error status
-			a.bus.Emit(events.PlexConnectionError, map[string]interface{}{
-				"error":     err.Error(),
-				"errorCode": errors.GetCode(err),
-			})
-
-			// Start automatic retry (backoff is handled by retry manager)
-			a.startPlexRetry(err)
-		},
-		// onRecovered: Called when Plex connection recovers
-		func() {
-			log.Printf("Plex connection recovered")
-
-			// Stop retry and update connection history
-			a.stopPlexRetry()
-			a.updatePlexConnectionTime()
-
-			// Emit event for frontend to clear error status
-			a.bus.Emit(events.PlexConnectionRestored, nil)
-		},
-	)
-
-	// Create context for poller
-	a.pollerCtx, a.pollerStop = context.WithCancel(context.Background())
-
-	// Start polling
-	sessionCh := a.poller.Start(a.pollerCtx)
-
-	log.Printf("Session polling started: user=%s, interval=%v", a.config.SelectedPlexUserID, interval)
+	log.Printf("Session polling started: user=%s, interval=%v", a.config.SelectedPlexUserID, a.pollingInterval())
 
 	// Start goroutine to handle session updates
 	go a.handleSessionUpdates(sessionCh)
 
 	return nil
+}
+
+// pollingInterval is the configured poll period, floored at the NFR4 default of
+// 2 seconds so a missing or nonsensical config value cannot slow detection of a
+// state change below what the requirement allows.
+func (a *App) pollingInterval() time.Duration {
+	interval := time.Duration(a.config.PollingInterval) * time.Second
+	if interval < time.Second {
+		return 2 * time.Second
+	}
+	return interval
+}
+
+// onPlexPollError handles the transition into a failed Plex connection
+// (Story 6.5): drop the now-stale presence, tell the frontend, and start the
+// retry loop.
+func (a *App) onPlexPollError(err error) {
+	log.Printf("Plex connection error detected, starting recovery...")
+
+	// Clear Discord presence so it doesn't show stale data
+	a.clearDiscordOnStop()
+
+	// Emit event for frontend to show error status
+	a.bus.Emit(events.PlexConnectionError, map[string]interface{}{
+		"error":     err.Error(),
+		"errorCode": errors.GetCode(err),
+	})
+
+	// Start automatic retry (backoff is handled by retry manager)
+	a.startPlexRetry(err)
+}
+
+// onPlexPollRecovered handles polling succeeding again after a failure.
+func (a *App) onPlexPollRecovered() {
+	log.Printf("Plex connection recovered")
+
+	// Stop retry and update connection history
+	a.stopPlexRetry()
+	a.updatePlexConnectionTime()
+
+	// Emit event for frontend to clear error status
+	a.bus.Emit(events.PlexConnectionRestored, nil)
 }
 
 // handleSessionUpdates constructs the observer pipeline and runs it.
@@ -398,7 +400,7 @@ func (a *App) StartSessionPolling() error {
 // the frontend sees the state after all side effects have run.
 func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 	observers := []SessionObserver{
-		newSessionCacheObserver(&a.sessionMu, &a.currentSession),
+		newSessionCacheObserver(a.sessions),
 		newHistoryObserver(a.history),
 		&discordPresenceObserver{
 			update:        a.updateDiscordFromSession,
@@ -419,32 +421,12 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 // wants to temporarily stop monitoring playback.
 // It is safe to call this method even if polling is not running.
 func (a *App) StopSessionPolling() {
-	a.pollerMu.Lock()
-	defer a.pollerMu.Unlock()
-
-	if a.poller == nil {
-		return
-	}
-
-	// Cancel context and stop poller
-	if a.pollerStop != nil {
-		a.pollerStop()
-	}
-
-	a.poller.Stop()
-	a.poller = nil
-	a.pollerCtx = nil
-	a.pollerStop = nil
-
-	log.Printf("Session polling stopped")
+	a.polling.Stop()
 }
 
 // IsPollingActive returns whether session polling is currently running.
 func (a *App) IsPollingActive() bool {
-	a.pollerMu.Lock()
-	defer a.pollerMu.Unlock()
-
-	return a.poller != nil && a.poller.IsRunning()
+	return a.polling.IsRunning()
 }
 
 // PlexConnectionStatus represents the current Plex connection status.
@@ -459,22 +441,16 @@ type PlexConnectionStatus struct {
 
 // GetPlexConnectionStatus returns the current Plex connection status (Story 6.5).
 func (a *App) GetPlexConnectionStatus() PlexConnectionStatus {
-	a.pollerMu.Lock()
-	defer a.pollerMu.Unlock()
+	polling, inError := a.polling.State()
 
-	status := PlexConnectionStatus{
-		ServerURL: a.activePlexServerURL(),
-		UserID:    a.config.SelectedPlexUserID,
-		UserName:  a.config.SelectedPlexUserName,
+	return PlexConnectionStatus{
+		ServerURL:    a.activePlexServerURL(),
+		UserID:       a.config.SelectedPlexUserID,
+		UserName:     a.config.SelectedPlexUserName,
+		Polling:      polling,
+		InErrorState: inError,
+		Connected:    polling && !inError,
 	}
-
-	if a.poller != nil {
-		status.Polling = a.poller.IsRunning()
-		status.InErrorState = a.poller.IsInErrorState()
-		status.Connected = status.Polling && !status.InErrorState
-	}
-
-	return status
 }
 
 // SetPollingInterval updates the session polling interval dynamically.
@@ -497,12 +473,9 @@ func (a *App) SetPollingInterval(intervalSeconds int) error {
 	}
 
 	// Update running poller if active
-	a.pollerMu.Lock()
-	if a.poller != nil && a.poller.IsRunning() {
-		a.poller.SetInterval(time.Duration(intervalSeconds) * time.Second)
+	if a.polling.SetInterval(time.Duration(intervalSeconds) * time.Second) {
 		log.Printf("Polling interval updated to %d seconds", intervalSeconds)
 	}
-	a.pollerMu.Unlock()
 
 	return nil
 }
@@ -520,9 +493,7 @@ func (a *App) GetPollingInterval() int {
 // Returns nil if no music is currently playing.
 // This is used by the frontend to restore playback state after page refresh.
 func (a *App) GetCurrentSession() *plex.MusicSession {
-	a.sessionMu.RLock()
-	defer a.sessionMu.RUnlock()
-	return a.currentSession
+	return a.sessions.Get()
 }
 
 // autoConnectPlex attempts to restore the Plex connection using persisted config.

@@ -104,3 +104,63 @@ func TestPublishUpdateNoticeReachesTray(t *testing.T) {
 		t.Errorf("tray notice = %+v, want it withdrawn", notice)
 	}
 }
+
+// TestUpdaterStatusReachesTrayThroughListener covers the wiring the tray notice
+// depends on end to end: the updater announces a lifecycle transition and the
+// tray menu item follows it. Before the UpdateService and TrayController
+// interfaces existed, this needed a real GitHub poll and a real desktop tray.
+func TestUpdaterStatusReachesTrayThroughListener(t *testing.T) {
+	tray := &fakeTray{}
+	fake := &fakeUpdater{}
+	app := &App{tray: tray, updater: fake}
+
+	// Registering the listener is what startup does; it must deliver the
+	// current state immediately so a listener registered after an early
+	// transition is not left behind.
+	fake.OnStatusChange(app.publishUpdateNotice)
+
+	notice, ok := tray.lastNotice()
+	if !ok {
+		t.Fatal("registering the listener delivered nothing to the tray")
+	}
+	if notice != (platform.UpdateNotice{}) {
+		t.Errorf("initial tray notice = %+v, want none for an idle updater", notice)
+	}
+
+	// A download starting is informational: the tray says so but the item
+	// is not clickable, since a click could only interrupt work in progress.
+	fake.publish(updater.Status{
+		State: updater.StateDownloading,
+		Info:  &version.UpdateInfo{LatestVersion: "v2.0.0"},
+	})
+	notice, _ = tray.lastNotice()
+	if notice.Label != "Downloading update v2.0.0…" {
+		t.Errorf("downloading notice = %q, want the download label", notice.Label)
+	}
+	if notice.Actionable {
+		t.Error("a download in progress was offered as an actionable tray item")
+	}
+
+	// Ready is the one worth acting on: the update is on disk, a restart applies it.
+	fake.publish(updater.Status{
+		State: updater.StateReady,
+		Info:  &version.UpdateInfo{LatestVersion: "v2.0.0"},
+	})
+	notice, _ = tray.lastNotice()
+	if notice.Label != "Restart to update to v2.0.0" {
+		t.Errorf("ready notice = %q, want the restart invitation", notice.Label)
+	}
+	if !notice.Actionable {
+		t.Error("a ready update was not offered as an actionable tray item")
+	}
+}
+
+// TestGetUpdateStatusWithoutUpdater verifies the binding hydrates the frontend
+// with a sane state before the checker has been constructed.
+func TestGetUpdateStatusWithoutUpdater(t *testing.T) {
+	app := &App{}
+
+	if got := app.GetUpdateStatus(); got.State != updater.StateIdle {
+		t.Errorf("GetUpdateStatus() state = %q, want idle before the updater exists", got.State)
+	}
+}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"time"
 
@@ -16,9 +15,6 @@ import (
 // Returns an error if connection fails (e.g., Discord not running).
 // Emits DiscordConnected or DiscordDisconnected Wails event based on result.
 func (a *App) ConnectDiscord(clientID string) error {
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
-
 	log.Printf("Attempting Discord connection...")
 
 	// Use configured client ID if not provided
@@ -57,7 +53,7 @@ func (a *App) ConnectDiscord(clientID string) error {
 	// Emit connected event
 	a.bus.Emit(events.DiscordConnected, discord.ConnectionEvent{
 		Connected: true,
-		ClientID:  a.discord.GetClientID(),
+		ClientID:  a.discord.ClientID(),
 	})
 
 	log.Printf("Discord connected successfully")
@@ -68,9 +64,6 @@ func (a *App) ConnectDiscord(clientID string) error {
 // Clears any active presence before disconnecting.
 // Emits DiscordDisconnected Wails event.
 func (a *App) DisconnectDiscord() error {
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
-
 	log.Printf("Disconnecting from Discord...")
 
 	err := a.discord.Disconnect()
@@ -90,8 +83,6 @@ func (a *App) DisconnectDiscord() error {
 
 // IsDiscordConnected returns whether a Discord connection is active.
 func (a *App) IsDiscordConnected() bool {
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
 	return a.discord.IsConnected()
 }
 
@@ -103,7 +94,30 @@ func (a *App) GetDefaultDiscordClientID() string {
 // GetDiscordClientID returns the currently configured Discord Client ID.
 // Returns the config value if set, otherwise the default.
 func (a *App) GetDiscordClientID() string {
-	if a.config.DiscordClientID != "" {
+	return a.effectiveDiscordClientID()
+}
+
+// presenceDisplayOptions projects the user's persisted presence preferences
+// onto the options the Discord layer consumes. Having one place build them
+// keeps every presence path — session updates, artwork re-issues, the manual
+// binding — telling Discord the same story.
+func (a *App) presenceDisplayOptions() discord.Options {
+	if a.config == nil {
+		return discord.Options{}
+	}
+	return discord.Options{
+		DetailsFormat: a.config.PresenceDetailsFormat,
+		StateFormat:   a.config.PresenceStateFormat,
+		ActivityStyle: a.config.PresenceActivityStyle,
+		StatusDisplay: a.config.PresenceStatusDisplay,
+	}
+}
+
+// effectiveDiscordClientID is the Client ID PlexCord actually connects with:
+// the configured one, or the built-in PlexCord application. It is the single
+// answer to that question, shared by the binding and by the silent reconnect.
+func (a *App) effectiveDiscordClientID() string {
+	if a.config != nil && a.config.DiscordClientID != "" {
 		return a.config.DiscordClientID
 	}
 	return discord.DefaultClientID
@@ -138,47 +152,26 @@ func (a *App) SaveDiscordClientID(clientID string) error {
 // UpdateDiscordPresence updates the Discord Rich Presence with current playback info.
 // This is called internally when playback state changes.
 func (a *App) UpdateDiscordPresence(track, artist, album, state string, duration, position int64) error {
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
+	session := &plex.MusicSession{Track: track, Artist: artist, Album: album, Duration: duration, ViewOffset: position}
+	session.State = state
 
 	if !a.discord.IsConnected() {
 		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
 	}
-
-	return a.discord.UpdatePlayback(discord.Playback{
-		Track:    track,
-		Artist:   artist,
-		Album:    album,
-		State:    state,
-		Duration: duration,
-		Position: position,
-	}, a.presenceDisplayOptions())
+	a.discord.Publish(session)
+	return nil
 }
 
 // ClearDiscordPresence removes the Discord Rich Presence.
 // Called when playback stops.
 func (a *App) ClearDiscordPresence() error {
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
-
-	if !a.discord.IsConnected() {
-		return nil // Not connected, nothing to clear
-	}
-
-	return a.discord.ClearPresence()
+	return a.discord.Clear()
 }
 
 // TestDiscordPresence sends a test presence message to Discord to verify the connection.
 // This displays a sample "Now Playing" message on the user's Discord profile.
 // Returns an error if not connected or if the test fails.
 func (a *App) TestDiscordPresence() error {
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
-
-	if !a.discord.IsConnected() {
-		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
-	}
-
 	log.Printf("Sending test presence to Discord...")
 
 	// Create test presence data
@@ -189,7 +182,10 @@ func (a *App) TestDiscordPresence() error {
 		State:  "playing",
 	}
 
-	err := a.discord.SetPresence(testPresence)
+	connected, err := a.discord.SetPresence(testPresence)
+	if !connected {
+		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
+	}
 	if err != nil {
 		log.Printf("ERROR: Failed to send test presence: %v", err)
 		return err
@@ -199,151 +195,18 @@ func (a *App) TestDiscordPresence() error {
 	return nil
 }
 
-// updateDiscordFromSession updates Discord Rich Presence with music session info.
-// This is called automatically when playback is detected by the poller.
-// If Discord is not connected, attempts to reconnect automatically (Story 3-8).
+// updateDiscordFromSession publishes a music session to Discord. The
+// mechanics — cached-vs-background artwork, silent reconnect, the generation
+// guard on a late cover — live in discordService.
 func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
-
-	// Each session update supersedes any in-flight async artwork resolve.
-	gen := a.artworkGen.Add(1)
-
-	// Never send Discord the tokened Plex ThumbURL (credential leak): resolve a
-	// public URL instead. Use a cached cover synchronously so a known album
-	// shows instantly; otherwise fall back to the Plex logo asset and resolve
-	// the real cover in the background below.
-	artURL := a.cachedSessionArtwork(session)
-
-	// If not connected, try to reconnect (auto-recovery for Discord restart)
-	if !a.discord.IsConnected() {
-		a.tryDiscordReconnect()
-		// If still not connected after reconnect attempt, skip update
-		if !a.discord.IsConnected() {
-			return
-		}
-		log.Printf("Discord: Reconnected - restoring presence")
-	}
-
-	if err := a.sendPresenceLocked(session, artURL); err != nil {
-		log.Printf("Warning: Failed to update Discord presence: %v", err)
-	}
-
-	// If we have no cover yet, resolve one off the presence path and re-issue
-	// when it lands (dropped if the session has since changed).
-	if artURL == "" && a.artwork != nil && a.config.ArtworkLookupEnabled() {
-		go a.resolveArtworkAsync(session, gen)
-	}
+	a.discord.Publish(session)
 }
 
-// cachedSessionArtwork returns a public artwork URL for the session if one is
-// already cached (no network), or "" to use the Plex logo fallback. It never
-// returns the tokened Plex ThumbURL.
-func (a *App) cachedSessionArtwork(session *plex.MusicSession) string {
-	if a.artwork == nil || !a.config.ArtworkLookupEnabled() {
-		return ""
-	}
-	if url, ok := a.artwork.Cached(session.Artist, session.Album); ok {
-		return url
-	}
-	return ""
-}
-
-// sendPresenceLocked issues a presence update for the session with the given
-// public artwork URL. The caller must hold discordMu.
-func (a *App) sendPresenceLocked(session *plex.MusicSession, artURL string) error {
-	return a.discord.UpdatePlayback(discord.Playback{
-		MediaType:  discord.MediaTypeMusic,
-		Track:      session.Track,
-		Artist:     session.Artist,
-		Album:      session.Album,
-		State:      session.State,
-		Duration:   session.Duration,
-		Position:   session.ViewOffset,
-		ArtworkURL: artURL,
-		Player:     session.PlayerName,
-	}, a.presenceDisplayOptions())
-}
-
-// presenceDisplayOptions projects the user's persisted presence preferences
-// onto the options the Discord layer consumes. Having one place build them
-// keeps every presence path — session updates, artwork re-issues, the manual
-// binding — telling Discord the same story.
-func (a *App) presenceDisplayOptions() discord.Options {
-	return discord.Options{
-		DetailsFormat: a.config.PresenceDetailsFormat,
-		StateFormat:   a.config.PresenceStateFormat,
-		ActivityStyle: a.config.PresenceActivityStyle,
-		StatusDisplay: a.config.PresenceStatusDisplay,
-	}
-}
-
-// resolveArtworkAsync resolves a public cover off the presence path and, if the
-// session is still current (generation unchanged) and not paused, re-issues the
-// presence with the cover. Runs in its own goroutine.
-func (a *App) resolveArtworkAsync(session *plex.MusicSession, gen uint64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-	defer cancel()
-
-	url, err := a.artwork.Resolve(ctx, session.Artist, session.Album)
-	if err != nil || url == "" {
-		return
-	}
-	// Drop stale resolves (a newer session update superseded this one) and skip
-	// while manually paused, so we don't resurrect a hidden presence.
-	if a.artworkGen.Load() != gen || a.IsPresencePaused() {
-		return
-	}
-
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
-	// Re-check under the lock to avoid racing a concurrent session update.
-	if a.artworkGen.Load() != gen || !a.discord.IsConnected() {
-		return
-	}
-	if err := a.sendPresenceLocked(session, url); err != nil {
-		log.Printf("Warning: Failed to update Discord presence with artwork: %v", err)
-	}
-}
-
-// tryDiscordReconnect attempts to reconnect to Discord.
-// This is called automatically when music is playing but Discord is not connected.
-// Uses the configured or default Client ID for reconnection.
-// Does not emit events - this is a silent background reconnection.
-func (a *App) tryDiscordReconnect() {
-	// Get the client ID to use
-	clientID := a.config.DiscordClientID
-	if clientID == "" {
-		clientID = discord.DefaultClientID
-	}
-
-	// Attempt to reconnect (silently - no event emission)
-	err := a.discord.Connect(clientID)
-	if err != nil {
-		// Failed to reconnect - Discord probably still not running
-		// This is expected, don't log as error
-		return
-	}
-
-	// Successfully reconnected - update connection history
-	a.updateDiscordConnectionTime()
-	log.Printf("Discord: Auto-reconnected to Discord")
-}
-
-// clearDiscordOnStop clears Discord Rich Presence when playback stops.
-// This is called automatically when playback ends.
-// If Discord is not connected, the clear is silently skipped.
+// clearDiscordOnStop clears Discord Rich Presence when playback stops. It runs
+// on the poll path, where there is nobody to report a failure to, so a failed
+// clear is logged and the next update overwrites the stale presence anyway.
 func (a *App) clearDiscordOnStop() {
-	a.discordMu.Lock()
-	defer a.discordMu.Unlock()
-
-	if !a.discord.IsConnected() {
-		// Not connected to Discord - nothing to clear
-		return
-	}
-
-	err := a.discord.ClearPresence()
-	if err != nil {
+	if err := a.discord.Clear(); err != nil {
 		log.Printf("Warning: Failed to clear Discord presence: %v", err)
 	}
 }
@@ -375,10 +238,7 @@ func (a *App) TogglePresencePause() bool {
 	} else {
 		log.Printf("Presence manually resumed")
 		// Restore presence from current session if available
-		a.sessionMu.RLock()
-		session := a.currentSession
-		a.sessionMu.RUnlock()
-		if session != nil {
+		if session := a.sessions.Get(); session != nil {
 			a.updateDiscordFromSession(session)
 		}
 	}

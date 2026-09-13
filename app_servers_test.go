@@ -25,11 +25,18 @@ func newTestApp(cfg *config.Config) *App {
 		bus:         events.NewRecordingBus(),
 		desktop:     desktop,
 		plexFactory: func(string, string) PlexAPI { return &fakePlexAPI{} },
+		polling:     &pollingController{},
+		sessions:    &sessionCache{},
 	}
 	a.windows = newWindowManager(desktop, desktop)
 	a.presence = newPresenceGate(a.clearDiscordOnStop, a.hideWhenPausedDelay)
+	a.discord = a.newDiscordService(&recordingPresence{}, nil)
 	return a
 }
+
+// defaultTestConfig is a fresh default config, for tests that only care that
+// the app has one.
+func defaultTestConfig() *config.Config { return config.DefaultConfig() }
 
 func TestActivePlexServerURL_PrefersActiveMultiServerEntry(t *testing.T) {
 	app := newTestApp(&config.Config{

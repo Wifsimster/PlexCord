@@ -25,7 +25,7 @@ func (f *fakeArtworkResolver) Resolve(context.Context, string, string) (string, 
 // keychain, no Plex server.
 func newPresenceTestApp(presence DiscordPresence, cfg *config.Config) *App {
 	a := newTestApp(cfg)
-	a.discord = presence
+	a.discord = a.newDiscordService(presence, nil)
 	return a
 }
 
@@ -43,9 +43,8 @@ func newTokenedSession() *plex.MusicSession {
 
 func TestUpdateDiscordFromSession_NeverSendsPlexToken(t *testing.T) {
 	fake := &recordingPresence{connected: true}
-	a := newPresenceTestApp(fake, config.DefaultConfig())
 	// No resolver: artwork falls back to the Plex logo asset, never the URL.
-	a.artwork = nil
+	a := newPresenceTestApp(fake, config.DefaultConfig())
 
 	a.updateDiscordFromSession(newTokenedSession())
 
@@ -63,8 +62,8 @@ func TestUpdateDiscordFromSession_NeverSendsPlexToken(t *testing.T) {
 
 func TestUpdateDiscordFromSession_UsesCachedPublicArtwork(t *testing.T) {
 	fake := &recordingPresence{connected: true}
-	a := newPresenceTestApp(fake, config.DefaultConfig())
-	a.artwork = &fakeArtworkResolver{cached: "https://cdn/cover-512.jpg", ok: true}
+	a := newTestApp(config.DefaultConfig())
+	a.discord = a.newDiscordService(fake, &fakeArtworkResolver{cached: "https://cdn/cover-512.jpg", ok: true})
 
 	a.updateDiscordFromSession(newTokenedSession())
 
@@ -110,9 +109,9 @@ func TestUpdateDiscordFromSession_ArtworkLookupDisabled(t *testing.T) {
 	cfg := config.DefaultConfig()
 	disabled := false
 	cfg.PresenceArtworkLookup = &disabled
-	a := newPresenceTestApp(fake, cfg)
 	// Even with a resolver that has a cached cover, lookup-disabled sends none.
-	a.artwork = &fakeArtworkResolver{cached: "https://cdn/cover.jpg", ok: true}
+	a := newTestApp(cfg)
+	a.discord = a.newDiscordService(fake, &fakeArtworkResolver{cached: "https://cdn/cover.jpg", ok: true})
 
 	a.updateDiscordFromSession(newTokenedSession())
 

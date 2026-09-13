@@ -4,12 +4,12 @@ import (
 	"context"
 	"log"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"plexcord/internal/artwork"
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
+	"plexcord/internal/errors"
 	"plexcord/internal/events"
 	"plexcord/internal/history"
 	"plexcord/internal/platform"
@@ -32,26 +32,18 @@ type App struct {
 	ctx context.Context
 	// config holds a pointer to the current Config for direct reads; all
 	// writes go through cfgStore which handles atomic mutation + persistence.
-	config         *config.Config
-	cfgStore       *config.Store
-	configs        ConfigGateway // loading, deleting, and locating the config file
-	pollerCtx      context.Context
-	pollerStop     context.CancelFunc
-	currentSession *plex.MusicSession // Track current playback for page refresh restoration
+	config   *config.Config
+	cfgStore *config.Store
+	configs  ConfigGateway // loading, deleting, and locating the config file
 
-	// Session polling
-	poller *plex.Poller
+	// polling owns the session poller's lifecycle; sessions caches what is
+	// playing so the frontend can restore its dashboard after a page refresh.
+	polling  *pollingController
+	sessions *sessionCache
 
-	// Discord integration, accessed via the DiscordPresence interface.
-	discord DiscordPresence
-
-	// artwork resolves public album-art URLs so covers render on Discord
-	// without leaking the Plex token; accessed via the ArtworkResolver interface.
-	artwork ArtworkResolver
-
-	// artworkGen debounces async artwork re-issues: each session change bumps
-	// it, and a late resolve only re-issues presence if its generation is current.
-	artworkGen atomic.Uint64
+	// discord owns the Discord link and everything serialized against it:
+	// connecting, publishing presence, and the artwork generation guard.
+	discord *discordService
 
 	// Plex client factory for constructing clients on demand (per-server).
 	// Using a factory instead of a singleton reflects that the server URL/token
@@ -94,6 +86,9 @@ type App struct {
 	// Automatic update checker (constructed in startup — it needs the bus)
 	updater UpdateService
 
+	// relauncher spawns the updated binary when applying an update.
+	relauncher AppRelauncher
+
 	// PIN authentication (maintain same client ID for PIN lifecycle)
 	plexAuth *plex.Authenticator
 
@@ -103,12 +98,13 @@ type App struct {
 	// Event bus for emitting events to the frontend (abstracts Wails runtime)
 	bus events.Bus
 
-	// Mutexes grouped together for alignment
-	pollerMu   sync.Mutex
-	sessionMu  sync.RWMutex // Protect currentSession access
-	discordMu  sync.Mutex
+	// plexAuthMu guards the PIN authenticator across the request/poll cycle.
 	plexAuthMu sync.Mutex
 }
+
+// historyEntryLimit is how many listening-history entries are retained; older
+// ones are trimmed.
+const historyEntryLimit = 200
 
 // saveConfig persists the current in-memory config via the ConfigStore.
 // This is the single path for all config writes — callers that need to
@@ -117,9 +113,10 @@ type App struct {
 // hook in here without changing call sites.
 func (a *App) saveConfig() error {
 	if a.cfgStore == nil {
-		// Fallback for code paths that run before startup (should not happen
-		// in practice, but keeps tests that bypass startup working).
-		return config.Save(a.config)
+		// Every production path runs after startup, which builds the store.
+		// Failing loudly beats the old fallback, which wrote straight to the
+		// real config file and so behaved differently from every other save.
+		return errors.New(errors.CONFIG_WRITE_FAILED, "configuration store is not initialised")
 	}
 	// No-op mutator: the caller already updated a.config directly; this
 	// just triggers the store's atomic save path.
@@ -137,7 +134,6 @@ func NewApp() *App {
 // tests can drive the full window/quit surface against a fake Desktop.
 func newAppWithDesktop(desktop Desktop) *App {
 	a := &App{
-		discord:      discord.NewPresenceManager(),
 		plexFactory:  newPlexClientFactory(),
 		discovery:    newServerDiscoverer(),
 		tokens:       newKeychainTokenStore(),
@@ -145,12 +141,34 @@ func newAppWithDesktop(desktop Desktop) *App {
 		autostart:    platform.NewAutoStartManager(),
 		plexRetry:    retry.NewManager("Plex"),
 		discordRetry: retry.NewManager("Discord"),
-		artwork:      artwork.NewResolver(artwork.WithUserAgent("PlexCord/" + version.Version)),
 		desktop:      desktop,
+		polling:      &pollingController{},
+		sessions:     &sessionCache{},
+		relauncher:   newAppRelauncher(),
 	}
 	a.windows = newWindowManager(desktop, desktop)
 	a.presence = newPresenceGate(a.clearDiscordOnStop, a.hideWhenPausedDelay)
+	a.discord = a.newDiscordService(
+		discord.NewPresenceManager(),
+		artwork.NewResolver(artwork.WithUserAgent("PlexCord/"+version.Version)),
+	)
 	return a
+}
+
+// newDiscordService wires a discordService to the parts of App it needs to
+// consult — the persisted presence options, the artwork-lookup toggle, the
+// configured client ID, the connection history, and the pause state. Passing
+// them as functions keeps the service from holding a reference back to App.
+func (a *App) newDiscordService(presence DiscordPresence, resolver ArtworkResolver) *discordService {
+	return &discordService{
+		presence:        presence,
+		artwork:         resolver,
+		options:         a.presenceDisplayOptions,
+		artworkEnabled:  func() bool { return a.config != nil && a.config.ArtworkLookupEnabled() },
+		defaultClientID: a.effectiveDiscordClientID,
+		onConnected:     a.updateDiscordConnectionTime,
+		isPaused:        func() bool { return a.presence.IsPaused() },
+	}
 }
 
 // hideWhenPausedDelay reports the configured hide-when-paused delay. It is the
@@ -197,9 +215,12 @@ func (a *App) startup(ctx context.Context) {
 	a.cfgStore = config.NewStore(cfg, config.Save)
 	log.Printf("Configuration loaded successfully")
 
-	// Initialize listening history store
-	configDir := a.configs.ConfigDir()
-	a.history = history.NewStore(configDir, 200)
+	// Initialize listening history store. Guarded like the tray and the
+	// updater below, so a test (or a future alternative backing store) that
+	// injected one before startup keeps it.
+	if a.history == nil {
+		a.history = history.NewStore(a.configs.ConfigDir(), historyEntryLimit)
+	}
 
 	// Bring an existing auto-start registration up to date with what this build
 	// registers: entries written by older versions launch the bare executable,
