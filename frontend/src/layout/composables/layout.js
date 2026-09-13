@@ -9,28 +9,40 @@ const layoutConfig = reactive({
 });
 
 export function useLayout() {
-    const executeDarkModeToggle = () => {
-        layoutConfig.darkTheme = !layoutConfig.darkTheme;
-        document.documentElement.classList.toggle('dark', layoutConfig.darkTheme);
-        localStorage.setItem(THEME_STORAGE_KEY, layoutConfig.darkTheme ? 'dark' : 'light');
+    const applyDarkMode = (dark) => {
+        layoutConfig.darkTheme = dark;
+        document.documentElement.classList.toggle('dark', dark);
+        localStorage.setItem(THEME_STORAGE_KEY, dark ? 'dark' : 'light');
     };
 
-    const toggleDarkMode = () => {
+    // Wraps the swap in a view transition (M-transition path) unless the
+    // platform lacks the API or the user asked for reduced motion.
+    const transition = (apply) => {
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         if (!document.startViewTransition || prefersReducedMotion) {
-            executeDarkModeToggle();
+            apply();
 
             return;
         }
 
-        document.startViewTransition(() => executeDarkModeToggle());
+        document.startViewTransition(() => apply());
+    };
+
+    const setDarkMode = (dark) => {
+        if (dark === layoutConfig.darkTheme) return;
+        transition(() => applyDarkMode(dark));
+    };
+
+    const toggleDarkMode = () => {
+        transition(() => applyDarkMode(!layoutConfig.darkTheme));
     };
 
     const isDarkTheme = computed(() => layoutConfig.darkTheme);
 
     return {
         isDarkTheme,
+        setDarkMode,
         toggleDarkMode
     };
 }

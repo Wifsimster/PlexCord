@@ -11,6 +11,7 @@ import ToggleSwitch from 'primevue/toggleswitch';
 import Dialog from 'primevue/dialog';
 import DiscordSpecimen from '@/components/DiscordSpecimen.vue';
 import SavedIndicator from '@/components/settings/SavedIndicator.vue';
+import { useLayout } from '@/layout/composables/layout';
 import { useSetupStore } from '@/stores/setup';
 import { usePresenceStore } from '@/stores/presence';
 import { useUpdatesStore } from '@/stores/updates';
@@ -19,6 +20,7 @@ import { useVersion } from '@/composables/useVersion';
 import { validatePlexServerUrl, PLEX_URL_PLACEHOLDER } from '@/utils/plexUrl';
 import { parseReleaseNotes } from '@/utils/changelogFormat';
 import { setLocale, SUPPORTED_LOCALES } from '@/i18n';
+import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime';
 import {
     GetPollingInterval,
     SetPollingInterval,
@@ -61,6 +63,7 @@ const router = useRouter();
 const { t, locale } = useI18n();
 const toast = useToast();
 const confirm = useConfirm();
+const { isDarkTheme, setDarkMode } = useLayout();
 const setupStore = useSetupStore();
 const presenceStore = usePresenceStore();
 const updatesStore = useUpdatesStore();
@@ -144,6 +147,18 @@ const languageOptions = SUPPORTED_LOCALES.map((code) => ({ code, label: t(`setti
 const selectedLanguage = computed(() => locale.value);
 function changeLanguage(code) {
     setLocale(code);
+}
+
+// ---------------- Theme (spec: dark/light appearance) ----------------
+// Lives here rather than in the topbar; the Alt+D shortcut flips the same
+// state. Persisted by the layout composable (localStorage), applied to <html>.
+const themeOptions = computed(() => [
+    { value: 'dark', label: t('settings.themeNames.dark') },
+    { value: 'light', label: t('settings.themeNames.light') }
+]);
+const selectedTheme = computed(() => (isDarkTheme.value ? 'dark' : 'light'));
+function changeTheme(value) {
+    setDarkMode(value === 'dark');
 }
 const activeSectionId = ref(sections[0].id);
 const railFocusIndex = ref(0);
@@ -816,6 +831,26 @@ function openReleases() {
     OpenReleasesPage();
 }
 
+// ---------------- Studio / publisher footer ----------------
+// Publisher identity shown at the foot of Settings (mirrors pro.battistella.ovh).
+// Links open in the system browser via the Wails runtime.
+const STUDIO_URL = 'https://pro.battistella.ovh';
+const STUDIO_EMAIL = 'battistella@proton.me';
+const studioLinks = [
+    { key: 'studioSite', url: STUDIO_URL },
+    { key: 'studioLegal', url: `${STUDIO_URL}/mentions-legales` },
+    { key: 'studioPrivacy', url: `${STUDIO_URL}/confidentialite` },
+    { key: 'studioTerms', url: `${STUDIO_URL}/cgu` }
+];
+const studioYear = new Date().getFullYear();
+
+function openStudioUrl(url) {
+    BrowserOpenURL(url);
+}
+function openStudioMail() {
+    BrowserOpenURL(`mailto:${STUDIO_EMAIL}`);
+}
+
 // ---------------- Danger zone: reset application ----------------
 const resetting = ref(false);
 
@@ -1101,11 +1136,22 @@ async function executeReset() {
                         </div>
                         <div class="setting-row">
                             <div class="row-text">
+                                <label class="row-label" for="theme-select">{{ $t('settings.theme') }}</label>
+                                <p class="row-caption">{{ $t('settings.themeCaption') }}</p>
+                            </div>
+                            <div class="row-control">
+                                <select id="theme-select" class="settings-select" :value="selectedTheme" @change="changeTheme($event.target.value)">
+                                    <option v-for="option in themeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="row-text">
                                 <label class="row-label" for="language-select">{{ $t('settings.language') }}</label>
                                 <p class="row-caption">{{ $t('settings.languageCaption') }}</p>
                             </div>
                             <div class="row-control">
-                                <select id="language-select" class="language-select" :value="selectedLanguage" @change="changeLanguage($event.target.value)">
+                                <select id="language-select" class="settings-select" :value="selectedLanguage" @change="changeLanguage($event.target.value)">
                                     <option v-for="option in languageOptions" :key="option.code" :value="option.code">{{ option.label }}</option>
                                 </select>
                             </div>
@@ -1256,6 +1302,20 @@ async function executeReset() {
                 </section>
             </div>
         </div>
+
+        <!-- Publisher footer -->
+        <footer class="settings-footer">
+            <div class="studio-identity">
+                <span class="studio-name">BATTISTELLA</span>
+                <span class="studio-tagline">{{ $t('settings.studioTagline') }}</span>
+            </div>
+            <p class="row-caption studio-caption">{{ $t('settings.studioCaption') }}</p>
+            <div class="studio-links">
+                <button v-for="link in studioLinks" :key="link.key" type="button" class="pc-link" @click="openStudioUrl(link.url)">{{ $t(`settings.${link.key}`) }}</button>
+                <button type="button" class="pc-link" @click="openStudioMail">{{ $t('settings.studioContact') }}</button>
+            </div>
+            <p class="row-caption studio-copyright">{{ $t('settings.studioCopyright', { year: studioYear }) }}</p>
+        </footer>
 
         <!-- Add server dialog -->
         <Dialog v-model:visible="showAddServerDialog" modal :header="$t('settings.dialogAddServer')" :style="{ width: '420px' }">
@@ -1839,7 +1899,52 @@ async function executeReset() {
 }
 
 /* Language picker: native select styled to match the form-field recipe. */
-.language-select {
+/* ---------------- Publisher footer ---------------- */
+.settings-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-top: 32px;
+    padding: 20px 0 4px;
+    border-top: 1px solid var(--pc-border-subtle);
+    text-align: center;
+}
+.studio-identity {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.studio-name {
+    font-size: var(--pc-text-body);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--pc-text);
+}
+.studio-tagline {
+    font-size: var(--pc-text-caption);
+    color: var(--pc-text-secondary);
+}
+.studio-caption {
+    max-width: 46ch;
+}
+.studio-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 16px;
+    margin-top: 2px;
+}
+.studio-links .pc-link {
+    font-size: var(--pc-text-caption);
+}
+.studio-copyright {
+    color: var(--pc-text-muted);
+}
+
+.settings-select {
     min-width: 140px;
     height: 34px;
     padding: 0 10px;
@@ -1851,7 +1956,7 @@ async function executeReset() {
     font-size: var(--pc-text-body);
     cursor: pointer;
 }
-.language-select:focus-visible {
+.settings-select:focus-visible {
     outline: none;
     box-shadow: var(--pc-ring-focus);
     border-color: var(--pc-accent);
