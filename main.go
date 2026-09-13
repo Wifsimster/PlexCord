@@ -13,6 +13,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"plexcord/internal/config"
+	"plexcord/internal/platform"
 )
 
 //go:embed all:frontend/dist
@@ -55,10 +56,12 @@ func main() {
 
 	// Provide the tray icon assets (embedded above) to the app so the platform
 	// layer can render the system tray without importing embedded assets.
-	app.trayIconPNG = icon
-	app.trayIconICO = iconWindows
-	app.trayIconUpdatePNG = iconUpdate
-	app.trayIconUpdateICO = iconWindowsUpdate
+	app.trayIcons = platform.TrayIcons{
+		PNG:       icon,
+		ICO:       iconWindows,
+		UpdatePNG: iconUpdate,
+		UpdateICO: iconWindowsUpdate,
+	}
 
 	// Create application with options
 	// Note: Removed MaxWidth and MaxHeight
