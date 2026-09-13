@@ -36,10 +36,6 @@
         "openDashboard": "Ouvrir le tableau de bord",
         "settings": "Paramètres",
         "backToDashboard": "Retour au tableau de bord",
-        "lightTheme": "Thème clair",
-        "darkTheme": "Thème sombre",
-        "switchToLight": "Passer au thème clair",
-        "switchToDark": "Passer au thème sombre",
         "minimise": "Réduire",
         "restore": "Restaurer",
         "maximise": "Agrandir",
@@ -323,6 +319,12 @@
         "autoUpdateCheckCaptionNotify": "Vérifie toutes les 6 heures et vous avertit quand une nouvelle version est disponible",
         "language": "Langue",
         "languageCaption": "Choisissez la langue d'affichage de PlexCord",
+        "theme": "Thème",
+        "themeCaption": "Choisissez entre l'apparence sombre et claire",
+        "themeNames": {
+            "dark": "Sombre",
+            "light": "Clair"
+        },
         "discordClientId": "ID client Discord",
         "customIdBadge": "ID personnalisé",
         "usingDefault": "Utilisation de l'application PlexCord par défaut",
@@ -416,6 +418,14 @@
             "resetMessage": "Cela supprime votre jeton Plex et la configuration du serveur, vos paramètres Discord et toutes vos préférences. Cette action est irréversible.",
             "resetAccept": "Réinitialiser l'application"
         },
+        "studioTagline": "Studio d'applications web, SaaS & IA auto-hébergées",
+        "studioCaption": "PlexCord est développé et maintenu par BATTISTELLA, studio indépendant à Artigues-près-Bordeaux, France.",
+        "studioSite": "Site web",
+        "studioLegal": "Mentions légales",
+        "studioPrivacy": "Politique de confidentialité",
+        "studioTerms": "Conditions d'utilisation",
+        "studioContact": "Contact",
+        "studioCopyright": "© {year} BATTISTELLA — Damien Battistella. Tous droits réservés.",
         "languageNames": {
             "en": "English",
             "es": "Español",
