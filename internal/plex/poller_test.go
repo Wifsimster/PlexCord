@@ -18,8 +18,8 @@ func TestNewPollerDefaults(t *testing.T) {
 		t.Fatal("NewPoller returned nil")
 	}
 
-	if poller.client != client {
-		t.Error("Client not set correctly")
+	if poller.source != SessionSource(client) {
+		t.Error("Session source not set correctly")
 	}
 
 	if poller.userID != "user1" {

@@ -145,7 +145,14 @@ func (a *App) UpdateDiscordPresence(track, artist, album, state string, duration
 		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
 	}
 
-	return a.discord.UpdatePresenceFromPlayback(track, artist, album, state, duration, position, "", "", a.config.PresenceDetailsFormat, a.config.PresenceStateFormat, a.config.PresenceActivityStyle, a.config.PresenceStatusDisplay)
+	return a.discord.UpdatePlayback(discord.Playback{
+		Track:    track,
+		Artist:   artist,
+		Album:    album,
+		State:    state,
+		Duration: duration,
+		Position: position,
+	}, a.presenceDisplayOptions())
 }
 
 // ClearDiscordPresence removes the Discord Rich Presence.
@@ -245,20 +252,30 @@ func (a *App) cachedSessionArtwork(session *plex.MusicSession) string {
 // sendPresenceLocked issues a presence update for the session with the given
 // public artwork URL. The caller must hold discordMu.
 func (a *App) sendPresenceLocked(session *plex.MusicSession, artURL string) error {
-	return a.discord.UpdatePresenceFromPlayback(
-		session.Track,
-		session.Artist,
-		session.Album,
-		session.State,
-		session.Duration,
-		session.ViewOffset,
-		artURL,
-		session.PlayerName,
-		a.config.PresenceDetailsFormat,
-		a.config.PresenceStateFormat,
-		a.config.PresenceActivityStyle,
-		a.config.PresenceStatusDisplay,
-	)
+	return a.discord.UpdatePlayback(discord.Playback{
+		MediaType:  discord.MediaTypeMusic,
+		Track:      session.Track,
+		Artist:     session.Artist,
+		Album:      session.Album,
+		State:      session.State,
+		Duration:   session.Duration,
+		Position:   session.ViewOffset,
+		ArtworkURL: artURL,
+		Player:     session.PlayerName,
+	}, a.presenceDisplayOptions())
+}
+
+// presenceDisplayOptions projects the user's persisted presence preferences
+// onto the options the Discord layer consumes. Having one place build them
+// keeps every presence path — session updates, artwork re-issues, the manual
+// binding — telling Discord the same story.
+func (a *App) presenceDisplayOptions() discord.Options {
+	return discord.Options{
+		DetailsFormat: a.config.PresenceDetailsFormat,
+		StateFormat:   a.config.PresenceStateFormat,
+		ActivityStyle: a.config.PresenceActivityStyle,
+		StatusDisplay: a.config.PresenceStatusDisplay,
+	}
 }
 
 // resolveArtworkAsync resolves a public cover off the presence path and, if the
@@ -349,10 +366,7 @@ func (a *App) updateDiscordConnectionTime() {
 // When paused, all Discord presence updates are skipped.
 // Returns the new paused state.
 func (a *App) TogglePresencePause() bool {
-	a.pauseMu.Lock()
-	a.presencePaused = !a.presencePaused
-	paused := a.presencePaused
-	a.pauseMu.Unlock()
+	paused := a.presence.Toggle()
 
 	if paused {
 		log.Printf("Presence manually paused")
@@ -374,9 +388,7 @@ func (a *App) TogglePresencePause() bool {
 
 // IsPresencePaused returns whether presence updates are manually paused.
 func (a *App) IsPresencePaused() bool {
-	a.pauseMu.Lock()
-	defer a.pauseMu.Unlock()
-	return a.presencePaused
+	return a.presence.IsPaused()
 }
 
 // GetHideWhenPaused returns the hide-when-paused settings.
@@ -400,58 +412,6 @@ func (a *App) SetHideWhenPaused(enabled bool, delaySeconds int) error {
 	}
 	log.Printf("Hide when paused set to: enabled=%v, delay=%d seconds", enabled, delaySeconds)
 	return nil
-}
-
-// scheduleHideOnPause schedules clearing Discord presence after the configured delay.
-//
-// timer.Stop() doesn't wait for an already-firing callback, so a stale
-// callback could race against a subsequent play-resume and clear the
-// presence we just restored. Each schedule bumps pauseTimerGen and the
-// callback checks the generation before clearing; if a cancel/reschedule
-// has happened since the timer was armed, the callback returns.
-func (a *App) scheduleHideOnPause() {
-	a.pauseMu.Lock()
-	defer a.pauseMu.Unlock()
-
-	// Cancel existing timer if any
-	if a.pauseTimer != nil {
-		a.pauseTimer.Stop()
-		a.pauseTimer = nil
-	}
-	a.pauseTimerGen++
-	gen := a.pauseTimerGen
-
-	delay := time.Duration(a.config.HideWhenPausedDelay) * time.Second
-	if delay <= 0 {
-		// Immediate clear
-		go a.clearDiscordOnStop()
-		return
-	}
-
-	a.pauseTimer = time.AfterFunc(delay, func() {
-		a.pauseMu.Lock()
-		stale := gen != a.pauseTimerGen
-		a.pauseMu.Unlock()
-		if stale {
-			return
-		}
-		log.Printf("Hide-when-paused delay elapsed, clearing presence")
-		a.clearDiscordOnStop()
-	})
-}
-
-// cancelPauseTimer cancels any pending hide-when-paused timer.
-// Bumps the generation so an already-firing callback returns without
-// clearing presence.
-func (a *App) cancelPauseTimer() {
-	a.pauseMu.Lock()
-	defer a.pauseMu.Unlock()
-
-	if a.pauseTimer != nil {
-		a.pauseTimer.Stop()
-		a.pauseTimer = nil
-	}
-	a.pauseTimerGen++
 }
 
 // ============================================================================

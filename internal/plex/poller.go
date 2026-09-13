@@ -17,7 +17,7 @@ import (
 //     Enabled by setting MediaTypes before calling StartMedia().
 type Poller struct {
 	lastErrorTime time.Time // Track when last error occurred
-	client        *Client
+	source        SessionSource
 	stopCh        chan struct{}
 	sessionC      chan *MusicSession // nil indicates no session / stopped playback (music mode)
 	mediaC        chan *MediaSession // nil indicates no session / stopped playback (media mode)
@@ -40,7 +40,10 @@ type Poller struct {
 // NewPoller creates a new session poller for the specified user.
 // The interval parameter controls how frequently sessions are polled.
 // Minimum interval is 1 second, maximum is 60 seconds.
-func NewPoller(client *Client, userID string, interval time.Duration) *Poller {
+//
+// source is the abstraction the poller reads sessions from (see SessionSource);
+// production callers pass a *Client, tests pass a fake.
+func NewPoller(source SessionSource, userID string, interval time.Duration) *Poller {
 	// Enforce interval bounds (AC3: min 1s, max 60s)
 	if interval < time.Second {
 		interval = time.Second
@@ -50,7 +53,7 @@ func NewPoller(client *Client, userID string, interval time.Duration) *Poller {
 	}
 
 	return &Poller{
-		client:   client,
+		source:   source,
 		userID:   userID,
 		interval: interval,
 		stopCh:   make(chan struct{}),
@@ -228,30 +231,55 @@ func (p *Poller) pollLoop(ctx context.Context) {
 // doPoll performs a single poll for music sessions.
 // Returns the current music session, or nil if no music is playing.
 // The second return value indicates whether the result is valid (not an error).
-// Also handles error state transitions and callbacks (Story 6.5).
 func (p *Poller) doPoll() (*MusicSession, bool) {
-	sessions, err := p.client.GetMusicSessions(p.userID)
+	return pollOnce(p, "Poll", func() ([]MusicSession, error) {
+		return p.source.GetMusicSessions(p.userID)
+	})
+}
+
+// pollOnce runs one fetch and folds the result into the poller's error state,
+// returning the first session (or nil when nothing is playing) and whether the
+// fetch succeeded. Both polling modes share it, so the error-state transitions
+// and the recovery callback exist in exactly one place.
+//
+// It is a free function rather than a method because Go methods cannot take
+// their own type parameters.
+func pollOnce[T any](p *Poller, label string, fetch func() ([]T, error)) (*T, bool) {
+	sessions, err := fetch()
 	if err != nil {
-		// Log error but continue polling (AC4: failed polls continue polling)
-		log.Printf("Poll error: %v", err)
-
-		// Handle error state transition (Story 6.5)
-		p.mu.Lock()
-		wasInErrorState := p.inErrorState
-		p.inErrorState = true
-		p.lastErrorTime = time.Now()
-		onError := p.onError
-		p.mu.Unlock()
-
-		// Call error callback only on first error (not every poll)
-		if !wasInErrorState && onError != nil {
-			onError(err)
-		}
-
+		// Log and continue polling (AC4: failed polls do not stop the loop).
+		log.Printf("%s error: %v", label, err)
+		p.recordPollFailure(err)
 		return nil, false
 	}
+	p.recordPollSuccess()
 
-	// Connection successful - check if recovering from error state
+	if len(sessions) == 0 {
+		return nil, true
+	}
+	// Return the first (most recent) session.
+	return &sessions[0], true
+}
+
+// recordPollFailure marks the poller as being in an error state and fires the
+// onError callback, but only on the transition into that state — not on every
+// failing poll (Story 6.5).
+func (p *Poller) recordPollFailure(err error) {
+	p.mu.Lock()
+	wasInErrorState := p.inErrorState
+	p.inErrorState = true
+	p.lastErrorTime = time.Now()
+	onError := p.onError
+	p.mu.Unlock()
+
+	if !wasInErrorState && onError != nil {
+		onError(err)
+	}
+}
+
+// recordPollSuccess clears the error state and fires the onRecovered callback
+// when this poll is the one that recovered the connection.
+func (p *Poller) recordPollSuccess() {
 	p.mu.Lock()
 	wasInErrorState := p.inErrorState
 	p.inErrorState = false
@@ -262,13 +290,6 @@ func (p *Poller) doPoll() (*MusicSession, bool) {
 		log.Printf("Plex connection recovered")
 		onRecovered()
 	}
-
-	if len(sessions) == 0 {
-		return nil, true
-	}
-
-	// Return the first (most recent) music session
-	return &sessions[0], true
 }
 
 // mediaPollLoop is the main polling goroutine for multi-media mode.
@@ -313,141 +334,8 @@ func (p *Poller) mediaPollLoop(ctx context.Context) {
 // Returns the current media session, or nil if no matching media is playing.
 // The second return value indicates whether the result is valid (not an error).
 func (p *Poller) doMediaPoll() (*MediaSession, bool) {
-	p.mu.RLock()
-	mediaTypes := p.mediaTypes
-	p.mu.RUnlock()
-
-	sessions, err := p.client.GetMediaSessions(p.userID, mediaTypes)
-	if err != nil {
-		log.Printf("Media poll error: %v", err)
-
-		// Handle error state transition (Story 6.5)
-		p.mu.Lock()
-		wasInErrorState := p.inErrorState
-		p.inErrorState = true
-		p.lastErrorTime = time.Now()
-		onError := p.onError
-		p.mu.Unlock()
-
-		if !wasInErrorState && onError != nil {
-			onError(err)
-		}
-
-		return nil, false
-	}
-
-	// Connection successful - check if recovering from error state
-	p.mu.Lock()
-	wasInErrorState := p.inErrorState
-	p.inErrorState = false
-	onRecovered := p.onRecovered
-	p.mu.Unlock()
-
-	if wasInErrorState && onRecovered != nil {
-		log.Printf("Plex connection recovered")
-		onRecovered()
-	}
-
-	if len(sessions) == 0 {
-		return nil, true
-	}
-
-	// Return the first (most recent) session
-	return &sessions[0], true
-}
-
-// mediaSessionChanged determines if the media session state has meaningfully changed.
-// Used to avoid emitting duplicate updates in multi-media mode.
-func mediaSessionChanged(prev, curr *MediaSession) bool {
-	// Both nil - no change
-	if prev == nil && curr == nil {
-		return false
-	}
-
-	// One nil, one not - definite change
-	if prev == nil || curr == nil {
-		return true
-	}
-
-	// Compare key session attributes
-	if prev.SessionKey != curr.SessionKey {
-		return true
-	}
-
-	if prev.State != curr.State {
-		return true
-	}
-
-	if prev.Title != curr.Title {
-		return true
-	}
-
-	if prev.MediaType != curr.MediaType {
-		return true
-	}
-
-	// Music-specific changes
-	if prev.Artist != curr.Artist {
-		return true
-	}
-
-	if prev.Album != curr.Album {
-		return true
-	}
-
-	// TV-specific changes
-	if prev.ShowTitle != curr.ShowTitle {
-		return true
-	}
-
-	if prev.Season != curr.Season {
-		return true
-	}
-
-	if prev.Episode != curr.Episode {
-		return true
-	}
-
-	return false
-}
-
-// sessionChanged determines if the session state has meaningfully changed.
-// Used to avoid emitting duplicate updates.
-func sessionChanged(prev, curr *MusicSession) bool {
-	// Both nil - no change
-	if prev == nil && curr == nil {
-		return false
-	}
-
-	// One nil, one not - definite change
-	if prev == nil || curr == nil {
-		return true
-	}
-
-	// Compare key session attributes
-	if prev.SessionKey != curr.SessionKey {
-		return true
-	}
-
-	if prev.State != curr.State {
-		return true
-	}
-
-	if prev.Track != curr.Track {
-		return true
-	}
-
-	// Also detect metadata changes (e.g., if Plex refreshes metadata during playback)
-	if prev.Artist != curr.Artist {
-		return true
-	}
-
-	if prev.Album != curr.Album {
-		return true
-	}
-
-	// ViewOffset changes are expected during playback, don't emit for every update
-	// Only emit if track, state, or metadata changed
-
-	return false
+	mediaTypes := p.GetMediaTypes()
+	return pollOnce(p, "Media poll", func() ([]MediaSession, error) {
+		return p.source.GetMediaSessions(p.userID, mediaTypes)
+	})
 }

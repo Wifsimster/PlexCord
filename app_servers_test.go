@@ -4,13 +4,31 @@ import (
 	"testing"
 
 	"plexcord/internal/config"
+	"plexcord/internal/events"
 )
 
-// newTestApp builds an App backed by an in-memory config store that never
-// touches disk, so server/connection helpers can be exercised in isolation.
+// newTestApp builds an App backed by in-memory collaborators that never touch
+// disk, the network, the keychain, the system tray or a Wails window — the
+// whole binding surface can be exercised in isolation.
 func newTestApp(cfg *config.Config) *App {
 	store := config.NewStore(cfg, func(*config.Config) error { return nil })
-	return &App{config: cfg, cfgStore: store}
+	desktop := &fakeDesktop{}
+	a := &App{
+		config:      cfg,
+		cfgStore:    store,
+		configs:     &fakeConfigGateway{cfg: cfg},
+		tokens:      &fakeTokenStore{},
+		discovery:   &fakeDiscoverer{},
+		tray:        &fakeTray{},
+		autostart:   &fakeAutoStart{},
+		history:     &fakeHistory{},
+		bus:         events.NewRecordingBus(),
+		desktop:     desktop,
+		plexFactory: func(string, string) PlexAPI { return &fakePlexAPI{} },
+	}
+	a.windows = newWindowManager(desktop, desktop)
+	a.presence = newPresenceGate(a.clearDiscordOnStop, a.hideWhenPausedDelay)
+	return a
 }
 
 func TestActivePlexServerURL_PrefersActiveMultiServerEntry(t *testing.T) {

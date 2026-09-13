@@ -17,8 +17,6 @@ import (
 	"plexcord/internal/history"
 	"plexcord/internal/updater"
 	"plexcord/internal/version"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ============================================================================
@@ -106,7 +104,7 @@ func (a *App) CheckForUpdate() (*version.UpdateInfo, error) {
 func (a *App) OpenReleasesPage() error {
 	releaseURL := version.GetReleasesURL()
 	log.Printf("Opening releases page: %s", releaseURL)
-	runtime.BrowserOpenURL(a.ctx, releaseURL)
+	a.desktop.OpenURL(a.ctx, releaseURL)
 	return nil
 }
 
@@ -125,7 +123,7 @@ func (a *App) OpenReleaseURL(releaseURL string) error {
 		return errors.New(errors.CONFIG_READ_FAILED, "release URL must be from github.com")
 	}
 	log.Printf("Opening release URL: %s", releaseURL)
-	runtime.BrowserOpenURL(a.ctx, releaseURL)
+	a.desktop.OpenURL(a.ctx, releaseURL)
 	return nil
 }
 
@@ -211,8 +209,8 @@ func (a *App) RestartApplication() error {
 	// enabled. Without this flag the old process would linger in the tray
 	// running the previous version, the single-instance lock would never be
 	// released, and the update would never take effect. Mirrors QuitApp.
-	a.quitting.Store(true)
-	runtime.Quit(a.ctx)
+	a.windows.MarkQuitting()
+	a.desktop.Quit(a.ctx)
 	return nil
 }
 

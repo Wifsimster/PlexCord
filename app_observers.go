@@ -53,10 +53,10 @@ func (o *sessionCacheObserver) OnStop() {
 // historyObserver records played tracks to the listening history
 // ----------------------------------------------------------------------------
 type historyObserver struct {
-	store *history.Store
+	store HistoryStore
 }
 
-func newHistoryObserver(store *history.Store) *historyObserver {
+func newHistoryObserver(store HistoryStore) *historyObserver {
 	return &historyObserver{store: store}
 }
 

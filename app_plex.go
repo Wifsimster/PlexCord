@@ -148,7 +148,7 @@ func (a *App) DiscoverPlexServers() ([]plex.Server, error) {
 	log.Printf("Starting Plex server discovery using GDM protocol...")
 
 	// Discover with 5 second timeout (as per AC1)
-	servers, err := plex.DiscoverServers(5 * time.Second)
+	servers, err := a.discovery.Discover(5 * time.Second)
 	if err != nil {
 		log.Printf("ERROR: Discovery failed: %v", err)
 		return nil, err
@@ -330,8 +330,9 @@ func (a *App) StartSessionPolling() error {
 		return errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
 	}
 
-	// Create Plex client
-	client := plex.NewClient(token, serverURL)
+	// Create the Plex client through the injected factory, the same path
+	// validation and user lookup use, so polling can be driven by a fake.
+	client := a.plexFactory(token, serverURL)
 
 	// Get polling interval from config (default 2 seconds for NFR4 compliance)
 	interval := time.Duration(a.config.PollingInterval) * time.Second
@@ -402,22 +403,15 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
 		&discordPresenceObserver{
 			update:        a.updateDiscordFromSession,
 			clearOnStop:   a.clearDiscordOnStop,
-			isManualPause: a.isPresencePausedLocked,
-			scheduleHide:  a.scheduleHideOnPause,
-			cancelHide:    a.cancelPauseTimer,
+			isManualPause: a.presence.IsPaused,
+			scheduleHide:  a.presence.ScheduleHide,
+			cancelHide:    a.presence.CancelHide,
 			hideOnPause:   func() bool { return a.config.HideWhenPaused },
 			log:           log.Printf,
 		},
 		newEventEmitterObserver(a.bus),
 	}
 	runSessionPipeline(sessionCh, observers)
-}
-
-// isPresencePausedLocked returns the current manual pause state under lock.
-func (a *App) isPresencePausedLocked() bool {
-	a.pauseMu.Lock()
-	defer a.pauseMu.Unlock()
-	return a.presencePaused
 }
 
 // StopSessionPolling stops the background session polling.

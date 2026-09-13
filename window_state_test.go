@@ -318,22 +318,29 @@ func TestScreenForWindow(t *testing.T) {
 // before startup (a second instance launched while PlexCord is still booting)
 // is parked rather than dropped — and does not run against a nil context.
 func TestShowWindowBeforeReadyIsDeferred(t *testing.T) {
-	app := &App{}
+	desktop := &fakeDesktop{}
+	app := newTestApp(config.DefaultConfig())
+	app.desktop = desktop
+	app.windows = newWindowManager(desktop, desktop)
 
 	app.ShowWindow()
 
-	app.windowMu.Lock()
-	pending := app.pendingShow
-	app.windowMu.Unlock()
-	if !pending {
-		t.Fatal("ShowWindow before startup did not record a pending restore request")
+	// Nothing reached the runtime: there was no context to drive it with.
+	if shown, _, _ := desktop.counts(); shown != 0 {
+		t.Fatalf("ShowWindow before startup drove the window %d time(s)", shown)
 	}
 
-	if !app.markWindowReady(context.Background()) {
-		t.Fatal("markWindowReady() = false, want true to replay the parked request")
+	if !app.windows.MarkReady(context.Background()) {
+		t.Fatal("MarkReady() = false, want true to replay the parked request")
 	}
-	if app.markWindowReady(context.Background()) {
-		t.Fatal("markWindowReady() replayed the same request twice")
+	if app.windows.MarkReady(context.Background()) {
+		t.Fatal("MarkReady() replayed the same request twice")
+	}
+
+	// Replaying now reaches the runtime.
+	app.ShowWindow()
+	if shown, _, _ := desktop.counts(); shown != 1 {
+		t.Fatalf("ShowWindow after ready drove the window %d time(s), want 1", shown)
 	}
 }
 
@@ -341,19 +348,17 @@ func TestShowWindowBeforeReadyIsDeferred(t *testing.T) {
 // requests run against the published context instead of being parked.
 func TestWindowContextAfterReady(t *testing.T) {
 	ctx := context.Background()
-	app := &App{}
+	desktop := &fakeDesktop{}
+	windows := newWindowManager(desktop, desktop)
 
-	if app.markWindowReady(ctx) {
-		t.Fatal("markWindowReady() = true with no request pending")
+	if windows.MarkReady(ctx) {
+		t.Fatal("MarkReady() = true with no request pending")
 	}
-	if app.windowContext() == nil {
-		t.Fatal("windowContext() = nil after the window became ready")
+	if windows.Context() == nil {
+		t.Fatal("Context() = nil after the window became ready")
 	}
-
-	app.windowMu.Lock()
-	pending := app.pendingShow
-	app.windowMu.Unlock()
-	if pending {
-		t.Fatal("windowContext() parked a request even though the window was ready")
+	// Reading the context on a ready window must not park a restore request.
+	if windows.MarkReady(ctx) {
+		t.Fatal("Context() parked a request even though the window was ready")
 	}
 }

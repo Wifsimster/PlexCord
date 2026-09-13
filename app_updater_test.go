@@ -82,19 +82,25 @@ func TestPublishUpdateNoticeWithoutTray(t *testing.T) {
 // TestPublishUpdateNoticeReachesTray verifies the mapping is what the tray ends
 // up holding.
 func TestPublishUpdateNoticeReachesTray(t *testing.T) {
-	app := &App{tray: platform.NewTrayManager(platform.TrayCallbacks{}, platform.TrayIcons{})}
+	tray := &fakeTray{}
+	app := &App{tray: tray}
 
 	app.publishUpdateNotice(updater.Status{
 		State: updater.StateReady,
 		Info:  &version.UpdateInfo{LatestVersion: "v1.5.0"},
 	})
-	if got := app.tray.UpdateNotice().Label; got != "Restart to update to v1.5.0" {
-		t.Errorf("tray notice label = %q, want the restart invitation", got)
+	notice, ok := tray.lastNotice()
+	if !ok {
+		t.Fatal("no notice reached the tray")
+	}
+	if notice.Label != "Restart to update to v1.5.0" {
+		t.Errorf("tray notice label = %q, want the restart invitation", notice.Label)
 	}
 
 	// Back to idle (for example after a reset): the notice must be withdrawn.
 	app.publishUpdateNotice(updater.Status{State: updater.StateIdle})
-	if got := app.tray.UpdateNotice(); got != (platform.UpdateNotice{}) {
-		t.Errorf("tray notice = %+v, want it withdrawn", got)
+	notice, _ = tray.lastNotice()
+	if notice != (platform.UpdateNotice{}) {
+		t.Errorf("tray notice = %+v, want it withdrawn", notice)
 	}
 }

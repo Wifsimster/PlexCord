@@ -6,33 +6,8 @@ import (
 	"testing"
 
 	"plexcord/internal/config"
-	"plexcord/internal/discord"
 	"plexcord/internal/plex"
 )
-
-// fakeDiscordPresence records the arguments of the last presence update so
-// tests can assert what PlexCord sends to Discord.
-type fakeDiscordPresence struct {
-	connected      bool
-	updateCount    int
-	lastArtworkURL string
-	lastTrack      string
-}
-
-func (f *fakeDiscordPresence) Connect(string) error { return nil }
-func (f *fakeDiscordPresence) Disconnect() error    { return nil }
-func (f *fakeDiscordPresence) IsConnected() bool    { return f.connected }
-func (f *fakeDiscordPresence) GetClientID() string  { return "" }
-func (f *fakeDiscordPresence) SetPresence(*discord.PresenceData) error {
-	return nil
-}
-func (f *fakeDiscordPresence) ClearPresence() error { return nil }
-func (f *fakeDiscordPresence) UpdatePresenceFromPlayback(track, artist, album, state string, duration, position int64, artworkURL, player, detailsFormat, stateFormat, activityStyle, statusDisplay string) error {
-	f.updateCount++
-	f.lastArtworkURL = artworkURL
-	f.lastTrack = track
-	return nil
-}
 
 // fakeArtworkResolver returns a preset cached URL.
 type fakeArtworkResolver struct {
@@ -43,6 +18,15 @@ type fakeArtworkResolver struct {
 func (f *fakeArtworkResolver) Cached(string, string) (string, bool) { return f.cached, f.ok }
 func (f *fakeArtworkResolver) Resolve(context.Context, string, string) (string, error) {
 	return f.cached, nil
+}
+
+// newPresenceTestApp wires an App around a presence fake with everything the
+// presence path touches, and nothing it does not: no Wails window, no tray, no
+// keychain, no Plex server.
+func newPresenceTestApp(presence DiscordPresence, cfg *config.Config) *App {
+	a := newTestApp(cfg)
+	a.discord = presence
+	return a
 }
 
 func newTokenedSession() *plex.MusicSession {
@@ -58,46 +42,42 @@ func newTokenedSession() *plex.MusicSession {
 }
 
 func TestUpdateDiscordFromSession_NeverSendsPlexToken(t *testing.T) {
-	fake := &fakeDiscordPresence{connected: true}
-	a := &App{
-		discord: fake,
-		config:  config.DefaultConfig(),
-		// No resolver: artwork falls back to the Plex logo asset, never the URL.
-		artwork: nil,
-	}
+	fake := &recordingPresence{connected: true}
+	a := newPresenceTestApp(fake, config.DefaultConfig())
+	// No resolver: artwork falls back to the Plex logo asset, never the URL.
+	a.artwork = nil
 
 	a.updateDiscordFromSession(newTokenedSession())
 
-	if fake.updateCount == 0 {
+	playback, ok := fake.lastPlayback()
+	if !ok {
 		t.Fatal("expected a presence update")
 	}
-	if strings.Contains(fake.lastArtworkURL, "X-Plex-Token") {
-		t.Errorf("presence artwork URL leaked the Plex token: %q", fake.lastArtworkURL)
+	if strings.Contains(playback.ArtworkURL, "X-Plex-Token") {
+		t.Errorf("presence artwork URL leaked the Plex token: %q", playback.ArtworkURL)
 	}
-	if fake.lastArtworkURL != "" {
-		t.Errorf("expected empty artwork URL (Plex logo fallback), got %q", fake.lastArtworkURL)
+	if playback.ArtworkURL != "" {
+		t.Errorf("expected empty artwork URL (Plex logo fallback), got %q", playback.ArtworkURL)
 	}
 }
 
 func TestUpdateDiscordFromSession_UsesCachedPublicArtwork(t *testing.T) {
-	fake := &fakeDiscordPresence{connected: true}
-	a := &App{
-		discord: fake,
-		config:  config.DefaultConfig(),
-		artwork: &fakeArtworkResolver{cached: "https://cdn/cover-512.jpg", ok: true},
-	}
+	fake := &recordingPresence{connected: true}
+	a := newPresenceTestApp(fake, config.DefaultConfig())
+	a.artwork = &fakeArtworkResolver{cached: "https://cdn/cover-512.jpg", ok: true}
 
 	a.updateDiscordFromSession(newTokenedSession())
 
-	if fake.lastArtworkURL != "https://cdn/cover-512.jpg" {
-		t.Errorf("expected cached public cover URL, got %q", fake.lastArtworkURL)
+	playback, _ := fake.lastPlayback()
+	if playback.ArtworkURL != "https://cdn/cover-512.jpg" {
+		t.Errorf("expected cached public cover URL, got %q", playback.ArtworkURL)
 	}
 }
 
 func TestGetPresenceOptions_NormalizesDefaults(t *testing.T) {
 	// A legacy config with empty presence options should read back as the
 	// media/state/artwork-on defaults.
-	a := &App{config: &config.Config{}}
+	a := newTestApp(&config.Config{})
 	opts := a.GetPresenceOptions()
 	if opts.ActivityStyle != "media" {
 		t.Errorf("ActivityStyle = %q, want media", opts.ActivityStyle)
@@ -111,7 +91,7 @@ func TestGetPresenceOptions_NormalizesDefaults(t *testing.T) {
 }
 
 func TestSetPresenceOptions_RejectsInvalidValues(t *testing.T) {
-	a := &App{config: config.DefaultConfig()}
+	a := newTestApp(config.DefaultConfig())
 
 	if err := a.SetPresenceOptions(PresenceOptions{ActivityStyle: "bogus", StatusDisplay: "state"}); err == nil {
 		t.Error("expected error for invalid activity style")
@@ -126,20 +106,18 @@ func TestSetPresenceOptions_RejectsInvalidValues(t *testing.T) {
 }
 
 func TestUpdateDiscordFromSession_ArtworkLookupDisabled(t *testing.T) {
-	fake := &fakeDiscordPresence{connected: true}
+	fake := &recordingPresence{connected: true}
 	cfg := config.DefaultConfig()
 	disabled := false
 	cfg.PresenceArtworkLookup = &disabled
-	a := &App{
-		discord: fake,
-		config:  cfg,
-		// Even with a resolver that has a cached cover, lookup-disabled sends none.
-		artwork: &fakeArtworkResolver{cached: "https://cdn/cover.jpg", ok: true},
-	}
+	a := newPresenceTestApp(fake, cfg)
+	// Even with a resolver that has a cached cover, lookup-disabled sends none.
+	a.artwork = &fakeArtworkResolver{cached: "https://cdn/cover.jpg", ok: true}
 
 	a.updateDiscordFromSession(newTokenedSession())
 
-	if fake.lastArtworkURL != "" {
-		t.Errorf("artwork lookup disabled should send no URL, got %q", fake.lastArtworkURL)
+	playback, _ := fake.lastPlayback()
+	if playback.ArtworkURL != "" {
+		t.Errorf("artwork lookup disabled should send no URL, got %q", playback.ArtworkURL)
 	}
 }

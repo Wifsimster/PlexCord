@@ -5,7 +5,6 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"time"
 
 	"plexcord/internal/discord/ipc"
 	"plexcord/internal/errors"
@@ -14,19 +13,41 @@ import (
 // PresenceManager handles Discord Rich Presence updates.
 // It manages the connection lifecycle and presence state.
 type PresenceManager struct {
-	presence  *PresenceData
-	conn      *ipc.Client
+	presence *PresenceData
+	conn     Conn
+	// dial constructs a fresh Conn for each login. Injected so the manager can
+	// be driven without a running Discord (see WithDialer).
+	dial      Dialer
 	clientID  string
 	mu        sync.RWMutex
 	connected bool
 }
 
-// NewPresenceManager creates a new presence manager.
-func NewPresenceManager() *PresenceManager {
-	return &PresenceManager{
+// ManagerOption configures a PresenceManager at construction.
+type ManagerOption func(*PresenceManager)
+
+// WithDialer replaces the Discord IPC dialer, so tests (or an alternative
+// transport) can supply their own Conn.
+func WithDialer(d Dialer) ManagerOption {
+	return func(pm *PresenceManager) {
+		if d != nil {
+			pm.dial = d
+		}
+	}
+}
+
+// NewPresenceManager creates a new presence manager. Without options it talks
+// to the local Discord IPC socket.
+func NewPresenceManager(opts ...ManagerOption) *PresenceManager {
+	pm := &PresenceManager{
 		clientID:  DefaultClientID,
 		connected: false,
+		dial:      defaultDialer,
 	}
+	for _, opt := range opts {
+		opt(pm)
+	}
+	return pm
 }
 
 // Connect establishes a connection to Discord using the provided Client ID.
@@ -66,8 +87,8 @@ func (pm *PresenceManager) Connect(clientID string) error {
 
 	log.Printf("Discord: Attempting to connect with Client ID %s", clientID)
 
-	// Attempt to login to Discord over the internal IPC client.
-	c := ipc.New()
+	// Attempt to login to Discord over the injected connection.
+	c := pm.dial()
 	if err := c.Login(clientID); err != nil {
 		log.Printf("Discord: Connection failed: %v", err)
 		return mapDiscordError(err)
@@ -278,37 +299,10 @@ func isConnectionLostError(err error) bool {
 		strings.Contains(errStr, "EOF")
 }
 
-// UpdatePresenceFromPlayback is a convenience method to update presence from playback data.
-// It handles the conversion from Plex session data format to Discord presence format.
-// artworkURL is used as the large image if provided; pass empty string to use the default Plex logo.
-// detailsFormat and stateFormat are custom format strings; pass empty strings to use defaults.
-// activityStyle ("media"/"game") and statusDisplay ("app"/"state"/"details") control the
-// Discord activity type and member-list line; empty strings fall back to defaults.
-func (pm *PresenceManager) UpdatePresenceFromPlayback(track, artist, album, state string, duration, position int64, artworkURL, player, detailsFormat, stateFormat, activityStyle, statusDisplay string) error {
-	startTime := time.Now().Add(-time.Duration(position) * time.Millisecond)
-
-	data := &PresenceData{
-		Track:         track,
-		Artist:        artist,
-		Album:         album,
-		State:         state,
-		Duration:      duration,
-		Position:      position,
-		StartTime:     &startTime,
-		ArtworkURL:    artworkURL,
-		Player:        player,
-		DetailsFormat: detailsFormat,
-		StateFormat:   stateFormat,
-		ActivityStyle: activityStyle,
-		StatusDisplay: statusDisplay,
-	}
-
-	// Compute the end timestamp for the progress bar when the duration is known.
-	// Streams / unknown durations fall back to an elapsed-only timer.
-	if duration > 0 {
-		endTime := startTime.Add(time.Duration(duration) * time.Millisecond)
-		data.EndTime = &endTime
-	}
-
-	return pm.SetPresence(data)
+// UpdatePlayback updates the presence from a playback snapshot and the user's
+// display options. It is the method the application uses on every session
+// change; SetPresence remains available for callers that have already built
+// their own PresenceData (the connection test, for example).
+func (pm *PresenceManager) UpdatePlayback(playback Playback, opts Options) error {
+	return pm.SetPresence(playback.toPresenceData(opts))
 }

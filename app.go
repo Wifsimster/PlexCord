@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"plexcord/internal/artwork"
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
@@ -21,13 +19,22 @@ import (
 	"plexcord/internal/version"
 )
 
-// App struct
+// App is the Wails binding surface: the set of methods the frontend can call.
+// Its single job is to translate those calls into work on the collaborators
+// below and to marshal the results back — the behaviour itself lives in the
+// internal packages and in the small helpers alongside this file
+// (windowManager, presenceGate, the session observers).
+//
+// Every collaborator is held as an interface so the whole surface can be
+// exercised with fakes: no Plex server, no Discord socket, no keychain, no
+// system tray, no Wails window.
 type App struct {
 	ctx context.Context
 	// config holds a pointer to the current Config for direct reads; all
 	// writes go through cfgStore which handles atomic mutation + persistence.
 	config         *config.Config
 	cfgStore       *config.Store
+	configs        ConfigGateway // loading, deleting, and locating the config file
 	pollerCtx      context.Context
 	pollerStop     context.CancelFunc
 	currentSession *plex.MusicSession // Track current playback for page refresh restoration
@@ -35,7 +42,7 @@ type App struct {
 	// Session polling
 	poller *plex.Poller
 
-	// Discord integration (production type, accessed via DiscordPresence interface)
+	// Discord integration, accessed via the DiscordPresence interface.
 	discord DiscordPresence
 
 	// artwork resolves public album-art URLs so covers render on Discord
@@ -51,12 +58,27 @@ type App struct {
 	// can change at runtime and enables tests to inject fakes.
 	plexFactory PlexAPIFactory
 
+	// discovery finds Plex servers on the local network (GDM in production).
+	discovery ServerDiscoverer
+
 	// Token store abstracts credential persistence (OS keychain in production)
 	tokens TokenStore
 
 	// Platform integration
-	autostart *platform.AutoStartManager
-	tray      *platform.TrayManager
+	autostart AutoStartController
+	tray      TrayController
+
+	// desktop is the Wails runtime: window, quit, browser, screens. Held as
+	// the union so the narrow pieces can be handed to their consumers.
+	desktop Desktop
+
+	// windows owns window visibility, the deferred-restore dance, and the
+	// explicit-quit flag.
+	windows *windowManager
+
+	// presence gates Discord updates behind the manual pause toggle and the
+	// hide-when-paused timer.
+	presence *presenceGate
 
 	// Tray icon data, injected from main so the platform layer stays
 	// asset-agnostic. iconPNG is used on macOS/Linux, iconICO on Windows.
@@ -70,40 +92,22 @@ type App struct {
 	discordRetry *retry.Manager
 
 	// Automatic update checker (constructed in startup — it needs the bus)
-	updater *updater.Updater
+	updater UpdateService
 
 	// PIN authentication (maintain same client ID for PIN lifecycle)
 	plexAuth *plex.Authenticator
 
 	// Listening history
-	history *history.Store
+	history HistoryStore
 
 	// Event bus for emitting events to the frontend (abstracts Wails runtime)
 	bus events.Bus
 
-	// Presence pause state
-	presencePaused bool        // Manual one-click pause toggle
-	pauseTimer     *time.Timer // Timer for delayed hide-when-paused
-	pauseTimerGen  uint64      // Incremented every schedule/cancel so a fired-but-cancelled callback bails out
-
-	// quitting is set when the user explicitly quits (e.g. via QuitApp) so
-	// beforeClose knows to allow shutdown instead of hiding to the background.
-	quitting atomic.Bool
-
-	// windowCtx is the Wails context published once the window can be driven;
-	// pendingShow records a restore request that arrived before that — a second
-	// instance launched while PlexCord was still booting — so it can be
-	// replayed instead of dropped. Both are guarded by windowMu.
-	windowCtx   context.Context
-	pendingShow bool
-
 	// Mutexes grouped together for alignment
-	windowMu   sync.Mutex // Protect windowCtx and pendingShow
 	pollerMu   sync.Mutex
 	sessionMu  sync.RWMutex // Protect currentSession access
 	discordMu  sync.Mutex
 	plexAuthMu sync.Mutex
-	pauseMu    sync.Mutex // Protect presencePaused and pauseTimer
 }
 
 // saveConfig persists the current in-memory config via the ConfigStore.
@@ -124,17 +128,38 @@ func (a *App) saveConfig() error {
 
 // NewApp creates a new App application struct with production dependencies.
 // For tests, construct an App directly with injected fakes for bus,
-// plexFactory, tokens, and discord.
+// plexFactory, tokens, discord, desktop, tray, autostart and updater.
 func NewApp() *App {
-	return &App{
+	return newAppWithDesktop(newDesktop())
+}
+
+// newAppWithDesktop builds an App over the given runtime. Split from NewApp so
+// tests can drive the full window/quit surface against a fake Desktop.
+func newAppWithDesktop(desktop Desktop) *App {
+	a := &App{
 		discord:      discord.NewPresenceManager(),
 		plexFactory:  newPlexClientFactory(),
+		discovery:    newServerDiscoverer(),
 		tokens:       newKeychainTokenStore(),
+		configs:      newConfigGateway(),
 		autostart:    platform.NewAutoStartManager(),
 		plexRetry:    retry.NewManager("Plex"),
 		discordRetry: retry.NewManager("Discord"),
 		artwork:      artwork.NewResolver(artwork.WithUserAgent("PlexCord/" + version.Version)),
+		desktop:      desktop,
 	}
+	a.windows = newWindowManager(desktop, desktop)
+	a.presence = newPresenceGate(a.clearDiscordOnStop, a.hideWhenPausedDelay)
+	return a
+}
+
+// hideWhenPausedDelay reports the configured hide-when-paused delay. It is the
+// presence gate's window onto the config, so the gate never reads it directly.
+func (a *App) hideWhenPausedDelay() time.Duration {
+	if a.config == nil {
+		return 0
+	}
+	return time.Duration(a.config.HideWhenPausedDelay) * time.Second
 }
 
 // startup is called at application startup
@@ -147,7 +172,7 @@ func (a *App) startup(ctx context.Context) {
 	// earlier — PlexCord started minimized and the user relaunched it while it
 	// was still booting — was parked rather than run against a nil context, so
 	// replay it now.
-	if a.markWindowReady(ctx) {
+	if a.windows.MarkReady(ctx) {
 		log.Printf("Replaying window restore requested before startup completed")
 		a.ShowWindow()
 	}
@@ -163,7 +188,7 @@ func (a *App) startup(ctx context.Context) {
 	version.CaptureLaunchPath()
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := a.configs.Load()
 	if err != nil {
 		log.Printf("Warning: failed to load config, using defaults: %v", err)
 		cfg = config.DefaultConfig()
@@ -173,7 +198,7 @@ func (a *App) startup(ctx context.Context) {
 	log.Printf("Configuration loaded successfully")
 
 	// Initialize listening history store
-	configDir := config.GetConfigDir()
+	configDir := a.configs.ConfigDir()
 	a.history = history.NewStore(configDir, 200)
 
 	// Bring an existing auto-start registration up to date with what this build
@@ -197,16 +222,18 @@ func (a *App) startup(ctx context.Context) {
 	// Start the system tray. This is the visible affordance for restoring the
 	// window (or quitting) once the app is running in the background, so it
 	// runs regardless of the "Minimize to tray" setting.
-	a.tray = platform.NewTrayManager(platform.TrayCallbacks{
-		OnShow:   a.ShowWindow,
-		OnQuit:   a.QuitApp,
-		OnUpdate: a.onTrayUpdateClick,
-	}, platform.TrayIcons{
-		PNG:       a.trayIconPNG,
-		ICO:       a.trayIconICO,
-		UpdatePNG: a.trayIconUpdatePNG,
-		UpdateICO: a.trayIconUpdateICO,
-	})
+	if a.tray == nil {
+		a.tray = platform.NewTrayManager(platform.TrayCallbacks{
+			OnShow:   a.ShowWindow,
+			OnQuit:   a.QuitApp,
+			OnUpdate: a.onTrayUpdateClick,
+		}, platform.TrayIcons{
+			PNG:       a.trayIconPNG,
+			ICO:       a.trayIconICO,
+			UpdatePNG: a.trayIconUpdatePNG,
+			UpdateICO: a.trayIconUpdateICO,
+		})
+	}
 	a.tray.Start()
 
 	// Setup retry callbacks for automatic reconnection
@@ -214,7 +241,9 @@ func (a *App) startup(ctx context.Context) {
 
 	// Start the automatic update checker (startup check + periodic re-check).
 	// No-op for dev builds; can be toggled at runtime via SetAutoUpdateCheck.
-	a.updater = updater.New(a.bus, 6*time.Hour)
+	if a.updater == nil {
+		a.updater = updater.New(a.bus, 6*time.Hour)
+	}
 	// Mirror update state into the tray menu: the frontend toast needs an open
 	// window, and PlexCord is built to run without one.
 	a.updater.OnStatusChange(a.publishUpdateNotice)
@@ -235,7 +264,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	// Auto-connect to Discord and Plex if setup is complete
-	if config.IsSetupComplete() {
+	if a.configs.IsSetupComplete() {
 		go func() {
 			// Small delay to allow UI to initialize
 			time.Sleep(500 * time.Millisecond)
@@ -267,9 +296,9 @@ func (a *App) domReady(ctx context.Context) {
 // the window and keeps PlexCord running in the background instead of quitting.
 // Explicit quits (QuitApp) set the quitting flag so this path is bypassed.
 func (a *App) beforeClose(ctx context.Context) (prevent bool) {
-	if !a.quitting.Load() && a.config != nil && a.config.MinimizeToTray {
+	if !a.windows.IsQuitting() && a.config != nil && a.config.MinimizeToTray {
 		log.Printf("Close requested: hiding window, PlexCord keeps running in the background")
-		runtime.WindowHide(ctx)
+		a.desktop.Hide(ctx)
 		return true
 	}
 	return false
