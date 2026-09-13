@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import Popover from 'primevue/popover';
 import BrandMark from '@/components/BrandMark.vue';
-import { useLayout } from '@/layout/composables/layout';
 import { usePresenceStatus } from '@/composables/usePresenceStatus';
 import { usePlaybackStore } from '@/stores/playback';
 import { usePlexConnectionStore } from '@/stores/plexConnection';
@@ -12,7 +11,6 @@ import { useDiscordConnectionStore } from '@/stores/discordConnection';
 import { usePresenceStore } from '@/stores/presence';
 import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit } from '../../wailsjs/runtime/runtime';
 
-const { toggleDarkMode, isDarkTheme } = useLayout();
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -32,14 +30,12 @@ const toggleSettings = () => {
 
 const isMac = /mac/i.test(navigator.platform || navigator.userAgent);
 const modKey = isMac ? '⌘' : 'Ctrl';
-const altKey = isMac ? '⌥' : 'Alt';
 const keyTooltip = (label, combo) => ({
     value: `${label} <span class="pc-chip-mono">${combo}</span>`,
     escape: false,
     showDelay: 300
 });
 const shortcutTooltip = (label, keys) => keyTooltip(label, `${modKey}+${keys}`);
-const altShortcutTooltip = (label, keys) => keyTooltip(label, `${altKey}+${keys}`);
 
 // ---- Node dot states -----------------------------------------------------
 const plexDotClass = computed(() => {
@@ -231,15 +227,6 @@ onBeforeUnmount(() => {
                 >
                     <i :class="isSettings ? 'pi pi-arrow-left' : 'pi pi-cog'"></i>
                 </button>
-                <button
-                    type="button"
-                    class="topbar-action"
-                    v-tooltip.bottom="altShortcutTooltip(isDarkTheme ? $t('topbar.lightTheme') : $t('topbar.darkTheme'), 'D')"
-                    :aria-label="isDarkTheme ? $t('topbar.switchToLight') : $t('topbar.switchToDark')"
-                    @click="toggleDarkMode"
-                >
-                    <i :class="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'"></i>
-                </button>
             </div>
 
             <!-- Window caption buttons (frameless title bar) -->
@@ -319,10 +306,10 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid var(--pc-border);
 
     /* Width of the right cluster — the wider of the two flanks the centered
-       signal path must not run into: 3×32px actions + 2×8px gaps + the 24px
+       signal path must not run into: 2×32px actions + 1×8px gap + the 24px
        gutter before the divider + 4px + 1px rule + 3×46px caption buttons.
        Kept here (not inlined in the calc below) so the two stay in step. */
-    --topbar-flank: 279px;
+    --topbar-flank: 239px;
     /* Breathing room between the signal path and either flank. */
     --topbar-flank-gap: 12px;
 }
