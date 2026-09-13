@@ -10,6 +10,7 @@ import (
 	"plexcord/internal/history"
 	"plexcord/internal/platform"
 	"plexcord/internal/plex"
+	"plexcord/internal/retry"
 	"plexcord/internal/updater"
 	"plexcord/internal/version"
 
@@ -493,3 +494,96 @@ func (p *recordingPresence) clearCount() int {
 }
 
 var _ DiscordPresence = (*recordingPresence)(nil)
+
+// ----------------------------------------------------------------------------
+// Reconnection and PIN authentication
+// ----------------------------------------------------------------------------
+
+// fakeRetry records how the reconnection loop is driven, with no timers.
+type fakeRetry struct {
+	mu            sync.Mutex
+	starts        []string // error codes passed to Start
+	resets        int
+	stops         int
+	manualRetries int
+	state         retry.RetryState
+	onRetry       retry.RetryCallback
+}
+
+func (r *fakeRetry) SetCallbacks(onRetry retry.RetryCallback, _ retry.StateChangeCallback) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.onRetry = onRetry
+}
+
+func (r *fakeRetry) Start(_ error, code string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.starts = append(r.starts, code)
+}
+
+func (r *fakeRetry) Stop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.stops++
+}
+
+func (r *fakeRetry) Reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.resets++
+}
+
+func (r *fakeRetry) ManualRetry() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.manualRetries++
+}
+
+func (r *fakeRetry) GetState() retry.RetryState {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.state
+}
+
+func (r *fakeRetry) startCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.starts)
+}
+
+var _ RetryManager = (*fakeRetry)(nil)
+
+// fakeAuthenticator answers the plex.tv PIN flow from canned responses.
+type fakeAuthenticator struct {
+	requestResp *plex.PINResponse
+	requestErr  error
+	checkResp   *plex.PINResponse
+	checkErr    error
+	authURL     string
+}
+
+func (f *fakeAuthenticator) RequestPIN(context.Context) (*plex.PINResponse, error) {
+	return f.requestResp, f.requestErr
+}
+
+func (f *fakeAuthenticator) CheckPIN(context.Context, int) (*plex.PINResponse, error) {
+	return f.checkResp, f.checkErr
+}
+
+func (f *fakeAuthenticator) GetAuthURL(string) string { return f.authURL }
+
+var _ PlexAuthenticator = (*fakeAuthenticator)(nil)
+
+// fakeRelauncher records a restart request without spawning a process.
+type fakeRelauncher struct {
+	calls int
+	err   error
+}
+
+func (r *fakeRelauncher) Relaunch() error {
+	r.calls++
+	return r.err
+}
+
+var _ AppRelauncher = (*fakeRelauncher)(nil)

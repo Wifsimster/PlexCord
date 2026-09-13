@@ -14,19 +14,23 @@ func newTestApp(cfg *config.Config) *App {
 	store := config.NewStore(cfg, func(*config.Config) error { return nil })
 	desktop := &fakeDesktop{}
 	a := &App{
-		config:      cfg,
-		cfgStore:    store,
-		configs:     &fakeConfigGateway{cfg: cfg},
-		tokens:      &fakeTokenStore{},
-		discovery:   &fakeDiscoverer{},
-		tray:        &fakeTray{},
-		autostart:   &fakeAutoStart{},
-		history:     &fakeHistory{},
-		bus:         events.NewRecordingBus(),
-		desktop:     desktop,
-		plexFactory: func(string, string) PlexAPI { return &fakePlexAPI{} },
-		polling:     &pollingController{},
-		sessions:    &sessionCache{},
+		config:       cfg,
+		cfgStore:     store,
+		configs:      &fakeConfigGateway{cfg: cfg},
+		tokens:       &fakeTokenStore{},
+		discovery:    &fakeDiscoverer{},
+		tray:         &fakeTray{},
+		autostart:    &fakeAutoStart{},
+		history:      &fakeHistory{},
+		bus:          events.NewRecordingBus(),
+		desktop:      desktop,
+		plexFactory:  func(string, string) PlexAPI { return &fakePlexAPI{} },
+		polling:      &pollingController{},
+		sessions:     &sessionCache{},
+		plexRetry:    &fakeRetry{},
+		discordRetry: &fakeRetry{},
+		authFactory:  func() PlexAuthenticator { return &fakeAuthenticator{} },
+		relauncher:   &fakeRelauncher{},
 	}
 	a.windows = newWindowManager(desktop, desktop)
 	a.presence = newPresenceGate(a.clearDiscordOnStop, a.hideWhenPausedDelay)

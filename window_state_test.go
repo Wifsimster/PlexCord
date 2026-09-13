@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -360,5 +361,34 @@ func TestWindowContextAfterReady(t *testing.T) {
 	// Reading the context on a ready window must not park a restore request.
 	if windows.MarkReady(ctx) {
 		t.Fatal("Context() parked a request even though the window was ready")
+	}
+}
+
+// TestLoadLaunchConfigFallsBackToDefaults verifies a config that cannot be read
+// never keeps the window from opening. This path runs in main(), before the app
+// and its collaborators exist, so it is reachable only because the loader is a
+// parameter.
+func TestLoadLaunchConfigFallsBackToDefaults(t *testing.T) {
+	cfg := loadLaunchConfig(func() (*config.Config, error) {
+		return nil, errors.New("config file is corrupt")
+	})
+
+	if cfg == nil {
+		t.Fatal("loadLaunchConfig() = nil on a read failure; the window would never open")
+	}
+	if cfg.StartMinimized {
+		t.Error("the fallback config starts minimized; a broken config must open the window")
+	}
+}
+
+// TestLoadLaunchConfigUsesLoadedConfig verifies the persisted choice is what
+// decides the launch state when the config does read.
+func TestLoadLaunchConfigUsesLoadedConfig(t *testing.T) {
+	want := &config.Config{StartMinimized: true}
+
+	cfg := loadLaunchConfig(func() (*config.Config, error) { return want, nil })
+
+	if cfg != want {
+		t.Fatalf("loadLaunchConfig() = %+v, want the loaded config", cfg)
 	}
 }

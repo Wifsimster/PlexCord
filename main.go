@@ -11,6 +11,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
+
+	"plexcord/internal/config"
 )
 
 //go:embed all:frontend/dist
@@ -43,7 +45,7 @@ func main() {
 	// only loads later, in OnStartup. A login launch starts in the background
 	// whatever that setting says, and an update relaunch always shows the
 	// window (see resolveWindowLaunchState).
-	launch := resolveWindowLaunchState(loadLaunchConfig(), launchContext{
+	launch := resolveWindowLaunchState(loadLaunchConfig(config.Load), launchContext{
 		IsUpdateRelaunch: isUpdateRelaunch,
 		IsAutoStart:      isAutoStartLaunch(os.Args[1:]),
 	})

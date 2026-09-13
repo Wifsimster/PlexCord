@@ -7,11 +7,16 @@ import (
 	"strconv"
 	"time"
 
+	"plexcord/internal/artwork"
 	"plexcord/internal/config"
+	"plexcord/internal/discord"
 	"plexcord/internal/errors"
+	"plexcord/internal/history"
 	"plexcord/internal/keychain"
 	"plexcord/internal/platform"
 	"plexcord/internal/plex"
+	"plexcord/internal/retry"
+	"plexcord/internal/updater"
 	"plexcord/internal/version"
 )
 
@@ -107,10 +112,23 @@ func (execRelauncher) Relaunch() error {
 // newAppRelauncher returns the default exec-backed relauncher.
 func newAppRelauncher() AppRelauncher { return execRelauncher{} }
 
+// newPlexAuthenticatorFactory returns the default factory for plex.tv PIN
+// authentication.
+func newPlexAuthenticatorFactory() PlexAuthenticatorFactory {
+	return func() PlexAuthenticator { return plex.NewAuthenticator() }
+}
+
 // Compile-time assertions that the production types satisfy the interfaces
 // App depends on. These keep a signature change in an internal package from
 // silently becoming a runtime surprise at startup.
 var (
 	_ TrayController      = (*platform.TrayManager)(nil)
 	_ AutoStartController = (*platform.AutoStartManager)(nil)
+	_ RetryManager        = (*retry.Manager)(nil)
+	_ PlexAuthenticator   = (*plex.Authenticator)(nil)
+	_ UpdateService       = (*updater.Updater)(nil)
+	_ HistoryStore        = (*history.Store)(nil)
+	_ ArtworkResolver     = (*artwork.Resolver)(nil)
+	_ DiscordPresence     = (*discord.PresenceManager)(nil)
+	_ Desktop             = wailsDesktop{}
 )

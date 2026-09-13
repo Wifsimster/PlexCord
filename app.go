@@ -13,7 +13,6 @@ import (
 	"plexcord/internal/events"
 	"plexcord/internal/history"
 	"plexcord/internal/platform"
-	"plexcord/internal/plex"
 	"plexcord/internal/retry"
 	"plexcord/internal/updater"
 	"plexcord/internal/version"
@@ -80,8 +79,8 @@ type App struct {
 	trayIconUpdateICO []byte
 
 	// Retry managers (Story 6.4)
-	plexRetry    *retry.Manager
-	discordRetry *retry.Manager
+	plexRetry    RetryManager
+	discordRetry RetryManager
 
 	// Automatic update checker (constructed in startup — it needs the bus)
 	updater UpdateService
@@ -89,8 +88,10 @@ type App struct {
 	// relauncher spawns the updated binary when applying an update.
 	relauncher AppRelauncher
 
-	// PIN authentication (maintain same client ID for PIN lifecycle)
-	plexAuth *plex.Authenticator
+	// PIN authentication: authFactory builds one authenticator per PIN request
+	// (each gets its own client ID); plexAuth is the one in flight.
+	authFactory PlexAuthenticatorFactory
+	plexAuth    PlexAuthenticator
 
 	// Listening history
 	history HistoryStore
@@ -138,6 +139,7 @@ func newAppWithDesktop(desktop Desktop) *App {
 		discovery:    newServerDiscoverer(),
 		tokens:       newKeychainTokenStore(),
 		configs:      newConfigGateway(),
+		authFactory:  newPlexAuthenticatorFactory(),
 		autostart:    platform.NewAutoStartManager(),
 		plexRetry:    retry.NewManager("Plex"),
 		discordRetry: retry.NewManager("Discord"),

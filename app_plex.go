@@ -22,7 +22,7 @@ func (a *App) StartPlexPINAuth() (map[string]interface{}, error) {
 
 	// Create a new authenticator for this PIN request
 	// This ensures we get a fresh client ID for this authentication session
-	a.plexAuth = plex.NewAuthenticator()
+	a.plexAuth = a.authFactory()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -9,6 +9,7 @@ import (
 	"plexcord/internal/history"
 	"plexcord/internal/platform"
 	"plexcord/internal/plex"
+	"plexcord/internal/retry"
 	"plexcord/internal/updater"
 	"plexcord/internal/version"
 )
@@ -166,3 +167,37 @@ type AppRelauncher interface {
 	// Relaunch spawns the updated binary and returns once it has started.
 	Relaunch() error
 }
+
+// ----------------------------------------------------------------------------
+// Reconnection
+// ----------------------------------------------------------------------------
+
+// RetryManager abstracts the automatic reconnection loop for one service.
+// App drives two of them (Plex and Discord) and only ever uses the calls
+// below, so the interface stops there rather than mirroring the whole manager.
+type RetryManager interface {
+	SetCallbacks(retry retry.RetryCallback, stateChange retry.StateChangeCallback)
+	Start(err error, code string)
+	Stop()
+	Reset()
+	ManualRetry()
+	GetState() retry.RetryState
+}
+
+// ----------------------------------------------------------------------------
+// Plex PIN authentication
+// ----------------------------------------------------------------------------
+
+// PlexAuthenticator abstracts the plex.tv PIN link flow: request a PIN, build
+// the URL the user visits, then poll until they authorize it. One authenticator
+// serves one PIN's lifecycle, which is why App builds them through a factory.
+type PlexAuthenticator interface {
+	RequestPIN(ctx context.Context) (*plex.PINResponse, error)
+	CheckPIN(ctx context.Context, pinID int) (*plex.PINResponse, error)
+	GetAuthURL(pinCode string) string
+}
+
+// PlexAuthenticatorFactory constructs an authenticator for a fresh PIN request.
+// A new one per request is deliberate: each authentication session gets its own
+// client ID.
+type PlexAuthenticatorFactory func() PlexAuthenticator
