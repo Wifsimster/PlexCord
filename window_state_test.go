@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -318,22 +319,29 @@ func TestScreenForWindow(t *testing.T) {
 // before startup (a second instance launched while PlexCord is still booting)
 // is parked rather than dropped — and does not run against a nil context.
 func TestShowWindowBeforeReadyIsDeferred(t *testing.T) {
-	app := &App{}
+	desktop := &fakeDesktop{}
+	app := newTestApp(config.DefaultConfig())
+	app.desktop = desktop
+	app.windows = newWindowManager(desktop, desktop)
 
 	app.ShowWindow()
 
-	app.windowMu.Lock()
-	pending := app.pendingShow
-	app.windowMu.Unlock()
-	if !pending {
-		t.Fatal("ShowWindow before startup did not record a pending restore request")
+	// Nothing reached the runtime: there was no context to drive it with.
+	if shown, _, _ := desktop.counts(); shown != 0 {
+		t.Fatalf("ShowWindow before startup drove the window %d time(s)", shown)
 	}
 
-	if !app.markWindowReady(context.Background()) {
-		t.Fatal("markWindowReady() = false, want true to replay the parked request")
+	if !app.windows.MarkReady(context.Background()) {
+		t.Fatal("MarkReady() = false, want true to replay the parked request")
 	}
-	if app.markWindowReady(context.Background()) {
-		t.Fatal("markWindowReady() replayed the same request twice")
+	if app.windows.MarkReady(context.Background()) {
+		t.Fatal("MarkReady() replayed the same request twice")
+	}
+
+	// Replaying now reaches the runtime.
+	app.ShowWindow()
+	if shown, _, _ := desktop.counts(); shown != 1 {
+		t.Fatalf("ShowWindow after ready drove the window %d time(s), want 1", shown)
 	}
 }
 
@@ -341,19 +349,46 @@ func TestShowWindowBeforeReadyIsDeferred(t *testing.T) {
 // requests run against the published context instead of being parked.
 func TestWindowContextAfterReady(t *testing.T) {
 	ctx := context.Background()
-	app := &App{}
+	desktop := &fakeDesktop{}
+	windows := newWindowManager(desktop, desktop)
 
-	if app.markWindowReady(ctx) {
-		t.Fatal("markWindowReady() = true with no request pending")
+	if windows.MarkReady(ctx) {
+		t.Fatal("MarkReady() = true with no request pending")
 	}
-	if app.windowContext() == nil {
-		t.Fatal("windowContext() = nil after the window became ready")
+	if windows.Context() == nil {
+		t.Fatal("Context() = nil after the window became ready")
 	}
+	// Reading the context on a ready window must not park a restore request.
+	if windows.MarkReady(ctx) {
+		t.Fatal("Context() parked a request even though the window was ready")
+	}
+}
 
-	app.windowMu.Lock()
-	pending := app.pendingShow
-	app.windowMu.Unlock()
-	if pending {
-		t.Fatal("windowContext() parked a request even though the window was ready")
+// TestLoadLaunchConfigFallsBackToDefaults verifies a config that cannot be read
+// never keeps the window from opening. This path runs in main(), before the app
+// and its collaborators exist, so it is reachable only because the loader is a
+// parameter.
+func TestLoadLaunchConfigFallsBackToDefaults(t *testing.T) {
+	cfg := loadLaunchConfig(func() (*config.Config, error) {
+		return nil, errors.New("config file is corrupt")
+	})
+
+	if cfg == nil {
+		t.Fatal("loadLaunchConfig() = nil on a read failure; the window would never open")
+	}
+	if cfg.StartMinimized {
+		t.Error("the fallback config starts minimized; a broken config must open the window")
+	}
+}
+
+// TestLoadLaunchConfigUsesLoadedConfig verifies the persisted choice is what
+// decides the launch state when the config does read.
+func TestLoadLaunchConfigUsesLoadedConfig(t *testing.T) {
+	want := &config.Config{StartMinimized: true}
+
+	cfg := loadLaunchConfig(func() (*config.Config, error) { return want, nil })
+
+	if cfg != want {
+		t.Fatalf("loadLaunchConfig() = %+v, want the loaded config", cfg)
 	}
 }

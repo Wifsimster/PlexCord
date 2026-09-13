@@ -234,7 +234,7 @@ func screenForWindow(screens []runtime.Screen) windowSize {
 // every platform backend moves the window without showing it, so a tray start
 // stays in the tray and comes back at the right size.
 func (a *App) adaptWindowToScreen(ctx context.Context) {
-	screens, err := runtime.ScreenGetAll(ctx)
+	screens, err := a.desktop.Screens(ctx)
 	if err != nil {
 		log.Printf("Warning: failed to read screen size, keeping the default window size: %v", err)
 		return
@@ -248,8 +248,7 @@ func (a *App) adaptWindowToScreen(ctx context.Context) {
 	}
 
 	log.Printf("Window resized to %dx%d to fit the %dx%d screen", fitted.Width, fitted.Height, screen.Width, screen.Height)
-	runtime.WindowSetSize(ctx, fitted.Width, fitted.Height)
-	runtime.WindowCenter(ctx)
+	a.windows.Resize(fitted.Width, fitted.Height)
 }
 
 // loadLaunchConfig reads the persisted configuration for the sole purpose of
@@ -258,8 +257,12 @@ func (a *App) adaptWindowToScreen(ctx context.Context) {
 //
 // A config that cannot be read must never keep the window from opening, so
 // failures fall back to defaults (which start the window normally).
-func loadLaunchConfig() *config.Config {
-	cfg, err := config.Load()
+//
+// It runs in main(), before the App and its injected collaborators exist, so it
+// takes its loader as a parameter rather than reaching for the config package —
+// which is also what lets the fall-back-to-defaults path be tested.
+func loadLaunchConfig(load func() (*config.Config, error)) *config.Config {
+	cfg, err := load()
 	if err != nil {
 		log.Printf("Warning: failed to load config for window start state, using defaults: %v", err)
 		return config.DefaultConfig()

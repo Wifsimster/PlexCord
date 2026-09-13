@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"sync"
 	"time"
 
 	"plexcord/internal/events"
@@ -29,34 +28,29 @@ type SessionObserver interface {
 // sessionCacheObserver stores the current session for page refresh restoration
 // ----------------------------------------------------------------------------
 type sessionCacheObserver struct {
-	mu      *sync.RWMutex
-	current **plex.MusicSession
+	cache *sessionCache
 }
 
-func newSessionCacheObserver(mu *sync.RWMutex, current **plex.MusicSession) *sessionCacheObserver {
-	return &sessionCacheObserver{mu: mu, current: current}
+func newSessionCacheObserver(cache *sessionCache) *sessionCacheObserver {
+	return &sessionCacheObserver{cache: cache}
 }
 
 func (o *sessionCacheObserver) OnUpdate(session *plex.MusicSession) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	*o.current = session
+	o.cache.Set(session)
 }
 
 func (o *sessionCacheObserver) OnStop() {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	*o.current = nil
+	o.cache.Clear()
 }
 
 // ----------------------------------------------------------------------------
 // historyObserver records played tracks to the listening history
 // ----------------------------------------------------------------------------
 type historyObserver struct {
-	store *history.Store
+	store HistoryStore
 }
 
-func newHistoryObserver(store *history.Store) *historyObserver {
+func newHistoryObserver(store HistoryStore) *historyObserver {
 	return &historyObserver{store: store}
 }
 

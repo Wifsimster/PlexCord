@@ -4,14 +4,13 @@ import (
 	"log"
 
 	"plexcord/internal/config"
-	"plexcord/internal/discord"
 )
 
 // CheckSetupComplete checks if the setup wizard has been completed
 // This method is called from the frontend router to determine if
 // the user should be redirected to the setup wizard on first launch
 func (a *App) CheckSetupComplete() bool {
-	return config.IsSetupComplete()
+	return a.configs.IsSetupComplete()
 }
 
 // CompleteSetup marks the setup wizard as complete and saves the configuration.
@@ -34,23 +33,16 @@ func (a *App) CompleteSetup() error {
 
 	log.Printf("Setup wizard completed successfully")
 
-	// Ensure Discord is connected for Rich Presence
-	a.discordMu.Lock()
+	// Ensure Discord is connected for Rich Presence. A failure here does not
+	// fail setup — the user may simply not have Discord running.
 	if !a.discord.IsConnected() {
 		log.Printf("Discord not connected during setup completion, attempting to connect...")
-		clientID := a.config.DiscordClientID
-		if clientID == "" {
-			clientID = discord.DefaultClientID
-		}
-		if err := a.discord.Connect(clientID); err != nil {
-			log.Printf("Warning: Failed to connect to Discord after setup: %v", err)
-			// Don't fail setup - user might not have Discord running
-		} else {
-			a.updateDiscordConnectionTime()
+		if a.discord.ConnectIfDown() {
 			log.Printf("Discord connected successfully after setup completion")
+		} else {
+			log.Printf("Warning: Failed to connect to Discord after setup")
 		}
 	}
-	a.discordMu.Unlock()
 
 	// Try to start session polling if configured
 	// This is non-blocking - errors are logged but don't fail setup completion
@@ -102,13 +94,11 @@ func (a *App) ResetApplication() {
 	a.StopSessionPolling()
 
 	// 2. Disconnect from Discord (clears presence)
-	a.discordMu.Lock()
 	if a.discord.IsConnected() {
 		if err := a.discord.Disconnect(); err != nil {
 			log.Printf("Warning: Failed to disconnect Discord: %v", err)
 		}
 	}
-	a.discordMu.Unlock()
 
 	// 3. Remove Plex token from secure storage
 	if err := a.tokens.Delete(); err != nil {
@@ -125,7 +115,7 @@ func (a *App) ResetApplication() {
 	}
 
 	// 5. Delete configuration file
-	if err := config.Delete(); err != nil {
+	if err := a.configs.Delete(); err != nil {
 		log.Printf("Warning: Failed to delete config file: %v", err)
 		// Continue with reset - we'll create fresh defaults
 	} else {

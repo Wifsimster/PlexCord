@@ -1,14 +1,10 @@
 package main
 
 import (
-	"context"
 	stderrors "errors"
 	"log"
 	"net/url"
-	"os"
-	"os/exec"
 	goruntime "runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,8 +13,6 @@ import (
 	"plexcord/internal/history"
 	"plexcord/internal/updater"
 	"plexcord/internal/version"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ============================================================================
@@ -106,7 +100,7 @@ func (a *App) CheckForUpdate() (*version.UpdateInfo, error) {
 func (a *App) OpenReleasesPage() error {
 	releaseURL := version.GetReleasesURL()
 	log.Printf("Opening releases page: %s", releaseURL)
-	runtime.BrowserOpenURL(a.ctx, releaseURL)
+	a.desktop.OpenURL(a.ctx, releaseURL)
 	return nil
 }
 
@@ -125,7 +119,7 @@ func (a *App) OpenReleaseURL(releaseURL string) error {
 		return errors.New(errors.CONFIG_READ_FAILED, "release URL must be from github.com")
 	}
 	log.Printf("Opening release URL: %s", releaseURL)
-	runtime.BrowserOpenURL(a.ctx, releaseURL)
+	a.desktop.OpenURL(a.ctx, releaseURL)
 	return nil
 }
 
@@ -176,43 +170,18 @@ func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 // takes effect. It spawns the (now-updated) executable and quits the current
 // process.
 func (a *App) RestartApplication() error {
-	// Use the launch path captured at startup, NOT a fresh os.Executable().
-	// The self-update renames the running binary to ".<name>.old" and moves the
-	// new binary into the original path; resolving the path after that rename
-	// would relaunch the OLD binary (this is exactly what os.Executable() returns
-	// on Windows post-rename). The captured path always points at the original
-	// location, which now holds the updated binary. See version.CaptureLaunchPath.
-	exe := version.LaunchPath()
-	if exe == "" {
-		return errors.New(errors.UNKNOWN_ERROR, "failed to locate executable")
-	}
-
-	// Use context.Background (not a.ctx): a.ctx is cancelled by the
-	// runtime.Quit below, which would otherwise terminate the relaunched
-	// process. The child must outlive this one.
-	// #nosec G204 G702 -- exe is our own executable ($APPIMAGE or os.Executable), not untrusted input
-	cmd := exec.CommandContext(context.Background(), exe) //nolint:gosec
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	// Hand the child our PID so it waits for this process to fully exit — and
-	// thereby release the Wails single-instance lock — before its own runtime
-	// tries to acquire that lock. Without this, the freshly-installed binary
-	// starts while we still hold the lock, is treated as a second instance
-	// (it merely restores our window and exits), and the OLD version keeps
-	// running. See waitForPreviousInstanceExit in relaunch.go.
-	cmd.Env = append(os.Environ(), relaunchPIDEnv+"="+strconv.Itoa(os.Getpid()))
-	if err := cmd.Start(); err != nil {
-		return errors.Wrap(err, errors.UNKNOWN_ERROR, "failed to relaunch application")
+	if err := a.relauncher.Relaunch(); err != nil {
+		return err
 	}
 
 	log.Printf("Relaunching application to apply update")
-	// Mark this as an explicit quit so beforeClose does not intercept
-	// runtime.Quit and merely hide the window when "Minimize to tray" is
-	// enabled. Without this flag the old process would linger in the tray
-	// running the previous version, the single-instance lock would never be
-	// released, and the update would never take effect. Mirrors QuitApp.
-	a.quitting.Store(true)
-	runtime.Quit(a.ctx)
+	// Mark this as an explicit quit so beforeClose does not intercept the quit
+	// and merely hide the window when "Minimize to tray" is enabled. Without
+	// this flag the old process would linger in the tray running the previous
+	// version, the single-instance lock would never be released, and the update
+	// would never take effect. Mirrors QuitApp.
+	a.windows.MarkQuitting()
+	a.desktop.Quit(a.ctx)
 	return nil
 }
 

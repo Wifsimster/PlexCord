@@ -3,6 +3,7 @@ package discord
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"plexcord/internal/discord/ipc"
 )
@@ -17,32 +18,76 @@ type PresenceBuilder interface {
 	Build(data *PresenceData) ipc.Activity
 }
 
-// builderRegistry maps media type strings to their PresenceBuilder.
-var builderRegistry = map[string]PresenceBuilder{
-	MediaTypeMusic: &musicBuilder{},
-	MediaTypeMovie: &movieBuilder{},
-	MediaTypeTV:    &tvBuilder{},
+// BuilderRegistry resolves a PresenceBuilder for a media type. It is the
+// extension point for new media types: register a builder and every presence
+// path picks it up, with no change to the existing builders or to the dispatch
+// (OCP).
+//
+// Registration is guarded by a mutex because a presence update can be built on
+// the poller goroutine while another goroutine registers a builder.
+type BuilderRegistry struct {
+	mu       sync.RWMutex
+	builders map[string]PresenceBuilder
+	// fallback formats media types nothing is registered for, so an unknown
+	// type degrades to a sensible presence rather than none at all.
+	fallback PresenceBuilder
 }
 
-// RegisterPresenceBuilder registers a builder for a given media type.
-// Intended for tests and future extensions.
+// NewBuilderRegistry returns a registry preloaded with the built-in builders.
+func NewBuilderRegistry() *BuilderRegistry {
+	music := &musicBuilder{}
+	return &BuilderRegistry{
+		builders: map[string]PresenceBuilder{
+			MediaTypeMusic: music,
+			MediaTypeMovie: &movieBuilder{},
+			MediaTypeTV:    &tvBuilder{},
+		},
+		fallback: music,
+	}
+}
+
+// Register adds or replaces the builder for a media type.
+func (r *BuilderRegistry) Register(mediaType string, builder PresenceBuilder) {
+	if builder == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.builders[mediaType] = builder
+}
+
+// Builder returns the builder for a media type, falling back to the music
+// builder for an empty or unregistered type (backward compatibility).
+func (r *BuilderRegistry) Builder(mediaType string) PresenceBuilder {
+	if mediaType == "" {
+		mediaType = MediaTypeMusic
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if b, ok := r.builders[mediaType]; ok {
+		return b
+	}
+	return r.fallback
+}
+
+// Build formats the presence data with the builder for its media type.
+func (r *BuilderRegistry) Build(data *PresenceData) ipc.Activity {
+	return r.Builder(data.MediaType).Build(data)
+}
+
+// defaultRegistry backs the package-level helpers used by PresenceManager.
+var defaultRegistry = NewBuilderRegistry()
+
+// RegisterPresenceBuilder registers a builder for a given media type on the
+// default registry. Intended for tests and future extensions.
 func RegisterPresenceBuilder(mediaType string, builder PresenceBuilder) {
-	builderRegistry[mediaType] = builder
+	defaultRegistry.Register(mediaType, builder)
 }
 
 // buildActivityForMediaType dispatches to the appropriate PresenceBuilder
-// based on data.MediaType. Falls back to the music builder for empty or
-// unknown media types to preserve backward compatibility.
+// based on data.MediaType, via the default registry.
 func buildActivityForMediaType(data *PresenceData) ipc.Activity {
-	mt := data.MediaType
-	if mt == "" {
-		mt = MediaTypeMusic
-	}
-	builder, ok := builderRegistry[mt]
-	if !ok {
-		builder = builderRegistry[MediaTypeMusic]
-	}
-	return builder.Build(data)
+	return defaultRegistry.Build(data)
 }
 
 // ----------------------------------------------------------------------------

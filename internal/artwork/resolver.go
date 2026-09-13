@@ -29,7 +29,39 @@ type Resolver struct {
 
 	// mbLimiter throttles MusicBrainz requests to respect its 1 req/s policy.
 	mbLimiter *rateLimiter
+
+	// sources is the ordered lookup chain, tried until one returns a URL.
+	// Holding the chain as data rather than as a hard-coded sequence of calls
+	// is what lets a new provider be added — or the order changed, or a
+	// provider dropped — without editing Resolve (OCP).
+	sources []Source
 }
+
+// Source is one place artwork can be looked up. Implementations must return an
+// empty string on a miss (not an error) and must respect ctx cancellation.
+//
+// The interface is a single method so a plain function can be a Source; see
+// SourceFunc.
+type Source interface {
+	// Lookup returns a public HTTPS artwork URL for the artist/album, or "".
+	Lookup(ctx context.Context, artist, album string) string
+	// Name identifies the source in logs and tests.
+	Name() string
+}
+
+// SourceFunc adapts a plain function to the Source interface.
+type SourceFunc struct {
+	SourceName string
+	Fn         func(ctx context.Context, artist, album string) string
+}
+
+// Lookup calls the wrapped function.
+func (f SourceFunc) Lookup(ctx context.Context, artist, album string) string {
+	return f.Fn(ctx, artist, album)
+}
+
+// Name returns the source's name.
+func (f SourceFunc) Name() string { return f.SourceName }
 
 // Option configures a Resolver.
 type Option func(*Resolver)
@@ -55,6 +87,22 @@ func WithMusicBrainzInterval(d time.Duration) Option {
 	return func(r *Resolver) { r.mbLimiter = newRateLimiter(d) }
 }
 
+// WithSources replaces the lookup chain. Sources are tried in order until one
+// returns a URL; passing none disables lookups entirely (every pair misses).
+func WithSources(sources ...Source) Option {
+	return func(r *Resolver) { r.sources = sources }
+}
+
+// AppendSource adds a source to the end of the lookup chain, so it is consulted
+// only after the built-in ones miss.
+func AppendSource(source Source) Option {
+	return func(r *Resolver) {
+		if source != nil {
+			r.sources = append(r.sources, source)
+		}
+	}
+}
+
 // NewResolver builds a Resolver with sensible production defaults.
 func NewResolver(opts ...Option) *Resolver {
 	r := &Resolver{
@@ -65,6 +113,12 @@ func NewResolver(opts ...Option) *Resolver {
 		mbBase:     "https://musicbrainz.org",
 		caaBase:    "https://coverartarchive.org",
 		mbLimiter:  newRateLimiter(time.Second),
+	}
+	// The default chain: iTunes first (fast, high coverage for mainstream
+	// music), then MusicBrainz + Cover Art Archive as a keyless fallback.
+	r.sources = []Source{
+		SourceFunc{SourceName: "itunes", Fn: r.resolveITunes},
+		SourceFunc{SourceName: "coverart", Fn: r.resolveCoverArt},
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -99,19 +153,21 @@ func (r *Resolver) Resolve(ctx context.Context, artist, album string) (string, e
 		return url, nil
 	}
 
-	// 1) iTunes Search — fast, high coverage for mainstream music.
-	if url := r.resolveITunes(ctx, artist, album); url != "" {
-		r.cache.put(key, url)
-		return url, nil
+	// Walk the chain in order; the first source with an answer wins.
+	for _, source := range r.sources {
+		if ctx.Err() != nil {
+			// Caller gave up (or timed out): do not cache a miss we never
+			// actually established, or the next poll would skip the lookup.
+			return "", ctx.Err()
+		}
+		if url := source.Lookup(ctx, artist, album); url != "" {
+			r.cache.put(key, url)
+			return url, nil
+		}
 	}
 
-	// 2) MusicBrainz + Cover Art Archive — keyless fallback.
-	if url := r.resolveCoverArt(ctx, artist, album); url != "" {
-		r.cache.put(key, url)
-		return url, nil
-	}
-
-	// 3) Miss — cache the negative result so we don't re-query every poll.
+	// Every source missed — cache the negative result so we don't re-query
+	// on every poll.
 	r.cache.put(key, "")
 	return "", nil
 }

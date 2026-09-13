@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"log"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ============================================================================
@@ -15,62 +13,22 @@ import (
 // ShowWindow shows and focuses the main application window.
 // This is used when restoring from minimized/hidden state: from the tray, and
 // from a relaunch of PlexCord while it is already running in the background.
+//
+// The window mechanics live in windowManager; App only forwards, so the Wails
+// binding surface stays a translation layer.
 func (a *App) ShowWindow() {
-	ctx := a.windowContext()
-	if ctx == nil {
-		log.Printf("Show requested before the window was ready; deferred until startup completes")
-		return
-	}
-
-	runtime.WindowShow(ctx)
-	// Only un-minimise when the window actually is minimised: on a window that
-	// was hidden while maximised, an unconditional restore would also drop it
-	// back to its normal size.
-	if runtime.WindowIsMinimised(ctx) {
-		runtime.WindowUnminimise(ctx)
-	}
-	runtime.WindowSetAlwaysOnTop(ctx, true)
-	runtime.WindowSetAlwaysOnTop(ctx, false) // Trick to bring to front
-}
-
-// windowContext returns the context to drive the window with, or nil when the
-// window is not ready yet — a restore arriving before OnStartup handed us the
-// Wails context. In that case the request is remembered so markWindowReady can
-// replay it, rather than being dropped (or run against a nil context, which
-// panics inside the Wails runtime).
-func (a *App) windowContext() context.Context {
-	a.windowMu.Lock()
-	defer a.windowMu.Unlock()
-
-	if a.windowCtx != nil {
-		return a.windowCtx
-	}
-	a.pendingShow = true
-	return nil
-}
-
-// markWindowReady publishes the Wails context that drives the window and
-// reports whether a restore request arrived before it existed, in which case
-// the caller should replay it. Called from startup.
-func (a *App) markWindowReady(ctx context.Context) bool {
-	a.windowMu.Lock()
-	defer a.windowMu.Unlock()
-
-	a.windowCtx = ctx
-	pending := a.pendingShow
-	a.pendingShow = false
-	return pending
+	a.windows.Show()
 }
 
 // HideWindow hides the main application window.
 // The application continues running in the background.
 func (a *App) HideWindow() {
-	runtime.WindowHide(a.ctx)
+	a.windows.Hide()
 }
 
 // MinimizeWindow minimizes the main application window.
 func (a *App) MinimizeWindow() {
-	runtime.WindowMinimise(a.ctx)
+	a.windows.Minimise()
 }
 
 // QuitApp terminates the application completely.
@@ -79,8 +37,7 @@ func (a *App) MinimizeWindow() {
 // hiding the window when "Minimize to tray" is enabled.
 func (a *App) QuitApp() {
 	log.Printf("Quit requested")
-	a.quitting.Store(true)
-	runtime.Quit(a.ctx)
+	a.windows.Quit()
 }
 
 // onSecondInstanceLaunch is invoked (via SingleInstanceLock) when the user

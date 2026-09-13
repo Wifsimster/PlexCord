@@ -1,6 +1,8 @@
 package discord
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -154,24 +156,45 @@ func TestBuildActivityForMediaType_DispatchesToMovie(t *testing.T) {
 }
 
 func TestRegisterPresenceBuilder_Custom(t *testing.T) {
-	// Save and restore state
-	orig := builderRegistry["custom"]
-	defer func() {
-		if orig == nil {
-			delete(builderRegistry, "custom")
-		} else {
-			builderRegistry["custom"] = orig
-		}
-	}()
+	// An isolated registry: registering a media type must not require mutating
+	// (and then restoring) shared global state.
+	reg := NewBuilderRegistry()
+	reg.Register("custom", &customBuilder{marker: "CUSTOM"})
 
-	RegisterPresenceBuilder("custom", &customBuilder{marker: "CUSTOM"})
-
-	data := &PresenceData{MediaType: "custom"}
-	activity := buildActivityForMediaType(data)
-
+	activity := reg.Build(&PresenceData{MediaType: "custom"})
 	if activity.Details != "CUSTOM" {
 		t.Errorf("expected custom builder, got %q", activity.Details)
 	}
+
+	// Registering a new type leaves the built-in ones untouched (OCP).
+	music := reg.Build(&PresenceData{MediaType: MediaTypeMusic, Track: "Song"})
+	if music.Details != "Song" {
+		t.Errorf("music builder changed after registering a new type: %q", music.Details)
+	}
+
+	// A media type nobody registered falls back to music rather than panicking.
+	if got := reg.Builder("no-such-type"); got != reg.Builder(MediaTypeMusic) {
+		t.Error("unknown media type should fall back to the music builder")
+	}
+}
+
+// TestBuilderRegistryConcurrent exercises registration racing with dispatch,
+// the case the previous package-level map could not survive under -race.
+func TestBuilderRegistryConcurrent(t *testing.T) {
+	reg := NewBuilderRegistry()
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			reg.Register(fmt.Sprintf("type-%d", i), &customBuilder{marker: "X"})
+		}()
+		go func() {
+			defer wg.Done()
+			reg.Build(&PresenceData{MediaType: MediaTypeMusic, Track: "Song"})
+		}()
+	}
+	wg.Wait()
 }
 
 type customBuilder struct {

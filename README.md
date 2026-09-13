@@ -59,6 +59,7 @@ executable. Both keep themselves up to date.
 - **[Getting Started](docs/getting-started.md)** - Installation, setup wizard, and troubleshooting
 - **[Brand](docs/brand.md)** - The mark, the wordmark, and where the brand assets live
 - **[Architecture](docs/architecture.md)** - System design, technology stack, and project structure
+- **[SOLID Review](docs/solid-review.md)** - Design audit against the SOLID principles, scored
 - **[API Reference](docs/api.md)** - Backend API documentation and error codes
 - **[Development](docs/development.md)** - Build from source, development workflow, and testing
 - **[Contributing](docs/contributing.md)** - How to contribute, coding guidelines, and PR process

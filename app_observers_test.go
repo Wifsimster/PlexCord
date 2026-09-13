@@ -1,7 +1,6 @@
 package main
 
 import (
-	"sync"
 	"testing"
 
 	"plexcord/internal/events"
@@ -9,20 +8,19 @@ import (
 )
 
 func TestSessionCacheObserver_StoresAndClearsSession(t *testing.T) {
-	var mu sync.RWMutex
-	var current *plex.MusicSession
-	obs := newSessionCacheObserver(&mu, &current)
+	cache := &sessionCache{}
+	obs := newSessionCacheObserver(cache)
 
 	session := &plex.MusicSession{Track: "Song", Artist: "Artist"}
 	obs.OnUpdate(session)
 
-	if current == nil || current.Track != "Song" {
-		t.Errorf("expected cached session, got %v", current)
+	if got := cache.Get(); got == nil || got.Track != "Song" {
+		t.Errorf("expected cached session, got %v", got)
 	}
 
 	obs.OnStop()
-	if current != nil {
-		t.Errorf("expected nil after stop, got %v", current)
+	if got := cache.Get(); got != nil {
+		t.Errorf("expected nil after stop, got %v", got)
 	}
 }
 
