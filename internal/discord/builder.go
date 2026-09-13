@@ -146,7 +146,9 @@ func applyPlaybackIcon(activity *ipc.Activity, data *PresenceData) {
 	}
 }
 
-// applyArtwork sets the large image to the artwork URL or falls back.
+// applyArtwork sets the large image to the artwork URL or falls back to the
+// Plex logo. The hover text is the album for music; video has none, so each
+// builder supplies what the picture is of instead.
 func applyArtwork(activity *ipc.Activity, data *PresenceData, fallbackText string) {
 	if data.ArtworkURL != "" {
 		activity.LargeImage = data.ArtworkURL
@@ -158,6 +160,15 @@ func applyArtwork(activity *ipc.Activity, data *PresenceData, fallbackText strin
 		activity.LargeImage = "plex"
 		activity.LargeText = fallbackText
 	}
+}
+
+// orPlex returns text when there is any, and the bare product name otherwise,
+// so a poster's hover text never comes out empty.
+func orPlex(text string) string {
+	if text == "" {
+		return "Plex"
+	}
+	return text
 }
 
 // applyFormatTokens applies custom format strings with token replacement.
@@ -240,7 +251,7 @@ func (movieBuilder) Build(data *PresenceData) ipc.Activity {
 
 	applyActivityType(&activity, data, ipc.ActivityWatching)
 	applyTimestamps(&activity, data)
-	applyArtwork(&activity, data, "Plex")
+	applyArtwork(&activity, data, orPlex(data.Track))
 	applyPlaybackIcon(&activity, data)
 	return activity
 }
@@ -272,7 +283,7 @@ func (tvBuilder) Build(data *PresenceData) ipc.Activity {
 
 	applyActivityType(&activity, data, ipc.ActivityWatching)
 	applyTimestamps(&activity, data)
-	applyArtwork(&activity, data, "Plex")
+	applyArtwork(&activity, data, orPlex(data.ShowTitle))
 	applyPlaybackIcon(&activity, data)
 	return activity
 }

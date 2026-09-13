@@ -18,7 +18,8 @@ import { GetCurrentSession } from '../../../wailsjs/go/main/App'
 
 const makeMockSession = (overrides = {}) => ({
   sessionKey: 'abc123',
-  track: 'Test Track',
+  mediaType: 'music',
+  title: 'Test Track',
   artist: 'Test Artist',
   album: 'Test Album',
   thumb: '/library/metadata/123/thumb',
@@ -27,6 +28,23 @@ const makeMockSession = (overrides = {}) => ({
   viewOffset: 60000,
   state: 'playing',
   playerName: 'Chrome',
+  ...overrides
+})
+
+const makeMockEpisode = (overrides = {}) => ({
+  sessionKey: 'ep1',
+  mediaType: 'tv',
+  title: 'Good News',
+  showTitle: 'Severance',
+  season: 1,
+  episode: 2,
+  year: 2022,
+  thumb: '/library/metadata/456/thumb',
+  thumbUrl: 'http://plex:32400/photo/:/transcode?url=ep',
+  duration: 3300000,
+  viewOffset: 60000,
+  state: 'playing',
+  playerName: 'Plex Web',
   ...overrides
 })
 
@@ -220,9 +238,15 @@ describe('playback store', () => {
 
         expect(store.currentTrack).toEqual({
           sessionKey: 'abc123',
+          mediaType: 'music',
+          title: 'Test Track',
           track: 'Test Track',
           artist: 'Test Artist',
           album: 'Test Album',
+          year: undefined,
+          showTitle: undefined,
+          season: undefined,
+          episode: undefined,
           thumb: '/library/metadata/123/thumb',
           thumbUrl: 'http://plex:32400/photo/:/transcode?url=...',
           duration: 240000,
@@ -233,6 +257,27 @@ describe('playback store', () => {
         expect(store.isPlaying).toBe(true)
         expect(store.isPaused).toBe(false)
         expect(store.isStopped).toBe(false)
+      })
+
+      it('keeps a TV episode\'s show, season and episode', () => {
+        store.setTrack(makeMockEpisode())
+
+        expect(store.currentTrack).toMatchObject({
+          mediaType: 'tv',
+          title: 'Good News',
+          showTitle: 'Severance',
+          season: 1,
+          episode: 2,
+          year: 2022
+        })
+        // `track` mirrors the title so every existing consumer keeps working.
+        expect(store.currentTrack.track).toBe('Good News')
+      })
+
+      it('defaults the media type to music for a session without one', () => {
+        store.setTrack(makeMockSession({ mediaType: undefined }))
+
+        expect(store.currentTrack.mediaType).toBe('music')
       })
 
       it('sets paused state correctly', () => {
@@ -287,7 +332,7 @@ describe('playback store', () => {
       })
 
       it('PlaybackUpdated sets the track', () => {
-        const session = makeMockSession({ track: 'New Song', artist: 'New Artist' })
+        const session = makeMockSession({ title: 'New Song', artist: 'New Artist' })
         eventHandlers['PlaybackUpdated'](session)
 
         expect(store.currentTrack.track).toBe('New Song')

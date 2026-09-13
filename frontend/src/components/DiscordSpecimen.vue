@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import TruncatedText from '@/components/TruncatedText.vue';
-import { renderPresenceLines } from '@/utils/presenceFormat';
+import { mediaTypeOf, renderPresenceLines } from '@/utils/presenceFormat';
 
 const { t } = useI18n();
 
@@ -16,7 +16,7 @@ const { t } = useI18n();
  * (it does not follow the app theme, per §1.2).
  */
 const props = defineProps({
-    /** Track/session object (MusicSession shape). null → idle ghost. */
+    /** Session object (MediaSession shape). null → idle ghost. */
     track: { type: Object, default: null },
     /**
      * Presence format strings: { details, state }. Also accepts the raw
@@ -50,6 +50,19 @@ const normalizedFormats = computed(() => ({
 const lines = computed(() => renderPresenceLines(normalizedFormats.value, props.track));
 
 const albumLine = computed(() => props.track?.album ?? '');
+
+// Discord labels the card by what the activity is, and so does the specimen:
+// music is listened to, a film or an episode is watched.
+const isVideo = computed(() => mediaTypeOf(props.track) !== 'music');
+const headerGlyph = computed(() => (isVideo.value ? 'pi-video' : 'pi-headphones'));
+const headerLabel = computed(() => (isVideo.value ? t('specimen.watchingOnPlex') : t('specimen.listeningToPlex')));
+const artGlyph = computed(() => (isVideo.value ? '▶' : '♪'));
+const artAlt = computed(() => {
+    if (isVideo.value) {
+        return props.track?.title ? t('specimen.posterOf', { title: props.track.title }) : t('specimen.poster');
+    }
+    return props.track?.album ? t('specimen.albumArtOf', { album: props.track.album }) : t('specimen.albumArt');
+});
 
 const hasProgress = computed(() => (props.track?.duration ?? 0) > 0);
 
@@ -98,8 +111,8 @@ const duration = computed(() => formatTime(props.track?.duration));
             <!-- The specimen card -->
             <div v-else class="specimen-card" :class="{ 'specimen-card--paused': paused }">
                 <div class="card-header">
-                    <i class="pi pi-headphones card-header-glyph" aria-hidden="true"></i>
-                    <span class="card-header-label">{{ $t('specimen.listeningToPlex') }}</span>
+                    <i class="pi card-header-glyph" :class="headerGlyph" aria-hidden="true"></i>
+                    <span class="card-header-label">{{ headerLabel }}</span>
                     <span class="card-header-badges">
                         <span v-if="sample" class="pc-badge">{{ $t('specimen.sample') }}</span>
                         <Transition name="pc-fade">
@@ -110,8 +123,8 @@ const duration = computed(() => formatTime(props.track?.duration));
                 <div class="card-body">
                     <div class="card-art">
                         <Transition name="pc-fade">
-                            <img v-if="track.thumbUrl" :key="track.thumbUrl" :src="track.thumbUrl" :alt="track.album ? $t('specimen.albumArtOf', { album: track.album }) : $t('specimen.albumArt')" class="card-art-img" />
-                            <span v-else class="card-art-ghost" aria-hidden="true">♪</span>
+                            <img v-if="track.thumbUrl" :key="track.thumbUrl" :src="track.thumbUrl" :alt="artAlt" class="card-art-img" />
+                            <span v-else class="card-art-ghost" aria-hidden="true">{{ artGlyph }}</span>
                         </Transition>
                     </div>
                     <Transition name="specimen-swap" mode="out-in">

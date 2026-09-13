@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"log"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"plexcord/internal/artwork"
 	"plexcord/internal/discord"
 	"plexcord/internal/plex"
 )
@@ -124,7 +126,7 @@ func (s *discordService) reconnectLocked() bool {
 // Artwork is resolved on the fast path only from cache, so a known album shows
 // instantly; an unknown one goes out with the Plex logo and the real cover is
 // looked up in the background and re-issued when it lands.
-func (s *discordService) Publish(session *plex.MusicSession) {
+func (s *discordService) Publish(session *plex.MediaSession) {
 	s.mu.Lock()
 
 	// Each session update supersedes any in-flight async artwork resolve.
@@ -168,14 +170,28 @@ func (s *discordService) lookupAllowed() bool {
 	return s.artwork != nil && (s.artworkEnabled == nil || s.artworkEnabled())
 }
 
+// artworkQuery describes what picture this session wants: an album cover, a
+// film poster, or the art of the show an episode belongs to. The episode's own
+// title is deliberately not searched — no poster database indexes it.
+func artworkQuery(session *plex.MediaSession) artwork.Query {
+	switch session.MediaType {
+	case plex.MediaTypeMovie:
+		return artwork.MovieQuery(session.Title, session.Year)
+	case plex.MediaTypeTV:
+		return artwork.ShowQuery(session.ShowTitle, session.Year)
+	default:
+		return artwork.MusicQuery(session.Artist, session.Album)
+	}
+}
+
 // cachedArtwork returns a public artwork URL for the session if one is already
 // cached (no network), or "" to use the Plex logo fallback. It never returns
 // the tokened Plex ThumbURL.
-func (s *discordService) cachedArtwork(session *plex.MusicSession) string {
+func (s *discordService) cachedArtwork(session *plex.MediaSession) string {
 	if !s.lookupAllowed() {
 		return ""
 	}
-	if url, ok := s.artwork.Cached(session.Artist, session.Album); ok {
+	if url, ok := s.artwork.Cached(artworkQuery(session)); ok {
 		return url
 	}
 	return ""
@@ -183,12 +199,16 @@ func (s *discordService) cachedArtwork(session *plex.MusicSession) string {
 
 // publishLocked issues a presence update for the session with the given public
 // artwork URL. Caller holds mu.
-func (s *discordService) publishLocked(session *plex.MusicSession, artURL string) error {
+func (s *discordService) publishLocked(session *plex.MediaSession, artURL string) error {
 	return s.presence.UpdatePlayback(discord.Playback{
-		MediaType:  discord.MediaTypeMusic,
-		Track:      session.Track,
+		MediaType:  session.MediaType,
+		Track:      session.Title,
 		Artist:     session.Artist,
 		Album:      session.Album,
+		Year:       yearText(session.Year),
+		ShowTitle:  session.ShowTitle,
+		Season:     session.Season,
+		Episode:    session.Episode,
 		State:      session.State,
 		Duration:   session.Duration,
 		Position:   session.ViewOffset,
@@ -197,14 +217,24 @@ func (s *discordService) publishLocked(session *plex.MusicSession, artURL string
 	}, s.options())
 }
 
+// yearText renders a release year for the presence layer, which carries it as
+// text so an unknown year (Plex sends 0) renders as nothing at all rather than
+// as the year zero.
+func yearText(year int) string {
+	if year <= 0 {
+		return ""
+	}
+	return strconv.Itoa(year)
+}
+
 // resolveArtwork looks a cover up off the presence path and, if the session is
 // still current (generation unchanged) and not paused, re-issues the presence
 // with it. Runs in its own goroutine.
-func (s *discordService) resolveArtwork(session *plex.MusicSession, gen uint64) {
+func (s *discordService) resolveArtwork(session *plex.MediaSession, gen uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), artworkResolveTimeout)
 	defer cancel()
 
-	url, err := s.artwork.Resolve(ctx, session.Artist, session.Album)
+	url, err := s.artwork.Resolve(ctx, artworkQuery(session))
 	if err != nil || url == "" {
 		return
 	}

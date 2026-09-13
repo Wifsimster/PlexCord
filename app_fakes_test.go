@@ -301,6 +301,8 @@ type fakePlexAPI struct {
 	music      []plex.MusicSession
 	musicErr   error
 	media      []plex.MediaSession
+	mediaErr   error
+	lastTypes  []string
 }
 
 func (f *fakePlexAPI) ValidateConnection() (*plex.ValidationResult, error) {
@@ -319,8 +321,9 @@ func (f *fakePlexAPI) GetMusicSessions(string) ([]plex.MusicSession, error) {
 	return f.music, f.musicErr
 }
 
-func (f *fakePlexAPI) GetMediaSessions(string, []string) ([]plex.MediaSession, error) {
-	return f.media, nil
+func (f *fakePlexAPI) GetMediaSessions(_ string, mediaTypes []string) ([]plex.MediaSession, error) {
+	f.lastTypes = mediaTypes
+	return f.media, f.mediaErr
 }
 
 var _ PlexAPI = (*fakePlexAPI)(nil)

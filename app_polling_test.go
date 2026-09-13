@@ -12,23 +12,30 @@ import (
 // countingSource is a SessionSource that answers from memory, so the polling
 // lifecycle can be driven with no Plex server anywhere.
 type countingSource struct {
-	sessions []plex.MusicSession
-	err      error
+	sessions  []plex.MediaSession
+	lastTypes []string
+	err       error
 }
 
 func (s *countingSource) GetMusicSessions(string) ([]plex.MusicSession, error) {
-	return s.sessions, s.err
-}
-
-func (s *countingSource) GetMediaSessions(string, []string) ([]plex.MediaSession, error) {
 	return nil, s.err
 }
 
-func musicSession(track string) plex.MusicSession {
-	m := plex.MusicSession{Track: track, Artist: "Artist", Album: "Album"}
-	m.State = "playing"
-	m.SessionKey = track
-	return m
+func (s *countingSource) GetMediaSessions(_ string, mediaTypes []string) ([]plex.MediaSession, error) {
+	s.lastTypes = mediaTypes
+	return s.sessions, s.err
+}
+
+func musicSession(track string) plex.MediaSession {
+	return plex.MediaSession{
+		SessionKey: track,
+		Type:       "track",
+		MediaType:  plex.MediaTypeMusic,
+		State:      "playing",
+		Title:      track,
+		Artist:     "Artist",
+		Album:      "Album",
+	}
 }
 
 func TestPollingControllerStartsStopsAndReportsState(t *testing.T) {
@@ -42,7 +49,7 @@ func TestPollingControllerStartsStopsAndReportsState(t *testing.T) {
 	}
 
 	ch := ctrl.Start(pollingConfig{
-		Source:   &countingSource{sessions: []plex.MusicSession{musicSession("Song")}},
+		Source:   &countingSource{sessions: []plex.MediaSession{musicSession("Song")}},
 		UserID:   "user1",
 		Interval: time.Second,
 	})
@@ -55,7 +62,7 @@ func TestPollingControllerStartsStopsAndReportsState(t *testing.T) {
 	// without waiting out an interval.
 	select {
 	case session := <-ch:
-		if session == nil || session.Track != "Song" {
+		if session == nil || session.Title != "Song" {
 			t.Fatalf("first session = %v, want the playing track", session)
 		}
 	case <-time.After(2 * time.Second):
@@ -145,7 +152,7 @@ func TestStartSessionPollingUsesInjectedFactory(t *testing.T) {
 	var gotToken, gotURL string
 	app.plexFactory = func(token, serverURL string) PlexAPI {
 		gotToken, gotURL = token, serverURL
-		return &fakePlexAPI{music: []plex.MusicSession{musicSession("Song")}}
+		return &fakePlexAPI{media: []plex.MediaSession{musicSession("Song")}}
 	}
 
 	if err := app.StartSessionPolling(); err != nil {
@@ -160,7 +167,7 @@ func TestStartSessionPollingUsesInjectedFactory(t *testing.T) {
 	// The session reaches the cache the frontend restores from.
 	waitFor(t, func() bool {
 		s := app.GetCurrentSession()
-		return s != nil && s.Track == "Song"
+		return s != nil && s.Title == "Song"
 	}, "the polled session never reached the session cache")
 }
 

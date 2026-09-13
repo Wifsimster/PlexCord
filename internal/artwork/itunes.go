@@ -12,19 +12,34 @@ type itunesResponse struct {
 	} `json:"results"`
 }
 
-// resolveITunes queries the keyless iTunes Search API for an album cover and
-// upscales Apple's 100px thumbnail URL to a crisp 512px cover.
-func (r *Resolver) resolveITunes(ctx context.Context, artist, album string) string {
-	term := strings.TrimSpace(artist + " " + album)
+// itunesSearch picks the search term and the iTunes entity for a query. The
+// entity is what makes the same endpoint answer with an album cover, a film
+// poster or a show's season art, so it — not the term alone — is what the
+// media type decides.
+func itunesSearch(q Query) (term, entity string) {
+	switch q.MediaType {
+	case MediaTypeMovie:
+		return q.Title, "movie"
+	case MediaTypeTV:
+		return q.Title, "tvSeason"
+	default:
+		return strings.TrimSpace(q.Artist + " " + q.Album), "album"
+	}
+}
+
+// resolveITunes queries the keyless iTunes Search API for cover or poster art
+// and upscales Apple's 100px thumbnail URL to a crisp 512px image.
+func (r *Resolver) resolveITunes(ctx context.Context, q Query) string {
+	term, entity := itunesSearch(q)
 	if term == "" {
 		return ""
 	}
 
-	q := url.Values{}
-	q.Set("term", term)
-	q.Set("entity", "album")
-	q.Set("limit", "1")
-	endpoint := r.itunesBase + "/search?" + q.Encode()
+	v := url.Values{}
+	v.Set("term", term)
+	v.Set("entity", entity)
+	v.Set("limit", "1")
+	endpoint := r.itunesBase + "/search?" + v.Encode()
 
 	var resp itunesResponse
 	if !r.getJSON(ctx, endpoint, &resp) {

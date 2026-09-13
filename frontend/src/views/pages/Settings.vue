@@ -50,6 +50,8 @@ import {
     SetPresenceFormat,
     GetPresenceOptions,
     SetPresenceOptions,
+    GetMediaSync,
+    SetMediaSync,
     GetServers,
     AddServer,
     RemoveServer,
@@ -71,9 +73,11 @@ const { currentTrack, hasActiveSession } = usePlayback();
 const { version, commit, buildDate } = useVersion();
 
 const AUTOSAVE_DEBOUNCE = 600;
-const FORMAT_TOKENS = ['{track}', '{artist}', '{album}', '{year}', '{player}'];
+const FORMAT_TOKENS = ['{track}', '{artist}', '{album}', '{year}', '{player}', '{show}', '{season}', '{episode}'];
 const SAMPLE_TRACK = Object.freeze({
     sessionKey: 'sample-queen',
+    mediaType: 'music',
+    title: 'Bohemian Rhapsody',
     track: 'Bohemian Rhapsody',
     artist: 'Queen',
     album: 'A Night at the Opera',
@@ -99,6 +103,7 @@ const stateFormat = ref('');
 const activityStyle = ref('media');
 const statusDisplay = ref('state');
 const artworkLookup = ref(true);
+const mediaSync = reactive({ music: true, movies: true, tv: true });
 const discordClientId = ref('');
 const defaultClientId = ref('');
 const servers = ref([]);
@@ -238,6 +243,8 @@ onMounted(async () => {
         activityStyle.value = presenceOptions?.activityStyle ?? 'media';
         statusDisplay.value = presenceOptions?.statusDisplay ?? 'state';
         artworkLookup.value = presenceOptions?.artworkLookup ?? true;
+
+        Object.assign(mediaSync, await GetMediaSync());
 
         servers.value = await GetServers();
 
@@ -609,6 +616,35 @@ function updateArtworkLookup(value) {
     const prev = artworkLookup.value;
     artworkLookup.value = value; // optimistic
     savePresenceOptions(() => { artworkLookup.value = prev; });
+}
+
+// ---------------- Presence: what to sync ----------------
+const mediaSyncSaving = ref(false);
+
+// The backend rejects a selection with nothing enabled — an empty list means
+// "all of them" in the config, so it would show three switches off while still
+// relaying everything. Refuse it here too, with an explanation rather than a
+// switch that silently springs back.
+async function updateMediaSync(key, value) {
+    const prev = mediaSync[key];
+    mediaSync[key] = value; // optimistic
+
+    if (!mediaSync.music && !mediaSync.movies && !mediaSync.tv) {
+        mediaSync[key] = prev;
+        toast.add({ severity: 'warn', summary: t('settings.mediaSyncNoneTitle'), detail: t('settings.mediaSyncNoneDetail'), life: 4000 });
+        return;
+    }
+
+    mediaSyncSaving.value = true;
+    try {
+        await SetMediaSync({ music: mediaSync.music, movies: mediaSync.movies, tv: mediaSync.tv });
+        flashSaved('mediaSync');
+    } catch (error) {
+        mediaSync[key] = prev;
+        toastFailure(t('settings.mediaSyncFailed'), error, t('settings.mediaSyncFailedDetail'));
+    } finally {
+        mediaSyncSaving.value = false;
+    }
 }
 
 // ---------------- App: toggles (instant, optimistic + revert) ----------------
@@ -1009,6 +1045,35 @@ async function executeReset() {
 
                         <div class="format-specimen">
                             <DiscordSpecimen :track="specimenTrack" :formats="specimenFormats" :sample="specimenIsSample" :paused="specimenPaused" />
+                        </div>
+
+                        <div class="setting-row divided-row">
+                            <div class="row-text">
+                                <span class="row-label" id="lbl-sync-music">{{ $t('settings.syncMusic') }}</span>
+                                <p class="row-caption">{{ $t('settings.syncMusicCaption') }}</p>
+                            </div>
+                            <div class="row-control">
+                                <SavedIndicator :visible="!!savedFlags.mediaSync" />
+                                <ToggleSwitch :modelValue="mediaSync.music" :disabled="mediaSyncSaving" aria-labelledby="lbl-sync-music" @update:modelValue="(v) => updateMediaSync('music', v)" />
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="row-text">
+                                <span class="row-label" id="lbl-sync-movies">{{ $t('settings.syncMovies') }}</span>
+                                <p class="row-caption">{{ $t('settings.syncMoviesCaption') }}</p>
+                            </div>
+                            <div class="row-control">
+                                <ToggleSwitch :modelValue="mediaSync.movies" :disabled="mediaSyncSaving" aria-labelledby="lbl-sync-movies" @update:modelValue="(v) => updateMediaSync('movies', v)" />
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="row-text">
+                                <span class="row-label" id="lbl-sync-tv">{{ $t('settings.syncTv') }}</span>
+                                <p class="row-caption">{{ $t('settings.syncTvCaption') }}</p>
+                            </div>
+                            <div class="row-control">
+                                <ToggleSwitch :modelValue="mediaSync.tv" :disabled="mediaSyncSaving" aria-labelledby="lbl-sync-tv" @update:modelValue="(v) => updateMediaSync('tv', v)" />
+                            </div>
                         </div>
 
                         <div class="setting-row divided-row">

@@ -290,11 +290,12 @@ func (a *App) SaveServerURL(serverURL string) error {
 	return nil
 }
 
-// StartSessionPolling begins polling the Plex server for music sessions.
+// StartSessionPolling begins polling the Plex server for playback sessions.
 // This method creates a background poller that periodically checks for active
-// music playback and emits Wails events when the session state changes:
-//   - PlaybackUpdated: Emitted when music is playing or track changes
-//   - PlaybackStopped: Emitted when music playback stops
+// playback — music, films and TV episodes, per the configured media types —
+// and emits Wails events when the session state changes:
+//   - PlaybackUpdated: Emitted when something is playing or the item changes
+//   - PlaybackStopped: Emitted when playback stops
 //
 // Polling uses the configured interval (default 2 seconds per NFR4).
 // Each poll completes within 500ms (NFR5).
@@ -328,9 +329,11 @@ func (a *App) StartSessionPolling() error {
 		return errors.New(errors.PLEX_CONN_FAILED, "plex client cannot supply sessions")
 	}
 
+	mediaTypes := a.config.EnabledMediaTypes()
 	sessionCh := a.polling.Start(pollingConfig{
 		Source:      client,
 		UserID:      a.config.SelectedPlexUserID,
+		MediaTypes:  mediaTypes,
 		Interval:    a.pollingInterval(),
 		OnError:     a.onPlexPollError,
 		OnRecovered: a.onPlexPollRecovered,
@@ -340,7 +343,8 @@ func (a *App) StartSessionPolling() error {
 		return nil
 	}
 
-	log.Printf("Session polling started: user=%s, interval=%v", a.config.SelectedPlexUserID, a.pollingInterval())
+	log.Printf("Session polling started: user=%s, interval=%v, media=%v",
+		a.config.SelectedPlexUserID, a.pollingInterval(), mediaTypes)
 
 	// Start goroutine to handle session updates
 	go a.handleSessionUpdates(sessionCh)
@@ -398,7 +402,7 @@ func (a *App) onPlexPollRecovered() {
 // discord observer is gated by the manual-pause flag and the
 // hide-when-paused config, and the event emitter always fires last so
 // the frontend sees the state after all side effects have run.
-func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MusicSession) {
+func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MediaSession) {
 	observers := []SessionObserver{
 		newSessionCacheObserver(a.sessions),
 		newHistoryObserver(a.history),
@@ -489,10 +493,10 @@ func (a *App) GetPollingInterval() int {
 	return a.config.PollingInterval
 }
 
-// GetCurrentSession returns the current music session if music is playing.
-// Returns nil if no music is currently playing.
+// GetCurrentSession returns the session currently playing — a track, a film or
+// a TV episode — or nil when nothing is.
 // This is used by the frontend to restore playback state after page refresh.
-func (a *App) GetCurrentSession() *plex.MusicSession {
+func (a *App) GetCurrentSession() *plex.MediaSession {
 	return a.sessions.Get()
 }
 

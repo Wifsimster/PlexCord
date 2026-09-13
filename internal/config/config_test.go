@@ -155,3 +155,88 @@ func TestLoginStartsMinimized(t *testing.T) {
 		t.Error("explicit false should open the window on login")
 	}
 }
+
+func TestEnabledMediaTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		persisted []string
+		want      []string
+	}{
+		{
+			// A config written before PlexCord handled video has no list at all.
+			name:      "unset means every kind",
+			persisted: nil,
+			want:      []string{"music", "movie", "tv"},
+		},
+		{
+			name:      "an empty list means every kind",
+			persisted: []string{},
+			want:      []string{"music", "movie", "tv"},
+		},
+		{
+			name:      "a selection is honoured",
+			persisted: []string{"movie", "tv"},
+			want:      []string{"movie", "tv"},
+		},
+		{
+			// A hand-edited config must not ask the poller for a type nothing
+			// can render.
+			name:      "unknown values are dropped",
+			persisted: []string{"music", "podcast"},
+			want:      []string{"music"},
+		},
+		{
+			name:      "only unknown values fall back to every kind",
+			persisted: []string{"podcast"},
+			want:      []string{"music", "movie", "tv"},
+		},
+		{
+			// The settings UI presents them in one order; the stored order
+			// must not leak into what the poller is asked for.
+			name:      "the canonical order is used",
+			persisted: []string{"tv", "music"},
+			want:      []string{"music", "tv"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{PresenceMediaTypes: tt.persisted}
+			got := cfg.EnabledMediaTypes()
+			if len(got) != len(tt.want) {
+				t.Fatalf("EnabledMediaTypes() = %v, want %v", got, tt.want)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Fatalf("EnabledMediaTypes() = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestIsMediaTypeEnabled(t *testing.T) {
+	cfg := &Config{PresenceMediaTypes: []string{"music"}}
+
+	if !cfg.IsMediaTypeEnabled("music") {
+		t.Error("IsMediaTypeEnabled(music) = false for a config that selected it")
+	}
+	if cfg.IsMediaTypeEnabled("movie") {
+		t.Error("IsMediaTypeEnabled(movie) = true for a config that did not select it")
+	}
+}
+
+func TestEnabledMediaTypesDoesNotAliasTheDefault(t *testing.T) {
+	// The caller hands the slice to the poller; mutating it must not rewrite
+	// the package default for every later call.
+	cfg := &Config{}
+	got := cfg.EnabledMediaTypes()
+	got[0] = "tampered"
+
+	if AllMediaTypes[0] != "music" {
+		t.Errorf("AllMediaTypes was mutated through a returned slice: %v", AllMediaTypes)
+	}
+	if cfg.EnabledMediaTypes()[0] != "music" {
+		t.Error("a later call saw the tampered value")
+	}
+}

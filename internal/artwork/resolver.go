@@ -11,7 +11,6 @@ package artwork
 import (
 	"context"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -38,13 +37,15 @@ type Resolver struct {
 }
 
 // Source is one place artwork can be looked up. Implementations must return an
-// empty string on a miss (not an error) and must respect ctx cancellation.
+// empty string on a miss (not an error) and must respect ctx cancellation. A
+// source that does not cover the query's media type misses, which is how the
+// music-only providers sit in the same chain as the video-capable ones.
 //
 // The interface is a single method so a plain function can be a Source; see
 // SourceFunc.
 type Source interface {
-	// Lookup returns a public HTTPS artwork URL for the artist/album, or "".
-	Lookup(ctx context.Context, artist, album string) string
+	// Lookup returns a public HTTPS artwork URL for the query, or "".
+	Lookup(ctx context.Context, q Query) string
 	// Name identifies the source in logs and tests.
 	Name() string
 }
@@ -52,12 +53,12 @@ type Source interface {
 // SourceFunc adapts a plain function to the Source interface.
 type SourceFunc struct {
 	SourceName string
-	Fn         func(ctx context.Context, artist, album string) string
+	Fn         func(ctx context.Context, q Query) string
 }
 
 // Lookup calls the wrapped function.
-func (f SourceFunc) Lookup(ctx context.Context, artist, album string) string {
-	return f.Fn(ctx, artist, album)
+func (f SourceFunc) Lookup(ctx context.Context, q Query) string {
+	return f.Fn(ctx, q)
 }
 
 // Name returns the source's name.
@@ -126,29 +127,27 @@ func NewResolver(opts ...Option) *Resolver {
 	return r
 }
 
-// cacheKey builds a stable, case-insensitive key for an artist/album pair.
-func cacheKey(artist, album string) string {
-	return strings.ToLower(strings.TrimSpace(artist)) + "\x00" + strings.ToLower(strings.TrimSpace(album))
-}
-
-// Cached returns a previously resolved URL for artist/album without performing
-// any network request. The second result reports whether the pair was cached.
+// Cached returns a previously resolved URL for the query without performing any
+// network request. The second result reports whether the query was cached.
 // It is used for the synchronous fast path so a known cover shows instantly.
-func (r *Resolver) Cached(artist, album string) (string, bool) {
-	if artist == "" && album == "" {
+func (r *Resolver) Cached(q Query) (string, bool) {
+	q = q.normalized()
+	if q.isEmpty() {
 		return "", false
 	}
-	return r.cache.get(cacheKey(artist, album))
+	return r.cache.get(q.cacheKey())
 }
 
-// Resolve returns a public HTTPS artwork URL for the given artist/album, or an
-// empty string if none is found. Results (including misses) are cached. The
-// returned URL is never a Plex URL and never contains a Plex token.
-func (r *Resolver) Resolve(ctx context.Context, artist, album string) (string, error) {
-	if strings.TrimSpace(artist) == "" && strings.TrimSpace(album) == "" {
+// Resolve returns a public HTTPS artwork URL for the given query — an album
+// cover, a film poster, a show's art — or an empty string if none is found.
+// Results (including misses) are cached. The returned URL is never a Plex URL
+// and never contains a Plex token.
+func (r *Resolver) Resolve(ctx context.Context, q Query) (string, error) {
+	q = q.normalized()
+	if q.isEmpty() {
 		return "", nil
 	}
-	key := cacheKey(artist, album)
+	key := q.cacheKey()
 	if url, ok := r.cache.get(key); ok {
 		return url, nil
 	}
@@ -160,7 +159,7 @@ func (r *Resolver) Resolve(ctx context.Context, artist, album string) (string, e
 			// actually established, or the next poll would skip the lookup.
 			return "", ctx.Err()
 		}
-		if url := source.Lookup(ctx, artist, album); url != "" {
+		if url := source.Lookup(ctx, q); url != "" {
 			r.cache.put(key, url)
 			return url, nil
 		}

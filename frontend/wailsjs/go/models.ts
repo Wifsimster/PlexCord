@@ -168,6 +168,22 @@ export namespace main {
 	        this.inErrorState = source["inErrorState"];
 	    }
 	}
+	export class MediaSyncSettings {
+	    music: boolean;
+	    movies: boolean;
+	    tv: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MediaSyncSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.music = source["music"];
+	        this.movies = source["movies"];
+	        this.tv = source["tv"];
+	    }
+	}
 	export class PresenceFormatSettings {
 	    detailsFormat: string;
 	    stateFormat: string;
@@ -205,40 +221,50 @@ export namespace main {
 
 export namespace plex {
 	
-	export class MusicSession {
+	export class MediaSession {
 	    sessionKey: string;
-	    userId: string;
-	    userName: string;
 	    type: string;
+	    mediaType: string;
 	    state: string;
-	    playerName: string;
-	    track: string;
-	    artist: string;
-	    album: string;
+	    title: string;
 	    thumb: string;
 	    thumbUrl: string;
 	    duration: number;
 	    viewOffset: number;
+	    year: number;
+	    artist: string;
+	    album: string;
+	    showTitle: string;
+	    season: number;
+	    episode: number;
+	    userId: string;
+	    userName: string;
+	    playerName: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new MusicSession(source);
+	        return new MediaSession(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sessionKey = source["sessionKey"];
-	        this.userId = source["userId"];
-	        this.userName = source["userName"];
 	        this.type = source["type"];
+	        this.mediaType = source["mediaType"];
 	        this.state = source["state"];
-	        this.playerName = source["playerName"];
-	        this.track = source["track"];
-	        this.artist = source["artist"];
-	        this.album = source["album"];
+	        this.title = source["title"];
 	        this.thumb = source["thumb"];
 	        this.thumbUrl = source["thumbUrl"];
 	        this.duration = source["duration"];
 	        this.viewOffset = source["viewOffset"];
+	        this.year = source["year"];
+	        this.artist = source["artist"];
+	        this.album = source["album"];
+	        this.showTitle = source["showTitle"];
+	        this.season = source["season"];
+	        this.episode = source["episode"];
+	        this.userId = source["userId"];
+	        this.userName = source["userName"];
+	        this.playerName = source["playerName"];
 	    }
 	}
 	export class PlexUser {

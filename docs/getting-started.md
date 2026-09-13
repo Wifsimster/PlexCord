@@ -1,6 +1,6 @@
 # Getting Started with PlexCord
 
-PlexCord bridges your Plex Media Server and Discord, displaying your music playback as Discord Rich Presence.
+PlexCord bridges your Plex Media Server and Discord, displaying what you play — music, films and TV episodes — as Discord Rich Presence.
 
 ## Quick Start
 
@@ -57,7 +57,7 @@ PlexCord will automatically discover Plex servers on your local network. Select 
 
 #### Step 3: Verify Connection
 
-PlexCord will test the connection to your Plex server and confirm that it can detect your music playback.
+PlexCord will test the connection to your Plex server and confirm that it can detect your playback.
 
 #### Step 4: Discord Setup (Automatic)
 
@@ -68,9 +68,29 @@ PlexCord automatically connects to your local Discord client. Just make sure Dis
 Once setup is complete:
 
 1. PlexCord runs in your system tray
-2. Start playing music in Plex or Plexamp
+2. Start playing something in Plex, Plexamp or any Plex client
 3. Your Discord status will update automatically
 4. When you stop playing, the status clears
+
+### What gets shared
+
+Out of the box PlexCord relays all three kinds of Plex playback, each in the
+shape Discord expects:
+
+| Playing | Discord shows |
+| --- | --- |
+| Music | *Listening to* — the track, then `by <artist> • <album>` |
+| A film | *Watching* — the title, then `Movie • <year>` |
+| A TV episode | *Watching* — the episode title, then `<show> • S01E02` |
+
+Settings → Presence has a switch per kind, so you can share your films while
+keeping your music to yourself (or the other way round). At least one has to
+stay on; to share nothing at all, pause the presence instead.
+
+Cover art and posters are looked up from public sources (iTunes, and
+MusicBrainz for music) rather than sent from your Plex server, whose artwork
+URLs carry your token and are not reachable from Discord. The "Fetch album art"
+switch turns that lookup off entirely, and the Plex logo is shown instead.
 
 ### Running in the background
 
@@ -115,7 +135,7 @@ You are told about it wherever you happen to be:
 
 - **Operating System**: Windows 10+, macOS 11+, or Linux (Ubuntu 20.04+)
 - **Discord**: Desktop application must be installed and running
-- **Plex**: Active Plex Media Server with music library
+- **Plex**: Active Plex Media Server
 
 ## Troubleshooting
 
@@ -134,7 +154,9 @@ You are told about it wherever you happen to be:
 
 ### PlexCord not detecting playback
 
-1. Make sure you're playing music (not videos or other media)
+1. Check that the kind you're playing is switched on in Settings → Presence
+   (music, movies and TV shows each have their own switch; photos are never
+   relayed)
 2. Check that PlexCord shows "Connected" status
 3. Try stopping and starting playback
 4. Check the polling interval in Settings (default: 5 seconds)

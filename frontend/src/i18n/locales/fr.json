@@ -95,7 +95,10 @@
         "sample": "Exemple",
         "paused": "En pause",
         "albumArtOf": "Pochette de l'album {album}",
-        "albumArt": "Pochette de l'album"
+        "albumArt": "Pochette de l'album",
+        "watchingOnPlex": "Regarde sur Plex",
+        "posterOf": "Affiche de {title}",
+        "poster": "Affiche"
     },
     "presenceStatus": {
         "plexUnreachable": "Plex injoignable",
@@ -431,6 +434,16 @@
             "es": "Español",
             "fr": "Français",
             "de": "Deutsch"
-        }
+        },
+        "syncMusic": "Synchroniser la musique",
+        "syncMusicCaption": "Afficher le titre, l’artiste et l’album que vous écoutez.",
+        "syncMovies": "Synchroniser les films",
+        "syncMoviesCaption": "Afficher le film que vous regardez, avec son année de sortie.",
+        "syncTv": "Synchroniser les séries",
+        "syncTvCaption": "Afficher la série, la saison et l’épisode que vous regardez.",
+        "mediaSyncNoneTitle": "Gardez-en au moins un",
+        "mediaSyncNoneDetail": "Tout désactiver n’enverrait plus rien à Discord — mettez plutôt la présence en pause.",
+        "mediaSyncFailed": "Échec de l’enregistrement du contenu à synchroniser",
+        "mediaSyncFailedDetail": "Le réglage n’a pas pu être enregistré."
     }
 }

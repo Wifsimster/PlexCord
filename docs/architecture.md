@@ -178,13 +178,13 @@ try {
 
 1. **Polling Timer** (backend) triggers every 2 seconds (configurable, default per NFR4)
 2. **Plex Client** fetches `/status/sessions` from Plex API
-3. **Session Parser** extracts music sessions and track metadata
+3. **Session Parser** extracts the playing session — track, film or episode — and its metadata
 4. **Event Emitter** sends update to frontend via Wails runtime
 5. **Playback Store** updates current track state
 6. **UI Components** reactively update to show new track
 7. **Discord Manager** (backend) updates Rich Presence
 
-### Music Playback to Discord Rich Presence Flow
+### Playback to Discord Rich Presence Flow
 
 ```mermaid
 sequenceDiagram
@@ -201,10 +201,10 @@ sequenceDiagram
     
     Timer->>Poller: Tick (interval elapsed)
     Poller->>PlexAPI: GET /status/sessions
-    PlexAPI-->>Poller: XML Response (Track metadata)
+    PlexAPI-->>Poller: XML Response (Track / Video metadata)
     
-    Poller->>Poller: Filter music sessions<br/>(type="track")
-    Poller->>Poller: sessionChanged()?<br/>(track/state/artist/album)
+    Poller->>Poller: Filter by configured media types<br/>(music / movie / tv)
+    Poller->>Poller: mediaSessionChanged()?<br/>(title/state/artist/album/show/S·E)
     
     alt Session Changed
         Poller->>Handler: Send to sessionChannel

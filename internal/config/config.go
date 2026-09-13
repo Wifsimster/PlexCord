@@ -55,6 +55,12 @@ type Config struct {
 	// explicit false; use ArtworkLookupEnabled() to read it.
 	PresenceArtworkLookup *bool `json:"presenceArtworkLookup,omitempty"`
 
+	// PresenceMediaTypes lists the kinds of Plex playback that reach Discord:
+	// any of "music", "movie" and "tv". An absent or empty list means all
+	// three, which is what a config written before PlexCord handled video
+	// carries — the feature arrives switched on rather than hidden.
+	PresenceMediaTypes []string `json:"presenceMediaTypes,omitempty"`
+
 	// Multi-server support
 	Servers []ServerConfig `json:"servers,omitempty"`
 
@@ -85,6 +91,40 @@ func (c *Config) ArtworkLookupEnabled() bool {
 	return c.PresenceArtworkLookup == nil || *c.PresenceArtworkLookup
 }
 
+// AllMediaTypes is every kind of playback PlexCord can relay, in the order the
+// settings UI presents them.
+var AllMediaTypes = []string{"music", "movie", "tv"}
+
+// EnabledMediaTypes reports which kinds of playback should reach Discord,
+// defaulting to all of them when the setting has never been persisted. Unknown
+// values are dropped so a hand-edited config cannot ask the poller for a media
+// type it has no builder for.
+func (c *Config) EnabledMediaTypes() []string {
+	enabled := make([]string, 0, len(AllMediaTypes))
+	for _, known := range AllMediaTypes {
+		for _, want := range c.PresenceMediaTypes {
+			if want == known {
+				enabled = append(enabled, known)
+				break
+			}
+		}
+	}
+	if len(enabled) == 0 {
+		return append([]string(nil), AllMediaTypes...)
+	}
+	return enabled
+}
+
+// IsMediaTypeEnabled reports whether one kind of playback reaches Discord.
+func (c *Config) IsMediaTypeEnabled(mediaType string) bool {
+	for _, t := range c.EnabledMediaTypes() {
+		if t == mediaType {
+			return true
+		}
+	}
+	return false
+}
+
 // LoginStartsMinimized reports whether a launch the OS performs at login
 // should come up in the background, defaulting to true when the field is unset
 // (legacy configs): nobody asked for a window at boot, so that is the behavior
@@ -111,6 +151,7 @@ func DefaultConfig() *Config {
 		PresenceStatusDisplay: "state",
 		PresenceArtworkLookup: boolPtr(true),
 		StartMinimizedOnLogin: boolPtr(true),
+		PresenceMediaTypes:    append([]string(nil), AllMediaTypes...),
 	}
 }
 

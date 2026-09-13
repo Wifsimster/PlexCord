@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"plexcord/internal/artwork"
 	"plexcord/internal/config"
 	"plexcord/internal/plex"
 )
@@ -15,8 +16,8 @@ type fakeArtworkResolver struct {
 	ok     bool
 }
 
-func (f *fakeArtworkResolver) Cached(string, string) (string, bool) { return f.cached, f.ok }
-func (f *fakeArtworkResolver) Resolve(context.Context, string, string) (string, error) {
+func (f *fakeArtworkResolver) Cached(artwork.Query) (string, bool) { return f.cached, f.ok }
+func (f *fakeArtworkResolver) Resolve(context.Context, artwork.Query) (string, error) {
 	return f.cached, nil
 }
 
@@ -29,16 +30,16 @@ func newPresenceTestApp(presence DiscordPresence, cfg *config.Config) *App {
 	return a
 }
 
-func newTokenedSession() *plex.MusicSession {
-	s := &plex.MusicSession{
-		Track:    "Song",
-		Artist:   "Artist",
-		Album:    "Album",
-		ThumbURL: "http://192.168.1.5:32400/library/metadata/1/thumb/1?X-Plex-Token=secret-token",
-		Duration: 240000,
+func newTokenedSession() *plex.MediaSession {
+	return &plex.MediaSession{
+		MediaType: plex.MediaTypeMusic,
+		Title:     "Song",
+		Artist:    "Artist",
+		Album:     "Album",
+		ThumbURL:  "http://192.168.1.5:32400/library/metadata/1/thumb/1?X-Plex-Token=secret-token",
+		Duration:  240000,
+		State:     "playing",
 	}
-	s.State = "playing"
-	return s
 }
 
 func TestUpdateDiscordFromSession_NeverSendsPlexToken(t *testing.T) {

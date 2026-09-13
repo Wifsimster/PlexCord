@@ -98,6 +98,10 @@ export function GetMinimizeToTray() {
   return window['go']['main']['App']['GetMinimizeToTray']();
 }
 
+export function GetMediaSync() {
+  return window['go']['main']['App']['GetMediaSync']();
+}
+
 export function GetPlexConnectionStatus() {
   return window['go']['main']['App']['GetPlexConnectionStatus']();
 }
@@ -252,6 +256,10 @@ export function SetPollingInterval(arg1) {
 
 export function SetPresenceFormat(arg1, arg2) {
   return window['go']['main']['App']['SetPresenceFormat'](arg1, arg2);
+}
+
+export function SetMediaSync(arg1) {
+  return window['go']['main']['App']['SetMediaSync'](arg1);
 }
 
 export function SetPresenceOptions(arg1) {

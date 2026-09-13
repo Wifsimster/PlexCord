@@ -2,16 +2,17 @@
 
 # PlexCord
 
-> Display your Plex music playback as Discord Rich Presence
+> Display your Plex playback — music, films and TV — as Discord Rich Presence
 
-PlexCord is a lightweight, cross-platform desktop application that bridges your Plex Media Server and Discord, showing what you're listening to in real-time. Built with Go + Vue 3 + Wails.
+PlexCord is a lightweight, cross-platform desktop application that bridges your Plex Media Server and Discord, showing what you're listening to or watching in real-time. Built with Go + Vue 3 + Wails.
 
 ![PlexCord Dashboard](docs/images/dashboard.png)
 
 ## Features
 
-- 🎵 Real-time Plex music playback detection
-- 💬 Discord Rich Presence integration (track, artist, album, artwork)
+- 🎵 Real-time Plex playback detection — music, movies and TV shows
+- 💬 Discord Rich Presence integration (track/artist/album, film and year, show with season & episode, artwork)
+- 🎚️ Pick what gets shared: each kind of media has its own switch
 - 🖥️ Cross-platform support (Windows, macOS, Linux)
 - 🔐 Secure credential storage (OS keychain integration)
 - ⚡ Lightweight single binary (<20MB)
@@ -50,7 +51,7 @@ current user (no administrator rights, shortcuts and an uninstall entry
 included); `PlexCord-windows-amd64.exe` is the same app as a portable
 executable. Both keep themselves up to date.
 
-**Requirements:** Plex Media Server with music library + Discord Desktop App
+**Requirements:** Plex Media Server + Discord Desktop App
 
 📖 **Detailed instructions:** [Getting Started Guide](docs/getting-started.md)
 
@@ -112,4 +113,4 @@ This project is not affiliated with or endorsed by Plex Inc. or Discord Inc.
 
 ---
 
-**Made with ❤️ for music lovers**
+**Made with ❤️ for music and movie lovers**

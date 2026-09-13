@@ -19,7 +19,7 @@ import (
 // can be added without modifying existing code (OCP).
 type SessionObserver interface {
 	// OnUpdate is called when a new or changed session is received.
-	OnUpdate(session *plex.MusicSession)
+	OnUpdate(session *plex.MediaSession)
 	// OnStop is called when playback stops (session becomes nil).
 	OnStop()
 }
@@ -35,7 +35,7 @@ func newSessionCacheObserver(cache *sessionCache) *sessionCacheObserver {
 	return &sessionCacheObserver{cache: cache}
 }
 
-func (o *sessionCacheObserver) OnUpdate(session *plex.MusicSession) {
+func (o *sessionCacheObserver) OnUpdate(session *plex.MediaSession) {
 	o.cache.Set(session)
 }
 
@@ -54,12 +54,18 @@ func newHistoryObserver(store HistoryStore) *historyObserver {
 	return &historyObserver{store: store}
 }
 
-func (o *historyObserver) OnUpdate(session *plex.MusicSession) {
+func (o *historyObserver) OnUpdate(session *plex.MediaSession) {
 	if o.store == nil {
 		return
 	}
+	// Listening history is about music. A film or an episode passing through
+	// the same pipeline is not an entry for it, and folding one in would make
+	// the "most played artist" statistic nonsense.
+	if session.MediaType != plex.MediaTypeMusic {
+		return
+	}
 	o.store.Add(history.Entry{
-		Track:     session.Track,
+		Track:     session.Title,
 		Artist:    session.Artist,
 		Album:     session.Album,
 		Duration:  session.Duration,
@@ -83,7 +89,7 @@ func newEventEmitterObserver(bus events.Bus) *eventEmitterObserver {
 	return &eventEmitterObserver{bus: bus}
 }
 
-func (o *eventEmitterObserver) OnUpdate(session *plex.MusicSession) {
+func (o *eventEmitterObserver) OnUpdate(session *plex.MediaSession) {
 	o.bus.Emit(events.PlaybackUpdated, session)
 }
 
@@ -100,7 +106,7 @@ func (o *eventEmitterObserver) OnStop() {
 // we delegate to small hook functions the App provides, keeping the
 // observer testable without the App.
 type discordPresenceObserver struct {
-	update        func(session *plex.MusicSession) // wraps updateDiscordFromSession
+	update        func(session *plex.MediaSession) // wraps updateDiscordFromSession
 	clearOnStop   func()                           // wraps clearDiscordOnStop
 	isManualPause func() bool                      // returns true when presence paused
 	scheduleHide  func()                           // schedules hide-when-paused timer
@@ -109,7 +115,7 @@ type discordPresenceObserver struct {
 	log           func(format string, args ...any)
 }
 
-func (o *discordPresenceObserver) OnUpdate(session *plex.MusicSession) {
+func (o *discordPresenceObserver) OnUpdate(session *plex.MediaSession) {
 	if o.isManualPause() {
 		// Manually paused — skip presence updates entirely
 		return
@@ -131,6 +137,19 @@ func (o *discordPresenceObserver) OnStop() {
 	o.clearOnStop()
 }
 
+// sessionLogLine describes a session the way its media type reads: an album
+// track by its artist, an episode by its show, a film by its title.
+func sessionLogLine(session *plex.MediaSession) string {
+	switch session.MediaType {
+	case plex.MediaTypeMusic:
+		return session.Title + " - " + session.Artist
+	case plex.MediaTypeTV:
+		return session.ShowTitle + " - " + session.Title
+	default:
+		return session.Title
+	}
+}
+
 // ----------------------------------------------------------------------------
 // Pipeline runner
 // ----------------------------------------------------------------------------
@@ -138,13 +157,13 @@ func (o *discordPresenceObserver) OnStop() {
 // runSessionPipeline consumes session updates from the channel and dispatches
 // each to the ordered list of observers. This replaces the previous
 // handleSessionUpdates god function. The loop exits when the channel closes.
-func runSessionPipeline(sessionCh <-chan *plex.MusicSession, observers []SessionObserver) {
-	var lastSession *plex.MusicSession
+func runSessionPipeline(sessionCh <-chan *plex.MediaSession, observers []SessionObserver) {
+	var lastSession *plex.MediaSession
 
 	for session := range sessionCh {
 		switch {
 		case session != nil:
-			log.Printf("Playback detected: %s - %s", session.Track, session.Artist)
+			log.Printf("Playback detected (%s): %s", session.MediaType, sessionLogLine(session))
 			for _, o := range observers {
 				o.OnUpdate(session)
 			}
