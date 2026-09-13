@@ -3,3 +3,6 @@
 build/bin
 tmp
 __pycache__
+
+# Go build output from a local `go build ./`
+/plexcord
