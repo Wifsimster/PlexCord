@@ -39,7 +39,7 @@ export function GetAutoUpdateCheck():Promise<boolean>;
 
 export function GetConnectionHistory():Promise<main.ConnectionHistory>;
 
-export function GetCurrentSession():Promise<plex.MusicSession>;
+export function GetCurrentSession():Promise<plex.MediaSession>;
 
 export function GetDefaultDiscordClientID():Promise<string>;
 
@@ -56,6 +56,8 @@ export function GetListeningHistory(arg1:number):Promise<Array<history.Entry>>;
 export function GetListeningStats():Promise<history.Stats>;
 
 export function GetMinimizeToTray():Promise<boolean>;
+
+export function GetMediaSync():Promise<main.MediaSyncSettings>;
 
 export function GetPlexConnectionStatus():Promise<main.PlexConnectionStatus>;
 
@@ -134,6 +136,8 @@ export function SetMinimizeToTray(arg1:boolean):Promise<void>;
 export function SetPollingInterval(arg1:number):Promise<void>;
 
 export function SetPresenceFormat(arg1:string,arg2:string):Promise<void>;
+
+export function SetMediaSync(arg1:main.MediaSyncSettings):Promise<void>;
 
 export function SetPresenceOptions(arg1:main.PresenceOptions):Promise<void>;
 

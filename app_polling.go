@@ -11,16 +11,16 @@ import (
 
 // sessionCache holds the session currently playing so the frontend can restore
 // its dashboard after a page refresh. It replaces a raw
-// (*sync.RWMutex, **plex.MusicSession) pair threaded through the observer:
+// (*sync.RWMutex, **plex.MediaSession) pair threaded through the observer:
 // the lock and the value it guards now travel together, and no caller can hold
 // one without the other.
 type sessionCache struct {
 	mu      sync.RWMutex
-	current *plex.MusicSession
+	current *plex.MediaSession
 }
 
 // Set records the session now playing.
-func (c *sessionCache) Set(session *plex.MusicSession) {
+func (c *sessionCache) Set(session *plex.MediaSession) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.current = session
@@ -34,7 +34,7 @@ func (c *sessionCache) Clear() {
 }
 
 // Get returns the session currently playing, or nil.
-func (c *sessionCache) Get() *plex.MusicSession {
+func (c *sessionCache) Get() *plex.MediaSession {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.current
@@ -62,6 +62,9 @@ type pollingConfig struct {
 	Source plex.SessionSource
 	// UserID is the Plex account whose playback is watched.
 	UserID string
+	// MediaTypes is the kinds of playback to watch ("music", "movie", "tv").
+	// Empty means every kind the poller can read.
+	MediaTypes []string
 	// Interval is the poll period; the poller clamps it to [1s, 60s].
 	Interval time.Duration
 	// OnError fires on the transition into a failed-connection state.
@@ -73,7 +76,7 @@ type pollingConfig struct {
 // Start begins polling and returns the channel of session updates. It returns
 // nil when a poller is already running, so the caller knows there is nothing
 // new to consume.
-func (p *pollingController) Start(cfg pollingConfig) <-chan *plex.MusicSession {
+func (p *pollingController) Start(cfg pollingConfig) <-chan *plex.MediaSession {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -84,12 +87,13 @@ func (p *pollingController) Start(cfg pollingConfig) <-chan *plex.MusicSession {
 
 	poller := plex.NewPoller(cfg.Source, cfg.UserID, cfg.Interval)
 	poller.SetErrorCallbacks(cfg.OnError, cfg.OnRecovered)
+	poller.SetMediaTypes(cfg.MediaTypes)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.poller = poller
 	p.stop = cancel
 
-	return poller.Start(ctx)
+	return poller.StartMedia(ctx)
 }
 
 // Stop stops polling. Safe to call when nothing is running.

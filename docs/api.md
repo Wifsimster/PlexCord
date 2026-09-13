@@ -75,41 +75,59 @@ try {
 
 ---
 
-### `GetCurrentSession() (Session, error)`
+### `GetCurrentSession() *MediaSession`
 
-Gets the current music playback session.
+Gets the session currently playing — a track, a film or a TV episode — or
+`null` when nothing is.
 
 **Returns:**
 
-- `Session` - Current playback session
-- `error` - Error if no session or fetch fails
+- `MediaSession` - Current playback session, or `null`
 
-**Session Type:**
+**MediaSession Type:**
 
 ```go
-type Session struct {
-    SessionKey  string `json:"sessionKey"`   // Unique session ID
-    Title       string `json:"title"`        // Track title
-    Artist      string `json:"artist"`       // Track artist
-    Album       string `json:"album"`        // Album name
-    AlbumArt    string `json:"albumArt"`     // Album art URL
-    Duration    int    `json:"duration"`     // Track duration (ms)
-    Position    int    `json:"position"`     // Current position (ms)
-    State       string `json:"state"`        // playing, paused, stopped
-    UserID      string `json:"userId"`       // Plex user ID
+type MediaSession struct {
+    SessionKey string `json:"sessionKey"` // Unique session ID
+    Type       string `json:"type"`       // Plex type: track, movie, episode, photo
+    MediaType  string `json:"mediaType"`  // Simplified: music, movie, tv, photo
+    State      string `json:"state"`      // playing, paused, stopped
+
+    Title      string `json:"title"`      // Track, film or episode title
+    Thumb      string `json:"thumb"`      // Relative artwork path from Plex
+    ThumbURL   string `json:"thumbUrl"`   // Absolute artwork URL (carries the Plex token)
+    Duration   int64  `json:"duration"`   // Duration (ms)
+    ViewOffset int64  `json:"viewOffset"` // Current position (ms)
+    Year       int    `json:"year"`       // Release year
+
+    Artist string `json:"artist"` // Music only
+    Album  string `json:"album"`  // Music only
+
+    ShowTitle string `json:"showTitle"` // TV episodes only
+    Season    int    `json:"season"`    // TV episodes only
+    Episode   int    `json:"episode"`   // TV episodes only
+
+    UserID     string `json:"userId"`
+    UserName   string `json:"userName"`
+    PlayerName string `json:"playerName"`
 }
 ```
+
+`ThumbURL` embeds the Plex token and is for the local UI only — it is never
+sent to Discord. See `GetPresenceOptions` for the public artwork lookup.
 
 **Example:**
 
 ```javascript
 import { GetCurrentSession } from '../wailsjs/go/main/App'
 
-try {
-  const session = await GetCurrentSession()
-  console.log(`Now playing: ${session.artist} - ${session.title}`)
-} catch (error) {
+const session = await GetCurrentSession()
+if (!session) {
   console.log('No active session')
+} else if (session.mediaType === 'tv') {
+  console.log(`Watching: ${session.showTitle} S${session.season}E${session.episode}`)
+} else {
+  console.log(`Now playing: ${session.artist} - ${session.title}`)
 }
 ```
 
@@ -258,6 +276,33 @@ type Config struct {
     SetupComplete    bool   `json:"setupComplete"`
 }
 ```
+
+---
+
+### `GetMediaSync() MediaSyncSettings`
+
+Reports which kinds of Plex playback are relayed to Discord.
+
+**Returns:**
+
+- `MediaSyncSettings` - `{ music, movies, tv }`, all true by default
+
+---
+
+### `SetMediaSync(settings MediaSyncSettings) error`
+
+Updates which kinds of playback are relayed, and restarts a running poller so
+the change takes effect immediately.
+
+**Parameters:**
+
+- `settings` - `{ music, movies, tv }`
+
+**Returns:**
+
+- `error` - `CONFIG_WRITE_FAILED` when every kind is switched off (an empty
+  selection means "all of them" in the stored config, so it is rejected rather
+  than silently ignored), or when the config cannot be saved
 
 ---
 

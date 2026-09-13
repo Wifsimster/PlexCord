@@ -152,8 +152,15 @@ func (a *App) SaveDiscordClientID(clientID string) error {
 // UpdateDiscordPresence updates the Discord Rich Presence with current playback info.
 // This is called internally when playback state changes.
 func (a *App) UpdateDiscordPresence(track, artist, album, state string, duration, position int64) error {
-	session := &plex.MusicSession{Track: track, Artist: artist, Album: album, Duration: duration, ViewOffset: position}
-	session.State = state
+	session := &plex.MediaSession{
+		MediaType:  plex.MediaTypeMusic,
+		Title:      track,
+		Artist:     artist,
+		Album:      album,
+		State:      state,
+		Duration:   duration,
+		ViewOffset: position,
+	}
 
 	if !a.discord.IsConnected() {
 		return errors.New(errors.DISCORD_CONN_FAILED, "not connected to Discord")
@@ -195,10 +202,10 @@ func (a *App) TestDiscordPresence() error {
 	return nil
 }
 
-// updateDiscordFromSession publishes a music session to Discord. The
+// updateDiscordFromSession publishes a playback session to Discord. The
 // mechanics — cached-vs-background artwork, silent reconnect, the generation
 // guard on a late cover — live in discordService.
-func (a *App) updateDiscordFromSession(session *plex.MusicSession) {
+func (a *App) updateDiscordFromSession(session *plex.MediaSession) {
 	a.discord.Publish(session)
 }
 

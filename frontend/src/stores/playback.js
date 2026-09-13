@@ -5,8 +5,8 @@ import { usePlexConnectionStore } from './plexConnection';
 
 /**
  * Playback Store
- * Manages the current playback state and track information from Plex.
- * Subscribes to Wails events for real-time updates.
+ * Manages the current playback state and metadata from Plex — a track, a film
+ * or a TV episode. Subscribes to Wails events for real-time updates.
  */
 export const usePlaybackStore = defineStore('playback', {
     state: () => ({
@@ -24,7 +24,7 @@ export const usePlaybackStore = defineStore('playback', {
 
     getters: {
         /**
-         * Check if music is currently active (playing or paused)
+         * Check if something is currently active (playing or paused)
          * @returns {boolean}
          */
         hasActiveSession: (state) => {
@@ -132,8 +132,13 @@ export const usePlaybackStore = defineStore('playback', {
         },
 
         /**
-         * Set the current track from a MusicSession event
-         * @param {Object} session - MusicSession object from backend
+         * Set the current item from a MediaSession event.
+         *
+         * `track` is kept alongside `title` because every consumer reads it:
+         * for a film or an episode it holds the title, which is what those
+         * consumers are showing anyway.
+         *
+         * @param {Object} session - MediaSession object from backend
          */
         setTrack(session) {
             if (!session) {
@@ -141,11 +146,19 @@ export const usePlaybackStore = defineStore('playback', {
                 return;
             }
 
+            const title = session.title ?? session.track ?? '';
+
             this.currentTrack = {
                 sessionKey: session.sessionKey,
-                track: session.track,
+                mediaType: session.mediaType || 'music',
+                title,
+                track: title,
                 artist: session.artist,
                 album: session.album,
+                year: session.year,
+                showTitle: session.showTitle,
+                season: session.season,
+                episode: session.episode,
                 thumb: session.thumb,
                 thumbUrl: session.thumbUrl,
                 duration: session.duration,
@@ -161,7 +174,7 @@ export const usePlaybackStore = defineStore('playback', {
         },
 
         /**
-         * Clear the current track (playback stopped)
+         * Clear the current item (playback stopped)
          */
         clearTrack() {
             this.currentTrack = null;

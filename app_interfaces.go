@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"plexcord/internal/artwork"
 	"plexcord/internal/config"
 	"plexcord/internal/discord"
 	"plexcord/internal/history"
@@ -84,14 +85,15 @@ type DiscordPresence interface {
 	PresenceWriter
 }
 
-// ArtworkResolver resolves a publicly reachable album-art URL for a track so
-// covers render on Discord without leaking the Plex token. The production
-// implementation is *artwork.Resolver; tests can inject a fake.
+// ArtworkResolver resolves a publicly reachable artwork URL — an album cover, a
+// film poster, a show's art — so pictures render on Discord without leaking the
+// Plex token. The production implementation is *artwork.Resolver; tests can
+// inject a fake.
 type ArtworkResolver interface {
 	// Cached returns a previously resolved URL without any network request.
-	Cached(artist, album string) (string, bool)
+	Cached(q artwork.Query) (string, bool)
 	// Resolve returns a public HTTPS artwork URL, or "" if none is found.
-	Resolve(ctx context.Context, artist, album string) (string, error)
+	Resolve(ctx context.Context, q artwork.Query) (string, error)
 }
 
 // ----------------------------------------------------------------------------

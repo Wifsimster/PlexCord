@@ -31,7 +31,7 @@ func TestResolve_ITunesHit(t *testing.T) {
 	defer srv.Close()
 
 	r := newTestResolver(srv.URL)
-	url, err := r.Resolve(context.Background(), "Queen", "A Night at the Opera")
+	url, err := r.Resolve(context.Background(), MusicQuery("Queen", "A Night at the Opera"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestResolve_CachesAndServesFromCache(t *testing.T) {
 
 	r := newTestResolver(srv.URL)
 	for i := 0; i < 3; i++ {
-		if _, err := r.Resolve(context.Background(), "A", "B"); err != nil {
+		if _, err := r.Resolve(context.Background(), MusicQuery("A", "B")); err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
 	}
@@ -66,7 +66,7 @@ func TestResolve_CachesAndServesFromCache(t *testing.T) {
 	}
 
 	// Cached() must return without any network call.
-	if url, ok := r.Cached("A", "B"); !ok || url != "https://cdn/512x512bb.jpg" {
+	if url, ok := r.Cached(MusicQuery("A", "B")); !ok || url != "https://cdn/512x512bb.jpg" {
 		t.Errorf("Cached() = %q, %v; want the resolved URL", url, ok)
 	}
 }
@@ -88,7 +88,7 @@ func TestResolve_CoverArtFallback(t *testing.T) {
 	defer srv.Close()
 
 	r := newTestResolver(srv.URL)
-	url, err := r.Resolve(context.Background(), "Obscure Artist", "Rare Album")
+	url, err := r.Resolve(context.Background(), MusicQuery("Obscure Artist", "Rare Album"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestResolve_CoverArtMissingImageIsMiss(t *testing.T) {
 	defer srv.Close()
 
 	r := newTestResolver(srv.URL)
-	url, err := r.Resolve(context.Background(), "X", "Y")
+	url, err := r.Resolve(context.Background(), MusicQuery("X", "Y"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestResolve_TotalMiss(t *testing.T) {
 	defer srv.Close()
 
 	r := newTestResolver(srv.URL)
-	url, err := r.Resolve(context.Background(), "Nobody", "Nothing")
+	url, err := r.Resolve(context.Background(), MusicQuery("Nobody", "Nothing"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestResolve_TotalMiss(t *testing.T) {
 		t.Errorf("expected empty URL on total miss, got %q", url)
 	}
 	// A miss is cached as "" so we don't re-query every poll.
-	if url, ok := r.Cached("Nobody", "Nothing"); !ok || url != "" {
+	if url, ok := r.Cached(MusicQuery("Nobody", "Nothing")); !ok || url != "" {
 		t.Errorf("expected negative result cached, got %q, %v", url, ok)
 	}
 }
@@ -158,7 +158,7 @@ func TestResolve_NeverReturnsPlexToken(t *testing.T) {
 	defer srv.Close()
 
 	r := newTestResolver(srv.URL)
-	url, _ := r.Resolve(context.Background(), "Artist", "Album")
+	url, _ := r.Resolve(context.Background(), MusicQuery("Artist", "Album"))
 	if strings.Contains(url, "X-Plex-Token") {
 		t.Errorf("resolved URL must never contain a Plex token: %q", url)
 	}
@@ -166,7 +166,7 @@ func TestResolve_NeverReturnsPlexToken(t *testing.T) {
 
 func TestResolve_EmptyInputs(t *testing.T) {
 	r := NewResolver(WithMusicBrainzInterval(0))
-	if url, err := r.Resolve(context.Background(), "", ""); err != nil || url != "" {
+	if url, err := r.Resolve(context.Background(), MusicQuery("", "")); err != nil || url != "" {
 		t.Errorf("empty inputs should yield empty URL, got %q, %v", url, err)
 	}
 }
@@ -185,5 +185,109 @@ func TestLRUCache_Eviction(t *testing.T) {
 	}
 	if v, ok := c.get("c"); !ok || v != "3" {
 		t.Errorf("expected 'c'='3', got %q, %v", v, ok)
+	}
+}
+
+func TestResolve_MoviePoster(t *testing.T) {
+	var gotEntity, gotTerm string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		gotEntity = req.URL.Query().Get("entity")
+		gotTerm = req.URL.Query().Get("term")
+		_, _ = w.Write([]byte(`{"results":[{"artworkUrl100":"https://cdn/poster/100x100bb.jpg"}]}`))
+	}))
+	defer srv.Close()
+
+	r := newTestResolver(srv.URL)
+	url, err := r.Resolve(context.Background(), MovieQuery("Blade Runner", 1982))
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if url != "https://cdn/poster/512x512bb.jpg" {
+		t.Errorf("Resolve() = %q, want the upscaled poster", url)
+	}
+	if gotEntity != "movie" {
+		t.Errorf("entity = %q, want movie — an album search returns the wrong artwork", gotEntity)
+	}
+	if gotTerm != "Blade Runner" {
+		t.Errorf("term = %q, want the film title", gotTerm)
+	}
+}
+
+func TestResolve_ShowPosterSearchesTheShowNotTheEpisode(t *testing.T) {
+	var gotEntity, gotTerm string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		gotEntity = req.URL.Query().Get("entity")
+		gotTerm = req.URL.Query().Get("term")
+		_, _ = w.Write([]byte(`{"results":[{"artworkUrl100":"https://cdn/show/100x100bb.jpg"}]}`))
+	}))
+	defer srv.Close()
+
+	r := newTestResolver(srv.URL)
+	url, err := r.Resolve(context.Background(), ShowQuery("Severance", 2022))
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if url != "https://cdn/show/512x512bb.jpg" {
+		t.Errorf("Resolve() = %q, want the upscaled show art", url)
+	}
+	if gotEntity != "tvSeason" {
+		t.Errorf("entity = %q, want tvSeason", gotEntity)
+	}
+	if gotTerm != "Severance" {
+		t.Errorf("term = %q, want the show title", gotTerm)
+	}
+}
+
+func TestResolve_VideoSkipsCoverArtArchive(t *testing.T) {
+	// Cover Art Archive indexes music releases only. A film that iTunes misses
+	// must not cost a MusicBrainz round trip that can never answer.
+	var mbHits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.HasPrefix(req.URL.Path, "/ws/2/release/") {
+			mbHits++
+		}
+		_, _ = w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+
+	r := newTestResolver(srv.URL)
+	if _, err := r.Resolve(context.Background(), MovieQuery("An Unlisted Film", 0)); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if mbHits != 0 {
+		t.Errorf("a movie lookup queried MusicBrainz %d time(s); it indexes music only", mbHits)
+	}
+}
+
+func TestResolve_MediaTypeSeparatesCacheEntries(t *testing.T) {
+	// A film and an album that share a name are different pictures.
+	var searches int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		searches++
+		switch req.URL.Query().Get("entity") {
+		case "movie":
+			_, _ = w.Write([]byte(`{"results":[{"artworkUrl100":"https://cdn/film/100x100bb.jpg"}]}`))
+		default:
+			_, _ = w.Write([]byte(`{"results":[{"artworkUrl100":"https://cdn/album/100x100bb.jpg"}]}`))
+		}
+	}))
+	defer srv.Close()
+
+	r := newTestResolver(srv.URL)
+	album, _ := r.Resolve(context.Background(), MusicQuery("", "Purple Rain"))
+	film, _ := r.Resolve(context.Background(), MovieQuery("Purple Rain", 1984))
+
+	if album == film {
+		t.Errorf("album and film resolved to the same URL %q — the cache key ignores the media type", album)
+	}
+	if searches != 2 {
+		t.Errorf("upstream searched %d time(s), want 2 — one per media type", searches)
+	}
+}
+
+func TestResolve_EmptyVideoTitleIsAMiss(t *testing.T) {
+	r := NewResolver(WithMusicBrainzInterval(0))
+	if url, err := r.Resolve(context.Background(), MovieQuery("", 0)); err != nil || url != "" {
+		t.Errorf("Resolve() = (%q, %v), want a clean miss with nothing to search on", url, err)
 	}
 }

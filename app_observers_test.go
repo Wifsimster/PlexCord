@@ -11,10 +11,10 @@ func TestSessionCacheObserver_StoresAndClearsSession(t *testing.T) {
 	cache := &sessionCache{}
 	obs := newSessionCacheObserver(cache)
 
-	session := &plex.MusicSession{Track: "Song", Artist: "Artist"}
+	session := &plex.MediaSession{MediaType: plex.MediaTypeMusic, Title: "Song", Artist: "Artist"}
 	obs.OnUpdate(session)
 
-	if got := cache.Get(); got == nil || got.Track != "Song" {
+	if got := cache.Get(); got == nil || got.Title != "Song" {
 		t.Errorf("expected cached session, got %v", got)
 	}
 
@@ -28,7 +28,7 @@ func TestEventEmitterObserver_EmitsEvents(t *testing.T) {
 	bus := events.NewRecordingBus()
 	obs := newEventEmitterObserver(bus)
 
-	session := &plex.MusicSession{Track: "Song"}
+	session := &plex.MediaSession{MediaType: plex.MediaTypeMusic, Title: "Song"}
 	obs.OnUpdate(session)
 	obs.OnStop()
 
@@ -44,7 +44,7 @@ func TestDiscordPresenceObserver_SkipsWhenManuallyPaused(t *testing.T) {
 	updateCalled := false
 	clearCalled := false
 	obs := &discordPresenceObserver{
-		update:        func(*plex.MusicSession) { updateCalled = true },
+		update:        func(*plex.MediaSession) { updateCalled = true },
 		clearOnStop:   func() { clearCalled = true },
 		isManualPause: func() bool { return true },
 		scheduleHide:  func() {},
@@ -53,7 +53,7 @@ func TestDiscordPresenceObserver_SkipsWhenManuallyPaused(t *testing.T) {
 		log:           func(string, ...any) {},
 	}
 
-	obs.OnUpdate(&plex.MusicSession{Session: plex.Session{State: "playing"}, Track: "Song"})
+	obs.OnUpdate(&plex.MediaSession{MediaType: plex.MediaTypeMusic, State: "playing", Title: "Song"})
 
 	if updateCalled {
 		t.Error("update should not be called when manually paused")
@@ -68,7 +68,7 @@ func TestDiscordPresenceObserver_SchedulesHideWhenPaused(t *testing.T) {
 	scheduleCalled := false
 	cancelCalled := false
 	obs := &discordPresenceObserver{
-		update:        func(*plex.MusicSession) { updateCalled = true },
+		update:        func(*plex.MediaSession) { updateCalled = true },
 		clearOnStop:   func() {},
 		isManualPause: func() bool { return false },
 		scheduleHide:  func() { scheduleCalled = true },
@@ -77,7 +77,7 @@ func TestDiscordPresenceObserver_SchedulesHideWhenPaused(t *testing.T) {
 		log:           func(string, ...any) {},
 	}
 
-	obs.OnUpdate(&plex.MusicSession{Session: plex.Session{State: "paused"}, Track: "Song"})
+	obs.OnUpdate(&plex.MediaSession{MediaType: plex.MediaTypeMusic, State: "paused", Title: "Song"})
 
 	if updateCalled {
 		t.Error("update should not be called when paused + hideOnPause")
@@ -94,7 +94,7 @@ func TestDiscordPresenceObserver_UpdatesOnPlayAfterPause(t *testing.T) {
 	updateCalled := false
 	cancelCalled := false
 	obs := &discordPresenceObserver{
-		update:        func(*plex.MusicSession) { updateCalled = true },
+		update:        func(*plex.MediaSession) { updateCalled = true },
 		clearOnStop:   func() {},
 		isManualPause: func() bool { return false },
 		scheduleHide:  func() {},
@@ -103,7 +103,7 @@ func TestDiscordPresenceObserver_UpdatesOnPlayAfterPause(t *testing.T) {
 		log:           func(string, ...any) {},
 	}
 
-	obs.OnUpdate(&plex.MusicSession{Session: plex.Session{State: "playing"}, Track: "Song"})
+	obs.OnUpdate(&plex.MediaSession{MediaType: plex.MediaTypeMusic, State: "playing", Title: "Song"})
 
 	if !updateCalled {
 		t.Error("update should be called when playing")
@@ -117,13 +117,13 @@ func TestRunSessionPipeline_DispatchesInOrder(t *testing.T) {
 	var order []string
 	recorder := func(name string) SessionObserver {
 		return &fakeObserver{
-			updateFn: func(*plex.MusicSession) { order = append(order, name+":update") },
+			updateFn: func(*plex.MediaSession) { order = append(order, name+":update") },
 			stopFn:   func() { order = append(order, name+":stop") },
 		}
 	}
 
-	ch := make(chan *plex.MusicSession, 3)
-	ch <- &plex.MusicSession{Track: "A"}
+	ch := make(chan *plex.MediaSession, 3)
+	ch <- &plex.MediaSession{MediaType: plex.MediaTypeMusic, Title: "A"}
 	ch <- nil
 	close(ch)
 
@@ -141,9 +141,29 @@ func TestRunSessionPipeline_DispatchesInOrder(t *testing.T) {
 }
 
 type fakeObserver struct {
-	updateFn func(*plex.MusicSession)
+	updateFn func(*plex.MediaSession)
 	stopFn   func()
 }
 
-func (f *fakeObserver) OnUpdate(s *plex.MusicSession) { f.updateFn(s) }
+func (f *fakeObserver) OnUpdate(s *plex.MediaSession) { f.updateFn(s) }
 func (f *fakeObserver) OnStop()                       { f.stopFn() }
+
+// TestHistoryObserverRecordsMusicOnly verifies a film passing through the same
+// pipeline does not land in the listening history, where it would make the
+// "most played artist" statistic nonsense.
+func TestHistoryObserverRecordsMusicOnly(t *testing.T) {
+	store := &fakeHistory{}
+	obs := newHistoryObserver(store)
+
+	obs.OnUpdate(&plex.MediaSession{MediaType: plex.MediaTypeMusic, Title: "Song", Artist: "Artist"})
+	obs.OnUpdate(&plex.MediaSession{MediaType: plex.MediaTypeMovie, Title: "Blade Runner"})
+	obs.OnUpdate(&plex.MediaSession{MediaType: plex.MediaTypeTV, Title: "Good News", ShowTitle: "Severance"})
+
+	entries := store.GetRecent(10)
+	if len(entries) != 1 {
+		t.Fatalf("history holds %d entries, want only the track", len(entries))
+	}
+	if entries[0].Track != "Song" {
+		t.Errorf("history entry = %q, want the track title", entries[0].Track)
+	}
+}

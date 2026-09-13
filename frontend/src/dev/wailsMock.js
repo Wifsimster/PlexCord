@@ -35,24 +35,59 @@ export function installWailsMock() {
     const plexError = scenario === 'error';
     const multiUsers = scenario === 'users';
     const updateSim = scenario === 'update';
+    const movieSim = scenario === 'movie';
+    const tvSim = scenario === 'tv';
 
     const listeners = new Map();
 
-    const session =
-        empty || plexError
-            ? null
-            : {
-                  sessionKey: 'mock-1',
-                  track: 'Midnight City',
-                  artist: 'M83',
-                  album: 'Hurry Up, We’re Dreaming',
-                  thumb: '/library/thumb/mock',
-                  thumbUrl: ALBUM_ART,
-                  duration: 243000,
-                  viewOffset: 97000,
-                  state: 'playing',
-                  playerName: 'Plexamp'
-              };
+    // ?mock=movie / ?mock=tv exercise the video presence; the default is music.
+    const musicSession = {
+        sessionKey: 'mock-1',
+        mediaType: 'music',
+        title: 'Midnight City',
+        artist: 'M83',
+        album: 'Hurry Up, We’re Dreaming',
+        thumb: '/library/thumb/mock',
+        thumbUrl: ALBUM_ART,
+        duration: 243000,
+        viewOffset: 97000,
+        state: 'playing',
+        playerName: 'Plexamp'
+    };
+    const movieSession = {
+        sessionKey: 'mock-movie',
+        mediaType: 'movie',
+        title: 'Blade Runner',
+        year: 1982,
+        thumb: '/library/thumb/mock-movie',
+        thumbUrl: ALBUM_ART,
+        duration: 7020000,
+        viewOffset: 2400000,
+        state: 'playing',
+        playerName: 'Plex for Apple TV'
+    };
+    const tvSession = {
+        sessionKey: 'mock-tv',
+        mediaType: 'tv',
+        title: 'Good News About Hell',
+        showTitle: 'Severance',
+        season: 1,
+        episode: 1,
+        year: 2022,
+        thumb: '/library/thumb/mock-tv',
+        thumbUrl: ALBUM_ART,
+        duration: 3300000,
+        viewOffset: 900000,
+        state: 'playing',
+        playerName: 'Plex Web'
+    };
+
+    let session = null;
+    if (!empty && !plexError) {
+        if (movieSim) session = { ...movieSession };
+        else if (tvSim) session = { ...tvSession };
+        else session = { ...musicSession };
+    }
 
     // ?mock=update — auto-download finishes ~2s after load
     const mockUpdateInfo = {
@@ -74,7 +109,8 @@ export function installWailsMock() {
         hideWhenPaused: false,
         hideWhenPausedDelay: 0,
         pollingInterval: 5,
-        presenceFormat: { detailsFormat: '{track}', stateFormat: 'by {artist}' },
+        presenceFormat: { detailsFormat: '', stateFormat: '' },
+        mediaSync: { music: true, movies: true, tv: true },
         discordClientId: '',
         servers: empty ? [] : [{ name: 'Home Server', url: 'http://192.168.1.10:32400', userId: '1', userName: 'demo-user', active: true }]
     };
@@ -175,6 +211,13 @@ export function installWailsMock() {
         GetPollingInterval: () => state.pollingInterval,
         SetPollingInterval: (v) => {
             state.pollingInterval = v;
+        },
+        GetMediaSync: () => ({ ...state.mediaSync }),
+        SetMediaSync: (v) => {
+            if (!v.music && !v.movies && !v.tv) {
+                throw new Error('at least one media type must be enabled');
+            }
+            state.mediaSync = { ...v };
         },
         GetPresenceFormat: () => ({ ...state.presenceFormat }),
         SetPresenceFormat: (details, stateFormat) => {

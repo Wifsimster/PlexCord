@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderPresenceFormat, renderPresenceLines } from '../presenceFormat';
+import { mediaTypeOf, renderPresenceFormat, renderPresenceLines } from '../presenceFormat';
 
 const track = {
     sessionKey: '1',
@@ -7,6 +7,25 @@ const track = {
     artist: 'Queen',
     album: 'A Night at the Opera',
     playerName: 'Plexamp'
+};
+
+const movie = {
+    sessionKey: '2',
+    mediaType: 'movie',
+    title: 'Blade Runner',
+    year: 1982,
+    playerName: 'Plex for Apple TV'
+};
+
+const episode = {
+    sessionKey: '3',
+    mediaType: 'tv',
+    title: 'Good News About Hell',
+    showTitle: 'Severance',
+    season: 1,
+    episode: 2,
+    year: 2022,
+    playerName: 'Plex Web'
 };
 
 describe('renderPresenceFormat', () => {
@@ -96,5 +115,82 @@ describe('renderPresenceLines', () => {
 
     it('returns empty lines when there is no track', () => {
         expect(renderPresenceLines({ details: '{track}', state: '{artist}' }, null)).toEqual({ details: '', state: '' });
+    });
+});
+
+describe('mediaTypeOf', () => {
+    it('defaults to music for the pre-video session shape', () => {
+        expect(mediaTypeOf(track)).toBe('music');
+    });
+
+    it('reads the media type when there is one', () => {
+        expect(mediaTypeOf(movie)).toBe('movie');
+        expect(mediaTypeOf(episode)).toBe('tv');
+    });
+
+    it('falls back to music for an unrecognized type, as the backend registry does', () => {
+        expect(mediaTypeOf({ mediaType: 'photo' })).toBe('music');
+        expect(mediaTypeOf(null)).toBe('music');
+    });
+});
+
+describe('video tokens', () => {
+    it('replaces {show}, {season} and {episode}', () => {
+        expect(renderPresenceFormat('{show} S{season}E{episode}: {track}', episode)).toBe('Severance S1E2: Good News About Hell');
+    });
+
+    it('renders an unknown season or episode as 0, matching the backend %d', () => {
+        expect(renderPresenceFormat('S{season}E{episode}', movie)).toBe('S0E0');
+    });
+});
+
+describe('renderPresenceLines for video', () => {
+    it('renders a film as its title and year', () => {
+        expect(renderPresenceLines(null, movie)).toEqual({
+            details: 'Blade Runner',
+            state: 'Movie • 1982'
+        });
+    });
+
+    it('renders a film with no year as just Movie', () => {
+        expect(renderPresenceLines(null, { ...movie, year: 0 })).toEqual({
+            details: 'Blade Runner',
+            state: 'Movie'
+        });
+    });
+
+    it('renders an episode as its title and a padded show • SxxExx line', () => {
+        expect(renderPresenceLines(null, episode)).toEqual({
+            details: 'Good News About Hell',
+            state: 'Severance • S01E02'
+        });
+    });
+
+    it('falls back to the show alone when the numbering is unknown', () => {
+        expect(renderPresenceLines(null, { ...episode, season: 0, episode: 0 })).toEqual({
+            details: 'Good News About Hell',
+            state: 'Severance'
+        });
+    });
+
+    it('falls back to a generic label with no show at all', () => {
+        expect(renderPresenceLines(null, { mediaType: 'tv', title: 'Pilot' })).toEqual({
+            details: 'Pilot',
+            state: 'TV Episode'
+        });
+    });
+
+    it('still honours a custom format for video', () => {
+        expect(renderPresenceLines({ details: '{show}', state: '{track}' }, episode)).toEqual({
+            details: 'Severance',
+            state: 'Good News About Hell'
+        });
+    });
+});
+
+describe('renderPresenceLines for music without an artist', () => {
+    it('narrates the playback state, as the backend builder does', () => {
+        expect(renderPresenceLines(null, { title: 'Untitled', state: 'playing' }).state).toBe('Playing on Plex');
+        expect(renderPresenceLines(null, { title: 'Untitled', state: 'paused' }).state).toBe('Paused');
     });
 });

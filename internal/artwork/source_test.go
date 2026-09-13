@@ -15,7 +15,7 @@ type recordingSource struct {
 	calls atomic.Int64
 }
 
-func (s *recordingSource) Lookup(context.Context, string, string) string {
+func (s *recordingSource) Lookup(context.Context, Query) string {
 	s.calls.Add(1)
 	return s.url
 }
@@ -31,7 +31,7 @@ func TestResolverWalksSourceChainInOrder(t *testing.T) {
 
 	r := NewResolver(WithSources(first, second))
 
-	got, err := r.Resolve(context.Background(), "Artist", "Album")
+	got, err := r.Resolve(context.Background(), MusicQuery("Artist", "Album"))
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestResolverFallsThroughToLaterSources(t *testing.T) {
 
 	r := NewResolver(WithSources(miss, hit))
 
-	got, err := r.Resolve(context.Background(), "Artist", "Album")
+	got, err := r.Resolve(context.Background(), MusicQuery("Artist", "Album"))
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestAppendSourceExtendsDefaultChain(t *testing.T) {
 		AppendSource(extra),
 	)
 
-	got, err := r.Resolve(context.Background(), "Artist", "Album")
+	got, err := r.Resolve(context.Background(), MusicQuery("Artist", "Album"))
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestResolverCachesMisses(t *testing.T) {
 	r := NewResolver(WithSources(miss))
 
 	for range 3 {
-		if _, err := r.Resolve(context.Background(), "Artist", "Album"); err != nil {
+		if _, err := r.Resolve(context.Background(), MusicQuery("Artist", "Album")); err != nil {
 			t.Fatalf("Resolve() error: %v", err)
 		}
 	}
@@ -107,14 +107,14 @@ func TestResolverCachesHits(t *testing.T) {
 	hit := &recordingSource{name: "hit", url: "https://cdn/cover.jpg"}
 	r := NewResolver(WithSources(hit))
 
-	if _, ok := r.Cached("Artist", "Album"); ok {
+	if _, ok := r.Cached(MusicQuery("Artist", "Album")); ok {
 		t.Fatal("Cached() reported a hit before anything was resolved")
 	}
-	if _, err := r.Resolve(context.Background(), "Artist", "Album"); err != nil {
+	if _, err := r.Resolve(context.Background(), MusicQuery("Artist", "Album")); err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
 
-	url, ok := r.Cached("Artist", "Album")
+	url, ok := r.Cached(MusicQuery("Artist", "Album"))
 	if !ok || url != "https://cdn/cover.jpg" {
 		t.Errorf("Cached() = (%q, %v), want the resolved cover", url, ok)
 	}
@@ -132,13 +132,13 @@ func TestResolverStopsOnCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := r.Resolve(ctx, "Artist", "Album"); !errors.Is(err, context.Canceled) {
+	if _, err := r.Resolve(ctx, MusicQuery("Artist", "Album")); !errors.Is(err, context.Canceled) {
 		t.Errorf("Resolve() error = %v, want context.Canceled", err)
 	}
 	if source.calls.Load() != 0 {
 		t.Errorf("a cancelled lookup still consulted the source %d time(s)", source.calls.Load())
 	}
-	if _, ok := r.Cached("Artist", "Album"); ok {
+	if _, ok := r.Cached(MusicQuery("Artist", "Album")); ok {
 		t.Error("a cancelled lookup cached a miss it never established")
 	}
 }
@@ -148,7 +148,7 @@ func TestResolverStopsOnCancelledContext(t *testing.T) {
 func TestResolverWithNoSourcesMisses(t *testing.T) {
 	r := NewResolver(WithSources())
 
-	got, err := r.Resolve(context.Background(), "Artist", "Album")
+	got, err := r.Resolve(context.Background(), MusicQuery("Artist", "Album"))
 	if err != nil || got != "" {
 		t.Errorf("Resolve() = (%q, %v), want a clean miss", got, err)
 	}

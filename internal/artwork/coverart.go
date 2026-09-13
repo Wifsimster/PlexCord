@@ -17,21 +17,24 @@ type mbReleaseResponse struct {
 // finds a release MBID by artist+album, then confirms and returns the public
 // Cover Art Archive front-cover URL for it. MusicBrainz requests are throttled
 // to its 1 req/s policy and carry a descriptive User-Agent.
-func (r *Resolver) resolveCoverArt(ctx context.Context, artist, album string) string {
-	if strings.TrimSpace(album) == "" {
+//
+// It indexes music releases only, so a video query misses here and falls
+// through to whatever comes next in the chain.
+func (r *Resolver) resolveCoverArt(ctx context.Context, q Query) string {
+	if q.MediaType != MediaTypeMusic || strings.TrimSpace(q.Album) == "" {
 		return ""
 	}
 	r.mbLimiter.wait()
 
-	query := fmt.Sprintf(`release:%q`, album)
-	if a := strings.TrimSpace(artist); a != "" {
+	query := fmt.Sprintf(`release:%q`, q.Album)
+	if a := strings.TrimSpace(q.Artist); a != "" {
 		query += fmt.Sprintf(` AND artist:%q`, a)
 	}
-	q := url.Values{}
-	q.Set("query", query)
-	q.Set("fmt", "json")
-	q.Set("limit", "1")
-	endpoint := r.mbBase + "/ws/2/release/?" + q.Encode()
+	v := url.Values{}
+	v.Set("query", query)
+	v.Set("fmt", "json")
+	v.Set("limit", "1")
+	endpoint := r.mbBase + "/ws/2/release/?" + v.Encode()
 
 	var resp mbReleaseResponse
 	if !r.getJSON(ctx, endpoint, &resp) {

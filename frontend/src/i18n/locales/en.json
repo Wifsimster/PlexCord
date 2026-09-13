@@ -99,7 +99,10 @@
         "sample": "Sample",
         "paused": "Paused",
         "albumArtOf": "Album art for {album}",
-        "albumArt": "Album artwork"
+        "albumArt": "Album artwork",
+        "watchingOnPlex": "Watching on Plex",
+        "posterOf": "Poster for {title}",
+        "poster": "Poster artwork"
     },
     "presenceStatus": {
         "plexUnreachable": "Plex unreachable",
@@ -421,6 +424,16 @@
             "es": "Español",
             "fr": "Français",
             "de": "Deutsch"
-        }
+        },
+        "syncMusic": "Sync music",
+        "syncMusicCaption": "Show the track, artist and album you are listening to.",
+        "syncMovies": "Sync movies",
+        "syncMoviesCaption": "Show the film you are watching, with its release year.",
+        "syncTv": "Sync TV shows",
+        "syncTvCaption": "Show the series, season and episode you are watching.",
+        "mediaSyncNoneTitle": "Keep at least one",
+        "mediaSyncNoneDetail": "Turn every kind off and nothing would reach Discord — pause the presence instead.",
+        "mediaSyncFailed": "Failed to save what to sync",
+        "mediaSyncFailedDetail": "The setting could not be saved."
     }
 }
