@@ -1,13 +1,13 @@
 module plexcord
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/energye/systray v1.0.3
 	github.com/minio/selfupdate v0.6.0
 	github.com/wailsapp/wails/v2 v2.13.0
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/sys v0.46.0
+	golang.org/x/sys v0.48.0
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 )
 
