@@ -392,6 +392,23 @@ func (a *App) onPlexPollRecovered() {
 
 	// Emit event for frontend to clear error status
 	a.bus.Emit(events.PlexConnectionRestored, nil)
+
+	// The error cleared the presence, but the poll loop only emits on a
+	// change: if the same item is still playing nothing would restore it.
+	a.restorePresenceAfterOutage()
+}
+
+// restorePresenceAfterOutage republishes the cached session, applying the same
+// gates as the discord observer (manual pause, hide-when-paused).
+func (a *App) restorePresenceAfterOutage() {
+	session := a.sessions.Get()
+	if session == nil || a.presence.IsPaused() {
+		return
+	}
+	if session.State == "paused" && a.config.HideWhenPaused {
+		return
+	}
+	a.updateDiscordFromSession(session)
 }
 
 // handleSessionUpdates constructs the observer pipeline and runs it.

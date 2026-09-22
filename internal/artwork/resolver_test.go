@@ -291,3 +291,20 @@ func TestResolve_EmptyVideoTitleIsAMiss(t *testing.T) {
 		t.Errorf("Resolve() = (%q, %v), want a clean miss with nothing to search on", url, err)
 	}
 }
+
+func TestResolve_DeadlineDuringLastSourceIsNotCachedAsMiss(t *testing.T) {
+	// The deadline expires while the last source runs, so it reports a miss;
+	// that miss was never established and must not be cached.
+	ctx, cancel := context.WithCancel(context.Background())
+	r := NewResolver(WithSources(SourceFunc{SourceName: "slow", Fn: func(context.Context, Query) string {
+		cancel()
+		return ""
+	}}))
+
+	if _, err := r.Resolve(ctx, MusicQuery("A", "B")); err == nil {
+		t.Error("Resolve() error = nil, want the context error")
+	}
+	if _, ok := r.Cached(MusicQuery("A", "B")); ok {
+		t.Error("a lookup cut short by its deadline was cached as a miss")
+	}
+}
