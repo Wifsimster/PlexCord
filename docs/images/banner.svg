@@ -1,24 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- PlexCord README banner. Colors and type come from the SIGNAL design system
-     (frontend/src/assets/tokens.css); the wordmark uses the same system font
-     stack as the app, so it composes with the reader's own fonts. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="PlexCord — your Plex playback, live on Discord">
-  <rect width="1200" height="320" fill="#0B0C0F"/>
+<!-- PlexCord README banner. Colors and type come from the ON AIR design system
+     (frontend/src/assets/tokens.css, docs/brand.md). The wordmark asks for
+     Bricolage Grotesque and falls back to the reader's UI face. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="PlexCord — put your Plex on air">
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FF4D8D" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FF4D8D" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="gap"><rect width="64" height="64" fill="#fff"/><circle cx="47" cy="47" r="17.5" fill="#000"/></mask>
+    <mask id="play"><rect width="64" height="64" fill="#fff"/><path d="M43.2 40.6 53.4 47 43.2 53.4 Z" fill="#000" stroke="#000" stroke-width="2" stroke-linejoin="round"/></mask>
+  </defs>
 
-  <g transform="translate(72 96) scale(0.875)">
-    <rect x="3" y="27.5" width="15" height="9" rx="4.5" fill="#EDEDF0"/>
-    <circle cx="32" cy="32" r="8.5" fill="#EDEDF0"/>
-    <rect x="46" y="27.5" width="15" height="9" rx="4.5" fill="#EDEDF0"/>
+  <rect width="1200" height="320" fill="#0E0D0C"/>
+  <ellipse cx="1010" cy="160" rx="340" ry="260" fill="url(#glow)"/>
+
+  <!-- Lockup -->
+  <g transform="translate(72 62) scale(1.25)">
+    <path mask="url(#gap)" fill="#F2EEE8" fill-rule="evenodd" d="M29 4a25 25 0 1 1 0 50a25 25 0 1 1 0-50zM29 19a10 10 0 1 0 0 20a10 10 0 1 0 0-20z"/>
+    <circle mask="url(#play)" cx="47" cy="47" r="13" fill="#FF4D8D"/>
   </g>
-  <text x="150" y="138" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI',system-ui,Roboto,'Helvetica Neue',Arial,sans-serif" font-size="40" font-weight="600" letter-spacing="-0.8" fill="#EDEDF0">PlexCord</text>
+  <text x="172" y="128" font-family="'Bricolage Grotesque Variable','Bricolage Grotesque',-apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI',system-ui,Roboto,Arial,sans-serif" font-size="56" font-weight="700" letter-spacing="-1.8" fill="#F2EEE8">PlexCord</text>
 
-  <text x="72" y="190" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI',system-ui,Roboto,'Helvetica Neue',Arial,sans-serif" font-size="19" fill="#a5a6b1">Your Plex playback, live on Discord.</text>
+  <text x="72" y="196" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI',system-ui,Roboto,'Helvetica Neue',Arial,sans-serif" font-size="22" fill="#B3ADA5">Put your Plex on air — music, films and TV, live on your Discord profile.</text>
 
-  <g font-family="ui-monospace,'SF Mono','Cascadia Code','Segoe UI Mono','Roboto Mono',Menlo,Consolas,monospace" font-size="14" fill="#8b8c98">
-    <circle cx="77" cy="250" r="5" fill="#E5A00D"/>
-    <text x="94" y="255">Plex</text>
-    <rect x="140" y="249.5" width="880" height="1" fill="#26272f"/>
-    <text x="1101" y="255" text-anchor="end">Discord</text>
-    <circle cx="1123" cy="250" r="5" fill="#5865F2"/>
+  <!-- The route: Plex ● ── [● ON AIR] ── ● Discord -->
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI',system-ui,Roboto,Arial,sans-serif" font-size="15" fill="#948E86">
+    <circle cx="77" cy="256" r="5" fill="#E5A00D"/>
+    <text x="92" y="261">Plex</text>
+    <rect x="140" y="255.5" width="340" height="1" fill="#34302D"/>
+    <rect x="496" y="241" width="112" height="30" rx="15" fill="#FF4D8D"/>
+    <circle cx="515" cy="256" r="4" fill="#1A0710"/>
+    <text x="528" y="261.5" font-family="'Bricolage Grotesque Variable','Bricolage Grotesque',-apple-system,'Segoe UI',system-ui,Arial,sans-serif" font-size="13" font-weight="800" letter-spacing="1.6" fill="#1A0710">ON AIR</text>
+    <rect x="624" y="255.5" width="340" height="1" fill="#34302D"/>
+    <text x="1101" y="261" text-anchor="end">Discord</text>
+    <circle cx="1123" cy="256" r="5" fill="#5865F2"/>
   </g>
 </svg>

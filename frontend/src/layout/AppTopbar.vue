@@ -19,7 +19,7 @@ const playbackStore = usePlaybackStore();
 const plexStore = usePlexConnectionStore();
 const discordStore = useDiscordConnectionStore();
 const presenceStore = usePresenceStore();
-const { status, headline, severity, isErrored, relayHealthy } = usePresenceStatus();
+const { status, severity, tally, trackTitle, isErrored } = usePresenceStatus();
 
 // ---- Right-side actions -------------------------------------------------
 const isSettings = computed(() => route.path.startsWith('/settings'));
@@ -59,31 +59,10 @@ const centerOk = computed(() => status.value === 'live' || status.value === 'idl
 const leftConnectorOk = computed(() => plexOk.value && centerOk.value);
 const rightConnectorOk = computed(() => centerOk.value && discordOk.value);
 
-// ---- Headline node (the Afterglow graft) ---------------------------------
-const headlineParts = computed(() => {
-    const value = headline.value;
-    const sep = ' — ';
-    const idx = value.indexOf(sep);
-    if (status.value === 'live' && idx !== -1) {
-        return { state: value.slice(0, idx + sep.length), title: value.slice(idx + sep.length) };
-    }
-    return { state: value, title: '' };
-});
-
-const headlineGlyph = computed(() => {
-    switch (status.value) {
-        case 'paused':
-        case 'track-paused':
-            return 'pi pi-pause';
-        case 'plex-error':
-        case 'discord-error':
-            return 'pi pi-exclamation-triangle';
-        case 'idle':
-            return 'pi pi-minus';
-        default:
-            return '';
-    }
-});
+// ---- Headline node: the tally lamp + what is on air ------------------------
+// The lamp carries the state; the title rides beside it only while live or
+// held (the two states in which something is actually on the profile).
+const headlineTitleText = computed(() => (status.value === 'live' || status.value === 'track-paused' ? trackTitle.value : ''));
 
 const headlineTitle = computed(() => {
     if (isErrored.value) return t('topbar.openDashboard');
@@ -189,11 +168,12 @@ onBeforeUnmount(() => {
             <span class="signal-connector" :class="{ 'signal-connector--ok': leftConnectorOk }" aria-hidden="true"></span>
 
             <Transition name="pc-state" mode="out-in">
-                <button type="button" :key="status + headlineParts.title" class="signal-node signal-node--headline" :class="`signal-headline--${severity}`" :title="headlineTitle" @click="onHeadlineClick">
-                    <span v-if="status === 'live'" class="pc-eq" aria-hidden="true"><i></i><i></i><i></i></span>
-                    <i v-else-if="headlineGlyph" :class="headlineGlyph" class="signal-headline-glyph" aria-hidden="true"></i>
-                    <span class="signal-headline-state">{{ headlineParts.state }}</span>
-                    <span v-if="headlineParts.title" class="signal-headline-title">{{ headlineParts.title }}</span>
+                <button type="button" :key="status + headlineTitleText" class="signal-node signal-node--headline" :class="`signal-headline--${severity}`" :title="headlineTitle" @click="onHeadlineClick">
+                    <span class="pc-tally" :class="`pc-tally--${tally.kind}`">
+                        <span class="pc-tally-lamp" aria-hidden="true"></span>
+                        {{ tally.label }}
+                    </span>
+                    <span v-if="headlineTitleText" class="signal-headline-title">{{ headlineTitleText }}</span>
                 </button>
             </Transition>
 
@@ -290,7 +270,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* The signal strip (spec §5.1): fixed 48px, overlay surface, hairline bottom. */
+/* The signal strip (spec §5.1) — Plex ● ── [tally] title ── ● Discord: fixed 48px, overlay surface, hairline bottom. */
 .layout-topbar {
     position: fixed;
     top: 0;
@@ -345,9 +325,9 @@ onBeforeUnmount(() => {
     align-items: center;
     gap: 6px;
     height: 28px;
-    padding: 0 8px;
+    padding: 0 10px;
     border: none;
-    border-radius: var(--pc-radius-sm);
+    border-radius: var(--pc-radius-full);
     background: transparent;
     color: var(--pc-text-secondary);
     font-family: var(--pc-font-ui);
@@ -369,7 +349,7 @@ onBeforeUnmount(() => {
 }
 
 .signal-connector {
-    width: 16px;
+    width: 20px;
     height: 1px;
     flex: none;
     background: var(--pc-border);
@@ -379,38 +359,22 @@ onBeforeUnmount(() => {
     background: var(--pc-success);
 }
 
-/* ---- Headline node ---- */
+/* ---- Headline node: tally lamp + on-air title ---- */
 .signal-node--headline {
     min-width: 0;
+    gap: 10px;
+    padding: 0 10px 0 4px;
+    height: 32px;
+    border-radius: var(--pc-radius-full);
 }
-.signal-headline-glyph {
-    font-size: 10px;
-    flex: none;
-}
-.signal-headline-state {
-    font-size: var(--pc-text-caption);
-    font-weight: 500;
-    white-space: nowrap;
-}
-.signal-headline--success .signal-headline-state,
-.signal-headline--success .signal-headline-glyph {
-    color: var(--pc-success);
-}
-.signal-headline--warn .signal-headline-state,
-.signal-headline--warn .signal-headline-glyph {
-    color: var(--pc-warn);
-}
-.signal-headline--danger .signal-headline-state,
-.signal-headline--danger .signal-headline-glyph {
-    color: var(--pc-danger);
-}
-.signal-headline--muted .signal-headline-state,
-.signal-headline--muted .signal-headline-glyph {
-    color: var(--pc-text-muted);
+.signal-node--headline:hover .pc-tally:not(.pc-tally--on) {
+    border-color: var(--pc-border-strong);
 }
 .signal-headline-title {
-    font-size: var(--pc-text-body);
-    font-weight: 500;
+    font-family: var(--pc-font-display);
+    font-size: 14.5px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
     color: var(--pc-text);
     max-width: 280px;
     white-space: nowrap;
@@ -446,7 +410,7 @@ onBeforeUnmount(() => {
     width: 32px;
     height: 32px;
     border: none;
-    border-radius: var(--pc-radius-sm);
+    border-radius: var(--pc-radius-full);
     background: transparent;
     color: var(--pc-text-secondary);
     cursor: pointer;

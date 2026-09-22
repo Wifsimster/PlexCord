@@ -1,5 +1,5 @@
 /* ============================================================
-   PlexCord "Signal" motion catalogue (spec §4).
+   PlexCord "ON AIR" motion catalogue (spec §4).
    Single home for global keyframes, ambient-loop utility classes,
    and Vue <Transition> class sets. Durations/easings come from
    tokens.css (--pc-dur-*, --pc-ease-*, --pc-loop-*).
@@ -52,24 +52,29 @@
     }
 }
 
-/* M22 / §4.1 — ambient artwork backdrop breathing (dark values;
-   light overrides below) */
+/* M22 / §4.1 — stage artwork wash: a slow breathe between 80% and 100% of
+   the scheme's --pc-backdrop-opacity, plus a barely-there drift. Light mode
+   uses the same keyframes (the token carries the difference). */
 @keyframes pc-breathe {
     0%,
     100% {
-        opacity: 0.07;
+        opacity: calc(var(--pc-backdrop-opacity) * 0.8);
+        transform: scale(1);
     }
     50% {
-        opacity: 0.13;
+        opacity: var(--pc-backdrop-opacity);
+        transform: scale(1.04);
     }
 }
 @keyframes pc-breathe-light {
     0%,
     100% {
-        opacity: 0.05;
+        opacity: calc(var(--pc-backdrop-opacity) * 0.8);
+        transform: scale(1);
     }
     50% {
-        opacity: 0.1;
+        opacity: var(--pc-backdrop-opacity);
+        transform: scale(1.04);
     }
 }
 

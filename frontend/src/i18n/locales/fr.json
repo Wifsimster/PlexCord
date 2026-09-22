@@ -161,8 +161,8 @@
         "skipFailedDetail": "Impossible d'ignorer la configuration. Veuillez réessayer."
     },
     "welcome": {
-        "title": "Relayez votre musique Plex vers Discord.",
-        "lede": "PlexCord affiche ce que vous écoutez sur Plex sous forme de statut Rich Presence Discord — avec pochette d'album, informations sur la piste et progression en direct. La configuration prend environ deux minutes.",
+        "title": "Mettez votre Plex à l’antenne.",
+        "lede": "PlexCord affiche ce que vous lisez sur Plex — musique, films et séries — sur votre profil Discord, avec la pochette et la progression en direct. La configuration prend environ deux minutes.",
         "diagramAria": "Plex vers PlexCord vers Discord",
         "plex": "Plex",
         "discord": "Discord",
@@ -445,5 +445,24 @@
         "mediaSyncNoneDetail": "Tout désactiver n’enverrait plus rien à Discord — mettez plutôt la présence en pause.",
         "mediaSyncFailed": "Échec de l’enregistrement du contenu à synchroniser",
         "mediaSyncFailedDetail": "Le réglage n’a pas pu être enregistré."
+    },
+    "tally": {
+        "onAir": "À l’antenne",
+        "offAir": "Hors antenne",
+        "paused": "En pause",
+        "standby": "En veille",
+        "plexDown": "Plex injoignable",
+        "discordDown": "Discord déconnecté"
+    },
+    "stage": {
+        "aria": "Lecture en cours",
+        "nowPlayingOn": "En lecture sur {player}",
+        "nowPlaying": "En lecture",
+        "idleTitle": "Rien à l’antenne.",
+        "offAirCaption": "Masqué sur Discord tant que la présence est en pause.",
+        "resume": "Reprendre l’antenne",
+        "holdCaption": "En pause dans le lecteur — Discord l’affiche en pause.",
+        "onProfile": "Sur votre profil Discord",
+        "episode": "S{season} · É{episode}"
     }
 }

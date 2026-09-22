@@ -529,16 +529,18 @@ onBeforeUnmount(() => {
 /* Shared step-content type recipe (§5.4: display heading + caption lede,
    then panels). Global on purpose — each step view uses these classes. */
 .setup-title {
-    margin: 0 0 8px;
+    margin: 0 0 10px;
+    font-family: var(--pc-font-display);
     font-size: var(--pc-text-display);
-    font-weight: 600;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
     color: var(--pc-text);
 }
 .setup-lede {
     margin: 0 0 var(--pc-space-section);
-    font-size: var(--pc-text-body);
+    max-width: 520px;
+    font-size: 15px;
     line-height: 1.5;
     color: var(--pc-text-secondary);
 }

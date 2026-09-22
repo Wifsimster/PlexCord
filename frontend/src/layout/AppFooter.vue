@@ -6,7 +6,7 @@ const { display, buildDate } = useVersion();
 
 <template>
     <footer class="layout-footer">
-        <span class="pc-chip-mono" :title="buildDate ? $t('footer.buildDate', { date: buildDate }) : undefined">{{ display }}</span>
+        <span class="footer-version" :title="buildDate ? $t('footer.buildDate', { date: buildDate }) : undefined">{{ display }}</span>
     </footer>
 </template>
 
@@ -16,6 +16,13 @@ const { display, buildDate } = useVersion();
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px 0 12px;
+    padding: 20px 0 14px;
+}
+.footer-version {
+    font-family: var(--pc-font-mono);
+    font-size: 11.5px;
+    color: var(--pc-text-faint);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
 }
 </style>

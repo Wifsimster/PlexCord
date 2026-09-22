@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- PlexCord symbol. See docs/brand.md. -->
+<!-- PlexCord symbol, "the live badge". See docs/brand.md. -->
 <!-- Tray icon while an update waits to be applied. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="PlexCord — update ready">
-  <mask id="badge-gap">
-    <rect width="64" height="64" fill="#fff"/>
-    <circle cx="49.92" cy="49.92" r="9.28" fill="#000"/>
-  </mask>
-  <g mask="url(#badge-gap)">
-  <rect width="64" height="64" rx="14.4" fill="#17181D"/>
-  <g transform="translate(8.320 8.320) scale(0.74000)">
-    <rect x="3.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="#EDEDF0"/>
-    <circle cx="32.0" cy="32.0" r="8.5" fill="#EDEDF0"/>
-    <rect x="46.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="#EDEDF0"/>
+  <mask id="u-gap"><rect width="64" height="64" fill="#fff"/><circle cx="51.20" cy="12.80" r="8.96" fill="#000"/></mask>
+  <g mask="url(#u-gap)">
+    <rect width="64" height="64" rx="14.4" fill="#171514"/>
+    <g transform="translate(6.400 6.400) scale(0.80000)">
+      <mask id="i-gap"><rect width="64" height="64" fill="#fff"/><circle cx="47.0" cy="47.0" r="17.5" fill="#000"/></mask>
+      <mask id="i-play"><rect width="64" height="64" fill="#fff"/><path d="M43.2 40.6 53.4 47.0 43.2 53.4 Z" fill="#000" stroke="#000" stroke-width="2" stroke-linejoin="round"/></mask>
+      <path mask="url(#i-gap)" fill="#F2EEE8" fill-rule="evenodd" d="M29.0 4.0a25.0 25.0 0 1 1 0 50.0a25.0 25.0 0 1 1 0 -50.0zM29.0 19.0a10.0 10.0 0 1 0 0 20.0a10.0 10.0 0 1 0 0 -20.0z"/>
+      <circle mask="url(#i-play)" cx="47.0" cy="47.0" r="13.0" fill="#FF4D8D"/>
+    </g>
   </g>
-  </g>
-  <circle cx="49.92" cy="49.92" r="6.72" fill="#F5B944"/>
+  <circle cx="51.20" cy="12.80" r="6.40" fill="#F5B944"/>
 </svg>
