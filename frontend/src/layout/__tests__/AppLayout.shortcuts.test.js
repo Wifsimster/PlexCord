@@ -7,8 +7,8 @@ import { mount } from '@vue/test-utils';
 const toggleDarkMode = vi.fn();
 const presenceToggle = vi.fn();
 const push = vi.fn();
-const plexRetry = vi.fn();
-const discordRetry = vi.fn();
+const plexRetry = vi.fn().mockResolvedValue(undefined);
+const discordRetry = vi.fn().mockResolvedValue(undefined);
 const toastAdd = vi.fn();
 
 let plexHasError = false;

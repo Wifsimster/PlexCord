@@ -111,6 +111,10 @@ export const usePlaybackStore = defineStore('playback', {
                     console.log('Restoring current playback session after page refresh');
                     usePlexConnectionStore().markLivePoll();
                     this.setTrack(currentSession);
+                } else {
+                    // Nothing is playing now: drop any track kept from before
+                    // the listeners were removed, whose stop event was missed.
+                    this.clearTrack();
                 }
             } catch (error) {
                 console.error('Failed to restore current session:', error);
