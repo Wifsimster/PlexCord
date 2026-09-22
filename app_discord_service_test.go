@@ -165,6 +165,28 @@ func TestDiscordServiceDropsStaleArtwork(t *testing.T) {
 	}
 }
 
+// TestDiscordServiceDropsArtworkAfterClear covers playback stopping (or the
+// hide-when-paused timer firing) while a cover is being looked up: the cover
+// must not republish the presence that was just cleared.
+func TestDiscordServiceDropsArtworkAfterClear(t *testing.T) {
+	resolver := &blockingResolver{url: "https://cdn/cover.jpg", release: make(chan struct{})}
+	presence := &recordingPresence{connected: true}
+	app := newTestApp(config.DefaultConfig())
+	app.discord = app.newDiscordService(presence, resolver)
+
+	app.discord.Publish(playingSession("Song"))
+	if err := app.discord.Clear(); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+
+	close(resolver.release)
+	time.Sleep(80 * time.Millisecond)
+
+	if presence.updateCount() != 1 {
+		t.Fatalf("presence updates = %d, want 1 — the late cover resurrected a cleared presence", presence.updateCount())
+	}
+}
+
 // albumBlockingResolver blocks the lookup for one specific album until
 // released, and reports an immediate miss for every other album.
 type albumBlockingResolver struct {

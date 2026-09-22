@@ -171,7 +171,9 @@ const countdownSeconds = computed(() => {
 const showCountdown = computed(() => store.isRetrying && countdownSeconds.value > 0);
 const attemptNumber = computed(() => store.retryState?.attemptNumber || 0);
 
-const retryNow = () => store.retry();
+// A failed retry already shows as the store's error state; swallow the
+// rejection so it does not surface as an unhandled promise.
+const retryNow = () => store.retry().catch((error) => console.error('Reconnect failed:', error));
 </script>
 
 <template>

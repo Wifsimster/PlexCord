@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"plexcord/internal/config"
 )
 
 // Entry represents a single listening history entry.
@@ -184,5 +186,5 @@ func (s *Store) saveLocked() error {
 		return err
 	}
 
-	return os.WriteFile(s.path, data, 0600)
+	return config.WriteFileAtomic(s.path, data, 0600)
 }

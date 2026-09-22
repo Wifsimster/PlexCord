@@ -320,10 +320,23 @@ describe('discordConnection store', () => {
         expect(GetErrorInfo).toHaveBeenCalledWith('DISCORD_CONN_FAILED')
       })
 
-      it('DiscordDisconnected falls back to DISCORD_NOT_RUNNING code', async () => {
-        await eventHandlers['DiscordDisconnected']({})
+      it('DiscordDisconnected without an error (a deliberate disconnect) reports none', async () => {
+        store.error = { code: 'STALE' }
+        await eventHandlers['DiscordDisconnected']({ connected: false })
 
-        expect(GetErrorInfo).toHaveBeenCalledWith('DISCORD_NOT_RUNNING')
+        expect(GetErrorInfo).not.toHaveBeenCalled()
+        expect(store.error).toBeNull()
+      })
+
+      it('DiscordDisconnected does not overwrite a connect that landed meanwhile', async () => {
+        GetErrorInfo.mockImplementationOnce(async (code) => {
+          eventHandlers['DiscordConnected']()
+          return { code }
+        })
+        await eventHandlers['DiscordDisconnected']({ error: { code: 'DISCORD_NOT_RUNNING' } })
+
+        expect(store.connected).toBe(true)
+        expect(store.error).toBeNull()
       })
 
       it('DiscordRetryState updates retry state', () => {

@@ -112,10 +112,12 @@ func (a *App) OpenReleaseURL(releaseURL string) error {
 	}
 	// Validate URL scheme and host to prevent opening arbitrary/malicious URLs
 	parsed, err := url.Parse(releaseURL)
-	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+	if err != nil || parsed.Scheme != "https" {
 		return errors.New(errors.CONFIG_READ_FAILED, "invalid release URL")
 	}
-	if !strings.HasSuffix(parsed.Host, "github.com") {
+	// Exact host or a true subdomain: a bare suffix check would also accept
+	// look-alikes such as evilgithub.com.
+	if host := parsed.Hostname(); host != "github.com" && !strings.HasSuffix(host, ".github.com") {
 		return errors.New(errors.CONFIG_READ_FAILED, "release URL must be from github.com")
 	}
 	log.Printf("Opening release URL: %s", releaseURL)

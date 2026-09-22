@@ -102,10 +102,12 @@ const handleShortcuts = (event) => {
         router.push(router.currentRoute.value.path.startsWith('/settings') ? '/' : '/settings');
     } else if (key === 'r') {
         event.preventDefault();
+        // The stores already surface a failed retry as their error state; the
+        // rejection itself has nobody to handle it here.
         if (plexStore.hasError) {
-            plexStore.retry();
+            plexStore.retry().catch((error) => console.error('Plex reconnect failed:', error));
         } else if (discordStore.hasError) {
-            discordStore.retry();
+            discordStore.retry().catch((error) => console.error('Discord reconnect failed:', error));
         } else {
             toast.add({ severity: 'secondary', summary: t('layout.nothingToRetry'), detail: t('layout.connectionsHealthy'), life: 4000 });
         }

@@ -96,8 +96,19 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
                 // The backend emits `discord.ConnectionEvent` which marshals as
                 // `{connected, error: {code, message}, clientId}`. The code is
                 // nested under `error`, not on the top-level payload.
-                const errorCode = data?.error?.code || data?.code || 'DISCORD_NOT_RUNNING';
+                // A deliberate DisconnectDiscord carries no error: that is not
+                // a failure to report.
+                const errorCode = data?.error?.code || data?.code;
+                if (!errorCode) {
+                    this.error = null;
+                    return;
+                }
                 await this.setError(errorCode);
+                // A connect that landed while the error info was being fetched
+                // supersedes this disconnect.
+                if (this.connected) {
+                    this.error = null;
+                }
             });
 
             EventsOn('DiscordRetryState', (state) => {

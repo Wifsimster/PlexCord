@@ -122,8 +122,10 @@ func (a *App) ResetApplication() {
 		log.Printf("Configuration file deleted")
 	}
 
-	// 6. Reset in-memory config to defaults
-	a.config = config.DefaultConfig()
+	// 6. Reset in-memory config to defaults. Reset in place rather than
+	// swapping the pointer: a.config and the store must stay the same Config,
+	// or every later save would write back the pre-reset settings.
+	a.cfgStore.UpdateNoSave(func(c *config.Config) { *c = *config.DefaultConfig() })
 	log.Printf("In-memory configuration reset to defaults")
 
 	log.Printf("Application reset complete - setup wizard will show on next launch")

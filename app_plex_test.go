@@ -214,3 +214,36 @@ func TestSaveServerURLRejectsNonHTTPSchemes(t *testing.T) {
 		t.Errorf("SaveServerURL() rejected a valid http URL: %v", err)
 	}
 }
+
+// TestPlexRecoveryRestoresPresence covers a short Plex outage mid-playback: the
+// error cleared the presence, and the poll loop emits nothing on recovery when
+// the same item is still playing, so recovery itself must put it back.
+func TestPlexRecoveryRestoresPresence(t *testing.T) {
+	presence := &recordingPresence{connected: true}
+	app := newTestApp(config.DefaultConfig())
+	app.discord = app.newDiscordService(presence, nil)
+
+	app.sessions.Set(playingSession("Song"))
+	app.onPlexPollError(errors.New("timeout"))
+	app.onPlexPollRecovered()
+
+	if presence.updateCount() != 1 {
+		t.Fatalf("presence updates = %d, want 1 after recovery", presence.updateCount())
+	}
+}
+
+// TestPlexRecoveryKeepsManualPause verifies recovery does not un-hide a
+// presence the user paused.
+func TestPlexRecoveryKeepsManualPause(t *testing.T) {
+	presence := &recordingPresence{connected: true}
+	app := newTestApp(config.DefaultConfig())
+	app.discord = app.newDiscordService(presence, nil)
+
+	app.sessions.Set(playingSession("Song"))
+	app.presence.Toggle()
+	app.onPlexPollRecovered()
+
+	if presence.updateCount() != 0 {
+		t.Errorf("presence updates = %d, want 0 while manually paused", presence.updateCount())
+	}
+}

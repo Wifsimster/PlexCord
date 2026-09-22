@@ -174,3 +174,31 @@ func TestClient_ReadResponse_HonorsDeadline(t *testing.T) {
 		t.Error("expected a read timeout error from a silent socket")
 	}
 }
+
+func TestClient_SetActivity_ZeroActivitySendsNull(t *testing.T) {
+	// Discord only clears the presence for a null activity; an empty object
+	// renders as a bare "Playing <app>".
+	var raw map[string]json.RawMessage
+	f := newFakeDiscord(t, func(op opcode, payload []byte) (opcode, []byte) {
+		if op == opHandshake {
+			return opFrame, readyFrame()
+		}
+		var fr struct {
+			Args map[string]json.RawMessage `json:"args"`
+		}
+		_ = json.Unmarshal(payload, &fr)
+		raw = fr.Args
+		return opFrame, nil
+	})
+
+	c := f.newClient()
+	if err := c.Login("123456789012345678"); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if err := c.SetActivity(Activity{}); err != nil {
+		t.Fatalf("SetActivity: %v", err)
+	}
+	if got := string(raw["activity"]); got != "null" {
+		t.Errorf("activity = %s, want null", got)
+	}
+}

@@ -3,6 +3,8 @@ package keychain
 import (
 	"os"
 	"testing"
+
+	"github.com/zalando/go-keyring"
 )
 
 // TestSetAndGetToken tests the basic SetToken and GetToken flow
@@ -219,4 +221,26 @@ func TestMain(m *testing.M) {
 	_ = DeleteToken()
 
 	os.Exit(code)
+}
+
+// TestGetTokenReadsFallbackWhenKeychainIsEmpty covers a token stored while the
+// OS keychain was unavailable: once the keychain is back (and empty), the
+// fallback copy must still be found rather than the user looking signed out.
+func TestGetTokenReadsFallbackWhenKeychainIsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("APPDATA", dir)
+	keyring.MockInit()
+
+	if err := setTokenFallback("fallback-token"); err != nil {
+		t.Fatalf("setTokenFallback: %v", err)
+	}
+	got, err := GetToken()
+	if err != nil {
+		t.Fatalf("GetToken: %v", err)
+	}
+	if got != "fallback-token" {
+		t.Errorf("GetToken() = %q, want the fallback token", got)
+	}
 }

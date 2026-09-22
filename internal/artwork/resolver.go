@@ -165,6 +165,12 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (string, error) {
 		}
 	}
 
+	// A deadline hit during the last source reads as a miss too; that is not
+	// an established answer, so leave it uncached for the next attempt.
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	// Every source missed — cache the negative result so we don't re-query
 	// on every poll.
 	r.cache.put(key, "")
