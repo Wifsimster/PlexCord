@@ -89,14 +89,20 @@ func (c *Client) handshake(clientID string) error {
 
 // SetActivity sends a SET_ACTIVITY command and parses the response, returning
 // an *ActivityError if Discord rejected the payload or a *ClosedError if the
-// connection dropped.
+// connection dropped. The zero Activity clears the presence: Discord only
+// removes it when the activity is null, an empty object would render as a
+// bare "Playing <app>".
 func (c *Client) SetActivity(a Activity) error {
 	if c.conn == nil {
 		return errNotConnected
 	}
+	var activity *payloadActivity
+	if !a.isZero() {
+		activity = a.toPayload()
+	}
 	payload, err := json.Marshal(frame{
 		Cmd:   "SET_ACTIVITY",
-		Args:  args{Pid: os.Getpid(), Activity: a.toPayload()},
+		Args:  args{Pid: os.Getpid(), Activity: activity},
 		Nonce: nonce(),
 	})
 	if err != nil {

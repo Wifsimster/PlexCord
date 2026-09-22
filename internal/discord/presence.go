@@ -3,6 +3,7 @@ package discord
 import (
 	stderrors "errors"
 	"log"
+	"net"
 	"strings"
 	"sync"
 
@@ -161,7 +162,7 @@ func (pm *PresenceManager) SetPresence(data *PresenceData) error {
 		log.Printf("Discord: Failed to set presence: %v", err)
 		// Check if connection was lost
 		if isConnectionLostError(err) {
-			pm.connected = false
+			pm.dropConnectionLocked()
 			return errors.New(errors.DISCORD_NOT_RUNNING, "Discord connection lost")
 		}
 		return errors.Wrap(err, errors.DISCORD_CONN_FAILED, "failed to update presence")
@@ -190,7 +191,11 @@ func (pm *PresenceManager) ClearPresence() error {
 	if err := pm.conn.SetActivity(ipc.Activity{}); err != nil {
 		// If the upstream rejects the empty activity, log but don't disconnect.
 		// The previous presence data will still be showing until the next update.
+		// A dead socket, though, is dropped so the next update reconnects first.
 		log.Printf("Discord: Failed to clear presence (non-fatal): %v", err)
+		if isConnectionLostError(err) {
+			pm.dropConnectionLocked()
+		}
 		return mapDiscordError(err)
 	}
 
@@ -282,6 +287,18 @@ func mapDiscordError(err error) error {
 	return errors.Wrap(err, errors.DISCORD_CONN_FAILED, "Discord connection failed")
 }
 
+// dropConnectionLocked tears down a connection found dead mid-command, so its
+// socket is not leaked and the next Connect dials afresh. Caller holds mu.
+func (pm *PresenceManager) dropConnectionLocked() {
+	if pm.conn != nil {
+		if err := pm.conn.Close(); err != nil {
+			log.Printf("Discord: error closing lost IPC connection: %v", err)
+		}
+		pm.conn = nil
+	}
+	pm.connected = false
+}
+
 // isConnectionLostError checks if an error indicates the Discord connection was lost.
 // It prefers the typed *ipc.ClosedError from the internal IPC client and falls
 // back to string matching for transport-level errors (broken pipe, EOF, ...).
@@ -291,6 +308,12 @@ func isConnectionLostError(err error) bool {
 	}
 	var closed *ipc.ClosedError
 	if stderrors.As(err, &closed) {
+		return true
+	}
+	// A reply that never arrived may still land later and would then be read
+	// as the answer to the next command; the stream cannot be trusted anymore.
+	var netErr net.Error
+	if stderrors.As(err, &netErr) && netErr.Timeout() {
 		return true
 	}
 	errStr := err.Error()

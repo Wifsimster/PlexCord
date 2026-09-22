@@ -133,6 +133,13 @@ type closePayload struct {
 	Message string `json:"message"`
 }
 
+// isZero reports whether a is the zero Activity, the clear-presence sentinel.
+func (a Activity) isZero() bool {
+	return a.Type == 0 && a.StatusDisplayType == nil && a.Details == "" && a.State == "" &&
+		a.LargeImage == "" && a.LargeText == "" && a.SmallImage == "" && a.SmallText == "" &&
+		a.Timestamps == nil && len(a.Buttons) == 0
+}
+
 // toPayload converts a high-level Activity into its wire representation.
 // Empty asset/timestamp groups are omitted so Discord clears them.
 func (a Activity) toPayload() *payloadActivity {

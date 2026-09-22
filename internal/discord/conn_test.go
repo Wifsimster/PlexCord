@@ -196,3 +196,32 @@ func TestPresenceManagerDisconnectIsIdempotent(t *testing.T) {
 		t.Errorf("closes = %d, want 0 when never connected", conn.closed)
 	}
 }
+
+// TestPresenceManagerClosesLostConnection verifies a connection found dead
+// mid-update is closed (not leaked) and the next Connect dials afresh.
+func TestPresenceManagerClosesLostConnection(t *testing.T) {
+	conn := &fakeConn{}
+	pm := newFakeManager(conn)
+	if err := pm.Connect(testClientID); err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+
+	conn.activityErr = &ipc.ClosedError{}
+	if err := pm.ClearPresence(); err == nil {
+		t.Fatal("ClearPresence() on a dead socket returned nil")
+	}
+	if pm.IsConnected() {
+		t.Error("IsConnected() = true after the connection was lost")
+	}
+	if conn.closed != 1 {
+		t.Errorf("closed = %d, want 1 — the lost socket leaked", conn.closed)
+	}
+
+	conn.activityErr = nil
+	if err := pm.Connect(testClientID); err != nil {
+		t.Fatalf("reconnect error: %v", err)
+	}
+	if len(conn.logins) != 2 {
+		t.Errorf("logins = %d, want 2 after reconnecting", len(conn.logins))
+	}
+}

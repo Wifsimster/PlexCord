@@ -34,6 +34,8 @@ type discordService struct {
 
 	// gen debounces async artwork re-issues: each session change bumps it, and
 	// a late resolve only re-issues presence if its generation is still current.
+	// Clear and Disconnect bump it too, so a cover landing after the presence
+	// was taken down cannot put it back.
 	gen atomic.Uint64
 
 	// options reports the user's presence display preferences.
@@ -66,6 +68,7 @@ func (s *discordService) Connect(clientID string) error {
 func (s *discordService) Disconnect() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.gen.Add(1)
 	return s.presence.Disconnect()
 }
 
@@ -159,6 +162,9 @@ func (s *discordService) Clear() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Supersede any in-flight artwork resolve: it would republish the session
+	// this clear just took down.
+	s.gen.Add(1)
 	if !s.presence.IsConnected() {
 		return nil
 	}
