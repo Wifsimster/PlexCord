@@ -161,8 +161,8 @@
         "skipFailedDetail": "No se pudo omitir la configuración. Inténtalo de nuevo."
     },
     "welcome": {
-        "title": "Retransmite tu música de Plex a Discord.",
-        "lede": "PlexCord muestra lo que estás escuchando en Plex como un estado de Rich Presence en Discord — con carátula del álbum, información de la pista y progreso en directo. La configuración lleva unos dos minutos.",
+        "title": "Pon tu Plex en antena.",
+        "lede": "PlexCord muestra lo que reproduces en Plex — música, películas y series — en tu perfil de Discord, con carátula y progreso en directo. La configuración lleva unos dos minutos.",
         "diagramAria": "De Plex a PlexCord a Discord",
         "plex": "Plex",
         "discord": "Discord",
@@ -445,5 +445,24 @@
         "mediaSyncNoneDetail": "Desactivarlo todo dejaría a Discord sin nada — pausa la presencia en su lugar.",
         "mediaSyncFailed": "No se pudo guardar qué sincronizar",
         "mediaSyncFailedDetail": "No se pudo guardar el ajuste."
+    },
+    "tally": {
+        "onAir": "En antena",
+        "offAir": "Fuera de antena",
+        "paused": "En pausa",
+        "standby": "En espera",
+        "plexDown": "Plex inaccesible",
+        "discordDown": "Discord desconectado"
+    },
+    "stage": {
+        "aria": "Reproduciendo ahora",
+        "nowPlayingOn": "Reproduciendo en {player}",
+        "nowPlaying": "Reproduciendo ahora",
+        "idleTitle": "Nada en antena.",
+        "offAirCaption": "Oculto en Discord mientras la presencia está en pausa.",
+        "resume": "Volver a antena",
+        "holdCaption": "En pausa en el reproductor — Discord lo muestra en pausa.",
+        "onProfile": "En tu perfil de Discord",
+        "episode": "T{season} · E{episode}"
     }
 }

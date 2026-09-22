@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- PlexCord symbol. See docs/brand.md. -->
-<!-- Horizontal lockup. The wordmark is a system stack: it composes with the
-     font of the host, as in the app (no webfonts, see design-system.md). -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" width="220" height="48" role="img" aria-label="PlexCord">
-  <g transform="translate(0 8) scale(0.5)">
-    <rect x="3.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="#EDEDF0"/>
-    <circle cx="32.0" cy="32.0" r="8.5" fill="#EDEDF0"/>
-    <rect x="46.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="#EDEDF0"/>
+<!-- PlexCord symbol, "the live badge". See docs/brand.md. -->
+<!-- Horizontal lockup: symbol, a gap of 40% of its height, the wordmark in
+     Bricolage Grotesque 700 at -0.025em (bundled in the app; falls back to
+     the system UI face where it is not installed). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 208 48" width="208" height="48" role="img" aria-label="PlexCord">
+  <g transform="translate(0 4) scale(0.625)">
+    <mask id="l-gap"><rect width="64" height="64" fill="#fff"/><circle cx="47.0" cy="47.0" r="17.5" fill="#000"/></mask>
+    <mask id="l-play"><rect width="64" height="64" fill="#fff"/><path d="M43.2 40.6 53.4 47.0 43.2 53.4 Z" fill="#000" stroke="#000" stroke-width="2" stroke-linejoin="round"/></mask>
+    <path mask="url(#l-gap)" fill="#F2EEE8" fill-rule="evenodd" d="M29.0 4.0a25.0 25.0 0 1 1 0 50.0a25.0 25.0 0 1 1 0 -50.0zM29.0 19.0a10.0 10.0 0 1 0 0 20.0a10.0 10.0 0 1 0 0 -20.0z"/>
+    <circle mask="url(#l-play)" cx="47.0" cy="47.0" r="13.0" fill="#FF4D8D"/>
   </g>
-  <text x="45" y="31" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI',system-ui,Roboto,'Helvetica Neue',Arial,sans-serif" font-size="26" font-weight="600" letter-spacing="-0.52" fill="#EDEDF0">PlexCord</text>
+  <text x="56" y="33" font-family="'Bricolage Grotesque Variable','Bricolage Grotesque',-apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI',system-ui,Roboto,Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="-0.7" fill="#F2EEE8">PlexCord</text>
 </svg>

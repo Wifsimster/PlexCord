@@ -71,6 +71,27 @@ export function usePresenceStatus() {
         }
     });
 
+    /**
+     * The tally lamp (spec §5.0.3): the on-air projection of `status`.
+     * kind: on | off | hold | fault | idle — maps 1:1 to .pc-tally--{kind}.
+     */
+    const tally = computed(() => {
+        switch (status.value) {
+            case 'live':
+                return { kind: 'on', label: t('tally.onAir') };
+            case 'paused':
+                return { kind: 'off', label: t('tally.offAir') };
+            case 'track-paused':
+                return { kind: 'hold', label: t('tally.paused') };
+            case 'plex-error':
+                return { kind: 'fault', label: t('tally.plexDown') };
+            case 'discord-error':
+                return { kind: 'fault', label: t('tally.discordDown') };
+            default:
+                return { kind: 'idle', label: t('tally.standby') };
+        }
+    });
+
     const isErrored = computed(() => status.value === 'plex-error' || status.value === 'discord-error');
 
     /** Both endpoints healthy — the relay can publish. */
@@ -82,6 +103,7 @@ export function usePresenceStatus() {
         status,
         headline,
         severity,
+        tally,
         trackTitle,
         isErrored,
         relayHealthy,

@@ -161,8 +161,8 @@
         "skipFailedDetail": "Einrichtung konnte nicht übersprungen werden. Bitte versuche es erneut."
     },
     "welcome": {
-        "title": "Übertrage deine Plex-Musik auf Discord.",
-        "lede": "PlexCord zeigt, was du gerade auf Plex hörst, als Discord-Rich-Presence-Status an — komplett mit Albumcover, Titelinformationen und Live-Fortschritt. Die Einrichtung dauert etwa zwei Minuten.",
+        "title": "Bring dein Plex auf Sendung.",
+        "lede": "PlexCord zeigt, was du auf Plex abspielst — Musik, Filme und Serien — auf deinem Discord-Profil an, mit Cover und Live-Fortschritt. Die Einrichtung dauert etwa zwei Minuten.",
         "diagramAria": "Plex zu PlexCord zu Discord",
         "plex": "Plex",
         "discord": "Discord",
@@ -445,5 +445,24 @@
         "mediaSyncNoneDetail": "Alles auszuschalten würde nichts mehr an Discord senden — pausiere stattdessen die Präsenz.",
         "mediaSyncFailed": "Speichern fehlgeschlagen",
         "mediaSyncFailedDetail": "Die Einstellung konnte nicht gespeichert werden."
+    },
+    "tally": {
+        "onAir": "Auf Sendung",
+        "offAir": "Nicht auf Sendung",
+        "paused": "Pausiert",
+        "standby": "Bereit",
+        "plexDown": "Plex nicht erreichbar",
+        "discordDown": "Discord getrennt"
+    },
+    "stage": {
+        "aria": "Aktuelle Wiedergabe",
+        "nowPlayingOn": "Läuft auf {player}",
+        "nowPlaying": "Läuft gerade",
+        "idleTitle": "Nichts auf Sendung.",
+        "offAirCaption": "Auf Discord ausgeblendet, solange die Presence pausiert ist.",
+        "resume": "Wieder auf Sendung",
+        "holdCaption": "Im Player pausiert — Discord zeigt es als pausiert.",
+        "onProfile": "Auf deinem Discord-Profil",
+        "episode": "S{season} · F{episode}"
     }
 }

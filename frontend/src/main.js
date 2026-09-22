@@ -18,6 +18,7 @@ import ConfirmationService from 'primevue/confirmationservice';
 import ToastService from 'primevue/toastservice';
 import Tooltip from 'primevue/tooltip';
 
+import '@fontsource-variable/bricolage-grotesque/standard.css';
 import '@/assets/tokens.css';
 import '@/assets/tailwind.css';
 import '@/assets/styles.scss';
@@ -31,160 +32,163 @@ document.documentElement.classList.toggle('dark', savedTheme === 'dark');
 
 const PlexCordPreset = definePreset(Aura, {
     primitive: {
-        signal: {
-            50: '#EEF5FF',
-            100: '#D9E9FF',
-            200: '#B3D3FF',
-            300: '#85B8FF',
-            400: '#5C9EFF',
-            500: '#3B82F6',
-            600: '#2A6AE0',
-            700: '#2456B8',
-            800: '#1F468F',
-            900: '#1C3A72',
-            950: '#142343'
+        // "Ink" — interaction is monochrome (spec §1.2). The ramp is the
+        // graphite surface ramp; which end is "primary" flips per scheme.
+        ink: {
+            50: '#FBFAF8',
+            100: '#F2EEE8',
+            200: '#E2DED8',
+            300: '#C6C1B9',
+            400: '#948E86',
+            500: '#716B64',
+            600: '#524D47',
+            700: '#34302D',
+            800: '#211F1D',
+            900: '#1A1817',
+            950: '#0E0D0C'
         }
     },
     semantic: {
         primary: {
-            50: '{signal.50}',
-            100: '{signal.100}',
-            200: '{signal.200}',
-            300: '{signal.300}',
-            400: '{signal.400}',
-            500: '{signal.500}',
-            600: '{signal.600}',
-            700: '{signal.700}',
-            800: '{signal.800}',
-            900: '{signal.900}',
-            950: '{signal.950}'
+            50: '{ink.50}',
+            100: '{ink.100}',
+            200: '{ink.200}',
+            300: '{ink.300}',
+            400: '{ink.400}',
+            500: '{ink.500}',
+            600: '{ink.600}',
+            700: '{ink.700}',
+            800: '{ink.800}',
+            900: '{ink.900}',
+            950: '{ink.950}'
         },
         transitionDuration: '0.15s',
-        focusRing: { width: '2px', style: 'solid', color: '{primary.color}', offset: '2px' },
+        focusRing: { width: '2px', style: 'solid', color: '{text.muted.color}', offset: '2px' },
         colorScheme: {
             light: {
                 surface: {
                     0: '#FFFFFF',
-                    50: '#F7F7F8',
-                    100: '#EEEEF0',
-                    200: '#DCDCE1',
-                    300: '#B9BAC3',
-                    400: '#8B8C98',
-                    500: '#6E6F7B',
-                    600: '#4B4C57',
-                    700: '#2E2F38',
-                    800: '#1E1F26',
-                    900: '#121317',
-                    950: '#0B0C0F'
+                    50: '#F5F3EF',
+                    100: '#EEEBE6',
+                    200: '#E2DED8',
+                    300: '#C6C1B9',
+                    400: '#948E86',
+                    500: '#716B64',
+                    600: '#524D47',
+                    700: '#34302D',
+                    800: '#211F1D',
+                    900: '#121110',
+                    950: '#0E0D0C'
                 },
                 primary: {
-                    color: '{signal.600}',
+                    color: '{ink.900}',
                     contrastColor: '#FFFFFF',
-                    hoverColor: '{signal.700}',
-                    activeColor: '{signal.800}'
+                    hoverColor: '{ink.700}',
+                    activeColor: '#000000'
                 },
                 highlight: {
-                    background: 'rgba(42,106,224,.10)',
-                    focusBackground: 'rgba(42,106,224,.16)',
-                    color: '#17181D',
-                    focusColor: '#17181D'
+                    background: 'rgba(26,24,23,.06)',
+                    focusBackground: 'rgba(26,24,23,.10)',
+                    color: '#1A1817',
+                    focusColor: '#1A1817'
                 },
                 formField: {
-                    background: '#F1F1F3',
-                    disabledBackground: '#F1F1F3',
-                    borderColor: '#E3E3E8',
-                    hoverBorderColor: '#C9CAD1',
-                    focusBorderColor: '{signal.600}',
-                    color: '#17181D',
-                    placeholderColor: '#8B8C98',
-                    floatLabelColor: '#5C5D68'
+                    background: '#F3F0EB',
+                    disabledBackground: '#F3F0EB',
+                    borderColor: '#E6E2DC',
+                    hoverBorderColor: '#CBC6BE',
+                    focusBorderColor: '{ink.900}',
+                    color: '#1A1817',
+                    placeholderColor: '#958F88',
+                    floatLabelColor: '#645E58'
                 },
                 text: {
-                    color: '#17181D',
-                    hoverColor: '#0B0C0F',
-                    mutedColor: '#5C5D68',
-                    hoverMutedColor: '#4B4C57'
+                    color: '#1A1817',
+                    hoverColor: '#0E0D0C',
+                    mutedColor: '#645E58',
+                    hoverMutedColor: '#4F4A45'
                 },
                 content: {
                     background: '#FFFFFF',
-                    hoverBackground: '#F1F1F3',
-                    borderColor: '#E3E3E8',
-                    color: '#17181D'
+                    hoverBackground: '#F3F0EB',
+                    borderColor: '#E6E2DC',
+                    color: '#1A1817'
                 },
                 overlay: {
-                    modal: { background: '#FFFFFF', borderColor: '#E3E3E8', color: '#17181D' },
-                    popover: { background: '#FFFFFF', borderColor: '#E3E3E8', color: '#17181D' }
+                    modal: { background: '#FFFFFF', borderColor: '#E6E2DC', color: '#1A1817' },
+                    popover: { background: '#FFFFFF', borderColor: '#E6E2DC', color: '#1A1817' }
                 }
             },
             dark: {
-                /* NB: --p-surface-900 is deliberately #17181D (our panel step, --pc-surface-850).
-                   The true near-black rail value #121317 is available only via --pc-overlay. */
+                /* NB: --p-surface-900 is deliberately #171514 (our panel step, --pc-surface-850).
+                   The true near-black rail value #121110 is available only via --pc-overlay. */
                 surface: {
                     0: '#FFFFFF',
-                    50: '#F7F7F8',
-                    100: '#EEEEF0',
-                    200: '#DCDCE1',
-                    300: '#B9BAC3',
-                    400: '#8B8C98',
-                    500: '#6E6F7B',
-                    600: '#4B4C57',
-                    700: '#2E2F38',
-                    800: '#1E1F26',
-                    900: '#17181D',
-                    950: '#0B0C0F'
+                    50: '#F5F3EF',
+                    100: '#EEEBE6',
+                    200: '#E2DED8',
+                    300: '#C6C1B9',
+                    400: '#948E86',
+                    500: '#716B64',
+                    600: '#524D47',
+                    700: '#34302D',
+                    800: '#211F1D',
+                    900: '#171514',
+                    950: '#0E0D0C'
                 },
                 primary: {
-                    color: '{signal.400}',
-                    contrastColor: '#0B0C0F',
-                    hoverColor: '{signal.300}',
-                    activeColor: '{signal.500}'
+                    color: '{ink.100}',
+                    contrastColor: '#141210',
+                    hoverColor: '#FFFFFF',
+                    activeColor: '{ink.200}'
                 },
                 highlight: {
-                    background: 'rgba(92,158,255,.16)',
-                    focusBackground: 'rgba(92,158,255,.24)',
-                    color: 'rgba(255,255,255,.92)',
-                    focusColor: 'rgba(255,255,255,.92)'
+                    background: 'rgba(242,238,232,.10)',
+                    focusBackground: 'rgba(242,238,232,.16)',
+                    color: 'rgba(255,255,255,.94)',
+                    focusColor: 'rgba(255,255,255,.94)'
                 },
                 formField: {
                     background: '{surface.800}',
                     disabledBackground: '{surface.800}',
-                    borderColor: '#26272F',
+                    borderColor: '#292624',
                     hoverBorderColor: '{surface.600}',
-                    focusBorderColor: '{signal.400}',
-                    color: '#EDEDF0',
+                    focusBorderColor: '{ink.300}',
+                    color: '#F2EEE8',
                     placeholderColor: '{surface.500}',
                     floatLabelColor: '{surface.400}'
                 },
                 text: {
-                    color: '#EDEDF0',
+                    color: '#F2EEE8',
                     hoverColor: '#FFFFFF',
-                    mutedColor: '#8B8C98',
-                    hoverMutedColor: '#A5A6B1'
+                    mutedColor: '#948E86',
+                    hoverMutedColor: '#B3ADA5'
                 },
                 content: {
                     background: '{surface.900}',
                     hoverBackground: '{surface.800}',
-                    borderColor: '#26272F',
-                    color: '#EDEDF0'
+                    borderColor: '#292624',
+                    color: '#F2EEE8'
                 },
                 overlay: {
-                    modal: { background: '#121317', borderColor: '#26272F', color: '#EDEDF0' },
-                    popover: { background: '#121317', borderColor: '#26272F', color: '#EDEDF0' }
+                    modal: { background: '#121110', borderColor: '#292624', color: '#F2EEE8' },
+                    popover: { background: '#121110', borderColor: '#292624', color: '#F2EEE8' }
                 }
             }
         }
     },
     components: {
-        button: { root: { borderRadius: '6px', paddingX: '0.75rem', paddingY: '0.4375rem' } },
-        card: { root: { borderRadius: '10px', background: '{content.background}' } },
-        dialog: { root: { borderRadius: '10px' } },
-        inputtext: { root: { borderRadius: '6px', paddingY: '0.4375rem' } },
-        inputnumber: { root: { borderRadius: '6px' } },
+        button: { root: { borderRadius: '999px', paddingX: '1rem', paddingY: '0.4375rem' } },
+        card: { root: { borderRadius: '14px', background: '{content.background}' } },
+        dialog: { root: { borderRadius: '14px' } },
+        inputtext: { root: { borderRadius: '8px', paddingY: '0.4375rem' } },
+        inputnumber: { root: { borderRadius: '8px' } },
+        select: { root: { borderRadius: '8px' } },
         toggleswitch: {
             root: { width: '2.25rem', height: '1.25rem' },
             handle: { size: '0.875rem' }
         },
-        toast: { root: { borderRadius: '8px' } }
+        toast: { root: { borderRadius: '10px' } }
     }
 });
 

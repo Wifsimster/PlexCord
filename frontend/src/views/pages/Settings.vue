@@ -1463,10 +1463,11 @@ async function executeReset() {
 }
 .settings-title {
     margin: 0 0 20px;
+    font-family: var(--pc-font-display);
     font-size: var(--pc-text-title);
-    font-weight: 600;
-    line-height: 1.3;
-    letter-spacing: -0.015em;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
     color: var(--pc-text);
 }
 .settings-layout {
@@ -1521,8 +1522,8 @@ async function executeReset() {
     color: var(--pc-text);
 }
 .rail-item--active {
-    color: var(--pc-accent);
-    font-weight: 500;
+    color: var(--pc-text);
+    font-weight: 600;
 }
 .rail-items:focus-visible .rail-item--focused {
     box-shadow: var(--pc-ring-focus);

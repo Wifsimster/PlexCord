@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- PlexCord symbol. See docs/brand.md. -->
+<!-- PlexCord symbol, "the live badge". See docs/brand.md. -->
+<!-- Ring in currentColor; the badge is always the tally. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="PlexCord">
-  <rect x="3.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="currentColor"/>
-  <circle cx="32.0" cy="32.0" r="8.5" fill="currentColor"/>
-  <rect x="46.0" y="27.5" width="15.0" height="9.0" rx="4.5" fill="currentColor"/>
+  <mask id="m-gap"><rect width="64" height="64" fill="#fff"/><circle cx="47.0" cy="47.0" r="17.5" fill="#000"/></mask>
+  <mask id="m-play"><rect width="64" height="64" fill="#fff"/><path d="M43.2 40.6 53.4 47.0 43.2 53.4 Z" fill="#000" stroke="#000" stroke-width="2" stroke-linejoin="round"/></mask>
+  <path mask="url(#m-gap)" fill="currentColor" fill-rule="evenodd" d="M29.0 4.0a25.0 25.0 0 1 1 0 50.0a25.0 25.0 0 1 1 0 -50.0zM29.0 19.0a10.0 10.0 0 1 0 0 20.0a10.0 10.0 0 1 0 0 -20.0z"/>
+  <circle mask="url(#m-play)" cx="47.0" cy="47.0" r="13.0" fill="#FF4D8D"/>
 </svg>

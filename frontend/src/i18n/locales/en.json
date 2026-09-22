@@ -161,8 +161,8 @@
         "skipFailedDetail": "Failed to skip setup. Please try again."
     },
     "welcome": {
-        "title": "Relay your Plex music to Discord.",
-        "lede": "PlexCord shows what you're listening to on Plex as a Discord Rich Presence status — complete with album art, track info, and live progress. Setup takes about two minutes.",
+        "title": "Put your Plex on air.",
+        "lede": "PlexCord shows what you’re playing on Plex — music, films and TV — on your Discord profile, with artwork and live progress. Setup takes about two minutes.",
         "diagramAria": "Plex to PlexCord to Discord",
         "plex": "Plex",
         "discord": "Discord",
@@ -445,5 +445,24 @@
         "mediaSyncNoneDetail": "Turn every kind off and nothing would reach Discord — pause the presence instead.",
         "mediaSyncFailed": "Failed to save what to sync",
         "mediaSyncFailedDetail": "The setting could not be saved."
+    },
+    "tally": {
+        "onAir": "On air",
+        "offAir": "Off air",
+        "paused": "Paused",
+        "standby": "Standby",
+        "plexDown": "Plex down",
+        "discordDown": "Discord down"
+    },
+    "stage": {
+        "aria": "Now playing",
+        "nowPlayingOn": "Now playing on {player}",
+        "nowPlaying": "Now playing",
+        "idleTitle": "Nothing on air.",
+        "offAirCaption": "Hidden from Discord while presence is paused.",
+        "resume": "Go back on air",
+        "holdCaption": "Paused in the player — Discord shows it paused.",
+        "onProfile": "On your Discord profile",
+        "episode": "S{season} · E{episode}"
     }
 }

@@ -16,7 +16,7 @@ PlexCord is a lightweight, cross-platform desktop application that bridges your 
 - 🖥️ Cross-platform support (Windows, macOS, Linux)
 - 🔐 Secure credential storage (OS keychain integration)
 - ⚡ Lightweight single binary (<20MB)
-- 🎨 Modern UI with setup wizard
+- 🎨 "ON AIR" interface: a tally lamp that tells you when you are live, and a stage washed in your artwork
 - 🔄 Auto-recovery on connection loss
 
 ## Screenshots
