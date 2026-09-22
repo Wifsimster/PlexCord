@@ -205,8 +205,10 @@ func Save(cfg *Config) error {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "failed to marshal config: "+err.Error())
 	}
 
-	// Write to file with 0600 permissions (owner read/write only)
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	// Write atomically with 0600 permissions (owner read/write only): a crash
+	// mid-write must not leave a truncated file that the next start would
+	// fail to load and then overwrite with defaults.
+	if err := WriteFileAtomic(configPath, data, 0600); err != nil {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "failed to write config file: "+err.Error())
 	}
 

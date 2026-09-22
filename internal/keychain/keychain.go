@@ -1,6 +1,8 @@
 package keychain
 
 import (
+	"log"
+
 	"plexcord/internal/errors"
 
 	"github.com/zalando/go-keyring"
@@ -41,6 +43,12 @@ func SetToken(token string) error {
 		return nil
 	}
 
+	// The keychain now holds the token; drop any older fallback copy so it
+	// cannot resurface through GetToken later. Best-effort: the keychain
+	// write already succeeded.
+	if err := deleteTokenFallback(); err != nil {
+		log.Printf("Warning: failed to remove stale token fallback: %v", err)
+	}
 	return nil
 }
 
@@ -61,9 +69,16 @@ func SetToken(token string) error {
 func GetToken() (string, error) {
 	token, err := keyring.Get(ServiceName, TokenKey)
 	if err != nil {
-		// Token not found is not an error (user hasn't set it up yet)
+		// Token not found is not an error (user hasn't set it up yet). The
+		// keychain may just have been unavailable when the token was stored,
+		// though, so a fallback file still holds it: read that before
+		// reporting the user as signed out.
 		if err == keyring.ErrNotFound {
-			return "", nil
+			fallbackToken, fallbackErr := getTokenFallback()
+			if fallbackErr != nil {
+				return "", nil
+			}
+			return fallbackToken, nil
 		}
 
 		// OS keychain unavailable — fall back to encrypted file storage
