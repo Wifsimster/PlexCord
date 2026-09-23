@@ -6,7 +6,7 @@
 
 PlexCord is a lightweight, cross-platform desktop application that bridges your Plex Media Server and Discord, showing what you're listening to or watching in real-time. Built with Go + Vue 3 + Wails.
 
-![PlexCord live on air with real Plex artwork](docs/images/now-playing.png)
+![PlexCord live on air with real Plex artwork](docs/images/dashboard.png)
 
 ## Features
 
@@ -21,15 +21,9 @@ PlexCord is a lightweight, cross-platform desktop application that bridges your 
 
 ## Screenshots
 
-### On air
-
-Your artwork floods the stage while the track goes live on your Discord profile (French UI shown).
-
-![PlexCord on air](docs/images/now-playing.png)
-
 ### Dashboard
 
-Live presence preview and connection health at a glance.
+Your artwork floods the stage while the track goes live on your Discord profile, with connection health at a glance (French UI shown).
 
 ![Dashboard](docs/images/dashboard.png)
 
