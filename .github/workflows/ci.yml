@@ -144,44 +144,50 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.25"
+      # The toolchain setup and the system packages do not depend on each
+      # other, so they run concurrently. A `parallel` group waits for all its
+      # steps (and their PATH changes) before the next step starts.
+      - parallel:
+          - name: Set up Go
+            uses: actions/setup-go@v6
+            with:
+              go-version: "1.25"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
+          - name: Set up Node.js
+            uses: actions/setup-node@v4
+            with:
+              node-version: "20"
+              cache: "npm"
+              cache-dependency-path: frontend/package-lock.json
 
-      - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          - name: Install Linux dependencies
+            if: matrix.platform == 'linux'
+            run: |
+              sudo apt-get update
+              sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
 
-      - name: Install Linux dependencies
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          # The windows-latest image has no NSIS on PATH, and `wails build -nsis`
+          # only warns ("Cannot create installer: makensis not found") before
+          # exiting 0 — so without this the installer is silently skipped and the
+          # job goes green having built nothing.
+          - name: Install NSIS (Windows)
+            if: matrix.platform == 'windows'
+            run: |
+              choco install nsis --no-progress -y
+              echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
 
-      # The windows-latest image has no NSIS on PATH, and `wails build -nsis`
-      # only warns ("Cannot create installer: makensis not found") before
-      # exiting 0 — so without this the installer is silently skipped and the
-      # job goes green having built nothing.
-      - name: Install NSIS (Windows)
-        if: matrix.platform == 'windows'
-        run: |
-          choco install nsis --no-progress -y
-          echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+      # Wails needs Go and npm ci needs Node, both set up by the group above.
+      - parallel:
+          - name: Install Wails
+            run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+          - name: Install frontend dependencies
+            working-directory: frontend
+            run: npm ci
 
       - name: Verify makensis is on PATH (Windows)
         if: matrix.platform == 'windows'
         run: makensis /VERSION
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
 
       # Ubuntu 24.04 ships webkit2gtk-4.1 only; Wails defaults to looking for
       # webkit2gtk-4.0, so Linux builds need the `webkit2_41` build tag. The
