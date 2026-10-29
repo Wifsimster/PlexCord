@@ -1,9 +1,6 @@
 <script>
 import { reactive } from 'vue';
 
-// Per-error-code collapse memory (module scope, spec §5.2 Crossfade graft):
-// a detail the user collapsed stays collapsed for subsequent status events
-// of the SAME failure, but a different error code opens again.
 const collapsedByKey = reactive({});
 </script>
 
@@ -17,15 +14,7 @@ import { usePlaybackStore } from '@/stores/playback';
 import { usePresenceStore } from '@/stores/presence';
 import { formatRelativeTime } from '@/utils/timeUtils';
 
-/**
- * Connections-panel tile (spec §5.2) — one component, `source` prop.
- * Replaces PlexStatusCard / DiscordStatusCard / ErrorBanner: brand identity
- * keyline on top, dot + micro status label (M4/M5/M6), 28px key-value rows,
- * and an inline collapsible error/retry detail (M17/M18) instead of a
- * dismissable banner. Errors resolve or collapse — never "dismiss" into lying.
- */
 const props = defineProps({
-    /** Which endpoint this tile represents. */
     source: {
         type: String,
         required: true,
@@ -44,7 +33,6 @@ const isPlex = props.source === 'plex';
 const store = isPlex ? plexStore : discordStore;
 const name = isPlex ? 'Plex' : 'Discord';
 
-// ---- Status (dot + micro label, §5.0.3) -----------------------------------
 const healthy = computed(() => (isPlex ? store.connected && store.polling : store.connected));
 
 const statusLabel = computed(() => {
@@ -65,14 +53,13 @@ const statusSeverity = computed(() => {
 
 const dotClass = computed(() => {
     const classes = [`pc-dot--${statusSeverity.value}`];
-    if (store.isRetrying) classes.push('pc-dot--blink'); // M5
+    if (store.isRetrying) classes.push('pc-dot--blink');
     if (statusSeverity.value === 'success' && playbackStore.isPlaying && !presenceStore.paused) {
-        classes.push('pc-dot--pulse'); // M4 — connected & playing
+        classes.push('pc-dot--pulse');
     }
     return classes;
 });
 
-// ---- Key-value rows --------------------------------------------------------
 const plexHost = computed(() => {
     if (!plexStore.serverUrl) return '—';
     return plexStore.serverUrl.replace(/^[a-z]+:\/\//i, '').replace(/\/+$/, '');
@@ -84,7 +71,6 @@ const discordPresence = computed(() => {
     return playbackStore.hasActiveSession ? t('presenceState.active') : t('presenceState.inactive');
 });
 
-// 1s ticker: keeps the relative sync label fresh and drives the M18 countdown.
 const now = ref(Date.now());
 let ticker = null;
 onMounted(() => {
@@ -97,11 +83,10 @@ onBeforeUnmount(() => {
 });
 
 const syncLabel = computed(() => {
-    void now.value; // recompute as time passes
+    void now.value;
     return formatRelativeTime(store.lastConnected);
 });
 
-// ---- Inline error detail (replaces ErrorBanner — F5/F9) --------------------
 const errorInfo = computed(() => {
     if (!store.hasError) return null;
     return (
@@ -113,9 +98,6 @@ const errorInfo = computed(() => {
     );
 });
 
-// Loading into an already-errored backend leaves hasError true (via
-// inErrorState/retryState) with no friendly error object until the next
-// failure event — hydrate it through the store's own GetErrorInfo path.
 watch(
     () => [store.hasError, store.error, store.retryState?.lastErrorCode],
     ([hasError, error, lastErrorCode]) => {
@@ -126,7 +108,6 @@ watch(
     { immediate: true }
 );
 
-// Retain the last error so the M17 collapse-out on recovery has content.
 const displayError = ref(null);
 watch(
     errorInfo,
@@ -143,7 +124,6 @@ const toggleDetail = () => {
     collapsedByKey[errorKey.value] = !collapsedByKey[errorKey.value];
 };
 
-// ---- Retry countdown (M18 — store nextRetryIn is NANOSECONDS) --------------
 const retryDeadline = ref(0);
 watch(
     () => store.retryState,
@@ -156,7 +136,7 @@ watch(
         if (Number.isFinite(at) && at > Date.now()) {
             retryDeadline.value = at;
         } else if (state.nextRetryIn > 0) {
-            retryDeadline.value = Date.now() + state.nextRetryIn / 1e6; // ns → ms
+            retryDeadline.value = Date.now() + state.nextRetryIn / 1e6;
         } else {
             retryDeadline.value = 0;
         }
@@ -171,8 +151,6 @@ const countdownSeconds = computed(() => {
 const showCountdown = computed(() => store.isRetrying && countdownSeconds.value > 0);
 const attemptNumber = computed(() => store.retryState?.attemptNumber || 0);
 
-// A failed retry already shows as the store's error state; swallow the
-// rejection so it does not surface as an unhandled promise.
 const retryNow = () => store.retry().catch((error) => console.error('Reconnect failed:', error));
 </script>
 
@@ -227,12 +205,9 @@ const retryNow = () => store.retry().catch((error) => console.error('Reconnect f
             </div>
         </div>
 
-        <!-- Inline collapsible error/retry detail (M17) -->
         <div class="pc-collapse tile-detail" :class="{ 'pc-collapse--open': detailOpen }">
             <div>
                 <div v-if="displayError" class="tile-detail-body">
-                    <!-- Announce the failure once; the ticking countdown stays
-                         outside the live region so it isn't read every second. -->
                     <div role="alert">
                         <p class="tile-error-title">{{ displayError.title || $t('connectionTile.connectionError') }}</p>
                         <p v-if="displayError.suggestion" class="tile-error-suggestion">{{ displayError.suggestion }}</p>
@@ -253,7 +228,6 @@ const retryNow = () => store.retry().catch((error) => console.error('Reconnect f
             </div>
         </div>
 
-        <!-- Reconnect stays reachable when down without an error object (F5) -->
         <div v-if="!healthy && !errorInfo && !store.loading" class="tile-action">
             <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="retryNow">
                 {{ isPlex ? $t('common.reconnect') : $t('common.connect') }}
@@ -263,9 +237,6 @@ const retryNow = () => store.retry().catch((error) => console.error('Reconnect f
 </template>
 
 <style scoped>
-/* Canonical raised surface (.pc-panel--raised, §5.0.1) carries bg + radius;
-   the tile adds the 2px brand identity keyline on top (§5.2) — the only
-   non-neutral borders in the app. Error adds a 2px danger left keyline. */
 .tile {
     border-top: 2px solid transparent;
     border-left: 2px solid transparent;
@@ -282,7 +253,6 @@ const retryNow = () => store.retry().catch((error) => console.error('Reconnect f
     border-left-color: var(--pc-danger);
 }
 
-/* ---- Header row ---- */
 .tile-header {
     display: flex;
     align-items: center;
@@ -319,7 +289,7 @@ const retryNow = () => store.retry().catch((error) => console.error('Reconnect f
     gap: 6px;
 }
 .tile-status .pc-dot {
-    transition: color var(--pc-dur-2) var(--pc-ease-out); /* M6 dot crossfade */
+    transition: color var(--pc-dur-2) var(--pc-ease-out);
 }
 .tile-status--success .pc-status-label {
     color: var(--pc-success);
@@ -360,7 +330,6 @@ const retryNow = () => store.retry().catch((error) => console.error('Reconnect f
     font-size: 11px;
 }
 
-/* ---- 28px key-value caption rows ---- */
 .tile-rows {
     margin-top: 6px;
 }
@@ -391,7 +360,6 @@ const retryNow = () => store.retry().catch((error) => console.error('Reconnect f
     white-space: nowrap;
 }
 
-/* ---- Error detail region ---- */
 .tile-detail-body {
     margin-top: 10px;
     padding-top: 10px;
@@ -429,7 +397,6 @@ const retryNow = () => store.retry().catch((error) => console.error('Reconnect f
 .tile-countdown-digits > span {
     display: inline-block;
 }
-/* M18 — per tick the digit slides up 4px + fades over 120ms */
 .tile-tick-enter-active,
 .tile-tick-leave-active {
     transition:

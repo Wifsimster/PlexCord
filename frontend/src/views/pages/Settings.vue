@@ -88,7 +88,6 @@ const SAMPLE_TRACK = Object.freeze({
     state: 'playing'
 });
 
-// ---------------- Settings state ----------------
 const loaded = ref(false);
 const pollingInterval = ref(2);
 const autoStart = ref(false);
@@ -109,14 +108,10 @@ const defaultClientId = ref('');
 const servers = ref([]);
 const hasPlexToken = ref(false);
 
-// Per-server health from the lightweight validate ping (keyed by URL):
-// { status: 'unknown'|'testing'|'ok'|'fail'|'auth', message }
 const serverHealth = reactive({});
 
-// Last values acknowledged by the backend (autosave dedupe)
 const lastSaved = { polling: null, details: null, state: null, hideDelay: null };
 
-// ---------------- Inline "✓ Saved" flashes (M15) ----------------
 const savedFlags = reactive({});
 const savedTimers = {};
 function flashSaved(key) {
@@ -136,7 +131,6 @@ function toastFailure(summary, error, fallback) {
     toast.add({ severity: 'error', summary, detail: friendlyError(error, fallback), life: 8000 });
 }
 
-// ---------------- Rail: scroll-spy + keyboard listbox ----------------
 const sections = [
     { id: 'section-connection', labelKey: 'settings.sectionConnection' },
     { id: 'section-presence', labelKey: 'settings.sectionPresence' },
@@ -145,18 +139,12 @@ const sections = [
     { id: 'section-about', labelKey: 'settings.sectionAbout' }
 ];
 
-// ---------------- Language (spec: display language override) ----------------
-// The active locale is resolved from the environment at startup; this picker
-// lets the user pin a specific language, persisted via setLocale().
 const languageOptions = SUPPORTED_LOCALES.map((code) => ({ code, label: t(`settings.languageNames.${code}`) }));
 const selectedLanguage = computed(() => locale.value);
 function changeLanguage(code) {
     setLocale(code);
 }
 
-// ---------------- Theme (spec: dark/light appearance) ----------------
-// Lives here rather than in the topbar; the Alt+D shortcut flips the same
-// state. Persisted by the layout composable (localStorage), applied to <html>.
 const themeOptions = computed(() => [
     { value: 'dark', label: t('settings.themeNames.dark') },
     { value: 'light', label: t('settings.themeNames.light') }
@@ -219,7 +207,6 @@ function onRailFocus() {
     railFocusIndex.value = activeIndex.value;
 }
 
-// ---------------- Initial load ----------------
 onMounted(async () => {
     try {
         pollingInterval.value = await GetPollingInterval();
@@ -258,8 +245,6 @@ onMounted(async () => {
         } catch {
             hasPlexToken.value = false;
         }
-        // Idempotent: AppLayout initializes it too, but a direct navigation
-        // to /settings should not depend on that ordering.
         await updatesStore.initialize();
         refreshAllServerHealth();
     } catch (error) {
@@ -295,7 +280,6 @@ onBeforeUnmount(() => {
     clearTimeout(testResultTimer);
 });
 
-// ---------------- Connection: polling interval (autosave) ----------------
 let pollingTimer = null;
 watch(pollingInterval, () => {
     if (!loaded.value) return;
@@ -320,7 +304,6 @@ async function savePollingInterval() {
     }
 }
 
-// ---------------- Connection: servers ----------------
 async function loadServers() {
     try {
         servers.value = await GetServers();
@@ -403,7 +386,6 @@ function goToPlexAuth() {
     router.push('/setup/plex');
 }
 
-// Add-server dialog
 const showAddServerDialog = ref(false);
 const newServerName = ref('');
 const newServerURL = ref('');
@@ -413,7 +395,6 @@ const newServerUrlValidation = computed(() => validatePlexServerUrl(newServerURL
 const newServerUrlTouched = computed(() => newServerURL.value.trim().length > 0);
 const canAddServer = computed(() => newServerName.value.trim().length > 0 && newServerUrlValidation.value.valid);
 
-// Server auto-discovery (GDM) inside the add-server dialog
 const isDiscovering = ref(false);
 const hasDiscovered = ref(false);
 const discoveryError = ref('');
@@ -475,7 +456,6 @@ async function addServer() {
     }
 }
 
-// ---------------- Presence: format editor (autosave on blur / 600ms) ----------------
 const detailsInputRef = ref(null);
 const stateInputRef = ref(null);
 const lastFocusedFormat = ref('details');
@@ -531,24 +511,22 @@ function insertToken(token) {
     });
 }
 
-// Specimen: live playback when present, else the Queen sample (SAMPLE badge)
 const specimenIsSample = computed(() => !hasActiveSession.value);
 const specimenTrack = computed(() => (hasActiveSession.value ? currentTrack.value : SAMPLE_TRACK));
 const specimenPaused = computed(() => presenceStore.paused && hasActiveSession.value);
 const specimenFormats = computed(() => ({ details: detailsFormat.value, state: stateFormat.value }));
 
-// ---------------- Presence: hide when paused ----------------
 const hideWhenPausedSaving = ref(false);
 let hideDelayTimer = null;
 
 async function updateHideWhenPaused(value) {
     hideWhenPausedSaving.value = true;
-    hideWhenPaused.value = value; // optimistic
+    hideWhenPaused.value = value;
     try {
         await SetHideWhenPaused(value, hideWhenPausedDelay.value ?? 0);
         flashSaved('hidePaused');
     } catch (error) {
-        hideWhenPaused.value = !value; // revert
+        hideWhenPaused.value = !value;
         toastFailure(t('settings.toast.hidePausedFailed'), error, t('settings.toast.hidePausedFailedDetail'));
     } finally {
         hideWhenPausedSaving.value = false;
@@ -578,11 +556,8 @@ async function saveHideWhenPausedDelay() {
     }
 }
 
-// ---------------- Presence: display options ----------------
 const presenceOptionsSaving = ref(false);
 
-// savePresenceOptions persists the current activity style, member-list line,
-// and artwork-lookup toggle together, reverting the affected ref on failure.
 async function savePresenceOptions(revert) {
     presenceOptionsSaving.value = true;
     try {
@@ -602,32 +577,27 @@ async function savePresenceOptions(revert) {
 
 function updateActivityStyle(value) {
     const prev = activityStyle.value;
-    activityStyle.value = value; // optimistic
+    activityStyle.value = value;
     savePresenceOptions(() => { activityStyle.value = prev; });
 }
 
 function updateStatusDisplay(value) {
     const prev = statusDisplay.value;
-    statusDisplay.value = value; // optimistic
+    statusDisplay.value = value;
     savePresenceOptions(() => { statusDisplay.value = prev; });
 }
 
 function updateArtworkLookup(value) {
     const prev = artworkLookup.value;
-    artworkLookup.value = value; // optimistic
+    artworkLookup.value = value;
     savePresenceOptions(() => { artworkLookup.value = prev; });
 }
 
-// ---------------- Presence: what to sync ----------------
 const mediaSyncSaving = ref(false);
 
-// The backend rejects a selection with nothing enabled — an empty list means
-// "all of them" in the config, so it would show three switches off while still
-// relaying everything. Refuse it here too, with an explanation rather than a
-// switch that silently springs back.
 async function updateMediaSync(key, value) {
     const prev = mediaSync[key];
-    mediaSync[key] = value; // optimistic
+    mediaSync[key] = value;
 
     if (!mediaSync.music && !mediaSync.movies && !mediaSync.tv) {
         mediaSync[key] = prev;
@@ -647,18 +617,13 @@ async function updateMediaSync(key, value) {
     }
 }
 
-// ---------------- App: toggles (instant, optimistic + revert) ----------------
 const autoStartSaving = ref(false);
 const minimizeToTraySaving = ref(false);
 const startMinimizedSaving = ref(false);
 const startMinimizedOnLoginSaving = ref(false);
 
-// Caption depends on where "minimized" lands: the tray when closing to the
-// tray is enabled, the taskbar otherwise. Mirrors resolveWindowLaunchState.
 const startMinimizedCaption = computed(() => (minimizeToTray.value ? t('settings.startMinimizedCaptionTray') : t('settings.startMinimizedCaptionTaskbar')));
 
-// Same split for the login launch: the tray when closing to the tray is
-// enabled, the taskbar otherwise.
 const startMinimizedOnLoginCaption = computed(() =>
     minimizeToTray.value ? t('settings.startMinimizedOnLoginCaptionTray') : t('settings.startMinimizedOnLoginCaptionTaskbar')
 );
@@ -735,7 +700,6 @@ async function updateAutoUpdateCheck(value) {
     }
 }
 
-// ---------------- Advanced: Discord Client ID (explicit Apply) ----------------
 const applyingClientId = ref(false);
 const clientIdError = ref('');
 const clientIdWarning = ref('');
@@ -758,11 +722,9 @@ async function applyClientId() {
         }
         await SaveDiscordClientID(id);
         discordClientId.value = id;
-        // The caption promises it: applying reconnects Discord with the new app.
         try {
             await DisconnectDiscord();
         } catch {
-            // Not connected — nothing to disconnect.
         }
         try {
             await ConnectDiscord(id);
@@ -782,7 +744,6 @@ function resetClientIdToDefault() {
     applyClientId();
 }
 
-// ---------------- Advanced: send test presence ----------------
 const sendingTestPresence = ref(false);
 const testPresenceResult = ref(null);
 let testResultTimer = null;
@@ -808,11 +769,6 @@ async function sendTestPresence() {
     }
 }
 
-// ---------------- About: updates + changelog ----------------
-// Update state lives in the updates store: the backend checks and downloads
-// automatically in the background, so the state must survive page navigation
-// (an update downloaded while on the Dashboard still shows "Restart now"
-// here). The store also owns the update runtime event subscriptions.
 const { info: updateInfo, progress: updateProgress, canSelfUpdate } = storeToRefs(updatesStore);
 const updateReady = computed(() => updatesStore.updateReady);
 const installingUpdate = computed(() => updatesStore.installing);
@@ -843,9 +799,6 @@ function openUpdatePage() {
     }
 }
 
-// Progress and completion are surfaced through the store (fed by the
-// UpdateDownloadProgress / UpdateReady events); the rejection carries the
-// failure message.
 async function installUpdate() {
     if (installingUpdate.value) return;
     try {
@@ -867,9 +820,6 @@ function openReleases() {
     OpenReleasesPage();
 }
 
-// ---------------- Studio / publisher footer ----------------
-// Publisher identity shown at the foot of Settings (mirrors pro.battistella.ovh).
-// Links open in the system browser via the Wails runtime.
 const STUDIO_URL = 'https://pro.battistella.ovh';
 const STUDIO_EMAIL = 'battistella@proton.me';
 const studioLinks = [
@@ -887,7 +837,6 @@ function openStudioMail() {
     BrowserOpenURL(`mailto:${STUDIO_EMAIL}`);
 }
 
-// ---------------- Danger zone: reset application ----------------
 const resetting = ref(false);
 
 function confirmReset() {
@@ -920,7 +869,6 @@ async function executeReset() {
         <h1 class="settings-title">{{ $t('settings.title') }}</h1>
 
         <div class="settings-layout">
-            <!-- Rail: scroll-spy + keyboard listbox (§5.3) -->
             <nav class="settings-rail" :aria-label="$t('settings.railAria')">
                 <p class="pc-eyebrow rail-eyebrow" id="settings-rail-label">{{ $t('settings.railEyebrow') }}</p>
                 <div class="rail-items" role="listbox" tabindex="0" aria-labelledby="settings-rail-label" :aria-activedescendant="`rail-opt-${sections[railFocusIndex].id}`" @keydown="onRailKeydown" @focus="onRailFocus">
@@ -943,7 +891,6 @@ async function executeReset() {
             </nav>
 
             <div class="settings-sections">
-                <!-- ============ Connection ============ -->
                 <section id="section-connection" class="pc-panel settings-section" aria-labelledby="hd-connection">
                     <div class="section-head">
                         <h2 id="hd-connection" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionConnection') }}</h2>
@@ -992,7 +939,6 @@ async function executeReset() {
                     </template>
                 </section>
 
-                <!-- ============ Presence ============ -->
                 <section id="section-presence" class="pc-panel settings-section" aria-labelledby="hd-presence">
                     <div class="section-head">
                         <h2 id="hd-presence" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionPresence') }}</h2>
@@ -1132,7 +1078,6 @@ async function executeReset() {
                     </template>
                 </section>
 
-                <!-- ============ App ============ -->
                 <section id="section-app" class="pc-panel settings-section" aria-labelledby="hd-app">
                     <div class="section-head">
                         <h2 id="hd-app" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionApp') }}</h2>
@@ -1224,7 +1169,6 @@ async function executeReset() {
                     </template>
                 </section>
 
-                <!-- ============ Advanced ============ -->
                 <section id="section-advanced" class="pc-panel settings-section" aria-labelledby="hd-advanced">
                     <div class="section-head">
                         <h2 id="hd-advanced" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionAdvanced') }}</h2>
@@ -1289,7 +1233,6 @@ async function executeReset() {
                     </template>
                 </section>
 
-                <!-- ============ About + Danger zone ============ -->
                 <section id="section-about" class="pc-panel settings-section" aria-labelledby="hd-about">
                     <div class="section-head">
                         <h2 id="hd-about" class="pc-eyebrow section-eyebrow">{{ $t('settings.sectionAbout') }}</h2>
@@ -1312,7 +1255,6 @@ async function executeReset() {
                         </div>
                     </div>
 
-                    <!-- Also shown for an already-downloaded update (whose info.available is false) -->
                     <div v-if="showUpdatePanel" class="pc-panel--raised update-row">
                         <div class="update-row-main">
                             <div class="row-text">
@@ -1327,7 +1269,6 @@ async function executeReset() {
                                 </div>
                                 <p v-if="updateReady" class="row-caption row-caption--success">{{ $t('settings.updateInstalled', { version: updateInfo?.latestVersion }) }}</p>
                             </div>
-                            <!-- Self-updating platforms install in place; the rest fall back to the release page -->
                             <button v-if="updateReady" type="button" class="pc-btn pc-btn--primary" @click="restartApp"><i class="pi pi-refresh" aria-hidden="true"></i>{{ $t('settings.restartNow') }}</button>
                             <button v-else-if="canSelfUpdate" type="button" class="pc-btn pc-btn--primary" :class="{ 'is-loading': installingUpdate }" :disabled="installingUpdate" @click="installUpdate">
                                 <span class="btn-label"><i class="pi pi-download" aria-hidden="true"></i>{{ $t('settings.downloadInstall') }}</span>
@@ -1368,7 +1309,6 @@ async function executeReset() {
             </div>
         </div>
 
-        <!-- Publisher footer -->
         <footer class="settings-footer">
             <div class="studio-identity">
                 <span class="studio-name">BATTISTELLA</span>
@@ -1382,10 +1322,8 @@ async function executeReset() {
             <p class="row-caption studio-copyright">{{ $t('settings.studioCopyright', { year: studioYear }) }}</p>
         </footer>
 
-        <!-- Add server dialog -->
         <Dialog v-model:visible="showAddServerDialog" modal :header="$t('settings.dialogAddServer')" :style="{ width: '420px' }">
             <div class="dialog-body">
-                <!-- Auto-discovery (GDM) -->
                 <div class="dialog-discovery">
                     <button v-if="!isDiscovering" type="button" class="pc-btn pc-btn--secondary discovery-btn" @click="discoverServers">
                         <i class="pi pi-search" aria-hidden="true"></i>{{ hasDiscovered ? $t('common.searchAgain') : $t('settings.discoverServers') }}
@@ -1477,7 +1415,6 @@ async function executeReset() {
     align-items: start;
 }
 
-/* ---------------- Rail ---------------- */
 .settings-rail {
     position: sticky;
     top: 72px;
@@ -1529,7 +1466,6 @@ async function executeReset() {
     box-shadow: var(--pc-ring-focus);
 }
 
-/* ---------------- Sections ---------------- */
 .settings-section {
     margin-bottom: var(--pc-space-panel-gap);
     scroll-margin-top: 72px;
@@ -1559,7 +1495,6 @@ async function executeReset() {
     height: 14px;
 }
 
-/* ---------------- Rows ---------------- */
 .setting-row {
     display: flex;
     align-items: center;
@@ -1625,7 +1560,6 @@ async function executeReset() {
     color: var(--pc-text-muted);
 }
 
-/* Button loading (§5.0.2): label persists at 40%, 12px absolute spinner */
 .pc-btn {
     position: relative;
     white-space: nowrap;
@@ -1644,7 +1578,6 @@ async function executeReset() {
     font-size: 12px;
 }
 
-/* ---------------- Servers ---------------- */
 .server-list {
     margin-bottom: 4px;
 }
@@ -1699,7 +1632,6 @@ async function executeReset() {
     border-top: 1px solid var(--pc-border-subtle);
 }
 
-/* ---------------- Format editor ---------------- */
 .format-fields {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1756,7 +1688,6 @@ async function executeReset() {
     margin: 16px 0;
 }
 
-/* ---------------- Advanced ---------------- */
 .client-id-block {
     padding: 12px 0;
 }
@@ -1789,7 +1720,6 @@ async function executeReset() {
     font-size: 11px;
 }
 
-/* ---------------- About + danger zone ---------------- */
 .version-chips {
     display: flex;
     align-items: center;
@@ -1860,7 +1790,6 @@ async function executeReset() {
     color: var(--pc-danger);
 }
 
-/* ---------------- Dialog ---------------- */
 .dialog-body {
     display: flex;
     flex-direction: column;
@@ -1959,13 +1888,10 @@ async function executeReset() {
     margin-right: auto;
 }
 
-/* ---------------- Controls sizing ---------------- */
 .num-input :deep(.p-inputnumber-input) {
     width: 96px;
 }
 
-/* Language picker: native select styled to match the form-field recipe. */
-/* ---------------- Publisher footer ---------------- */
 .settings-footer {
     display: flex;
     flex-direction: column;
@@ -2028,7 +1954,6 @@ async function executeReset() {
     border-color: var(--pc-accent);
 }
 
-/* ---------------- Responsive ---------------- */
 @media (max-width: 860px) {
     .settings-layout {
         grid-template-columns: 1fr;

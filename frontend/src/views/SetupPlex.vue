@@ -12,8 +12,7 @@ const { t } = useI18n();
 const setupStore = useSetupStore();
 const wizard = inject('setupWizard', null);
 
-// ---- PIN authentication state machine (kept — spec §5.4 step 2.1) ------
-const authStep = ref(setupStore.isPlexStepValid ? 'success' : 'initial'); // 'initial' | 'loading' | 'waiting' | 'success' | 'error'
+const authStep = ref(setupStore.isPlexStepValid ? 'success' : 'initial');
 const pinCode = ref('');
 const pinID = ref(null);
 const authURL = ref('');
@@ -22,18 +21,15 @@ const checkInterval = ref(null);
 const pinPollFailures = ref(0);
 const MAX_PIN_POLL_FAILURES = 5;
 
-// ---- Server discovery state ---------------------------------------------
 const isDiscovering = ref(false);
 const discoveryError = ref('');
 const hasDiscovered = ref(setupStore.discoveredServers.length > 0);
 
-// ---- Manual server entry state ------------------------------------------
 const showManualEntry = ref(setupStore.isManualEntry);
 const manualServerUrl = ref(setupStore.isManualEntry ? setupStore.plexServerUrl : '');
 const manualEntryError = ref('');
 const isManualUrlValid = ref(setupStore.isManualEntry && validatePlexServerUrl(setupStore.plexServerUrl).valid);
 
-// ---- Validation state ----------------------------------------------------
 const isValidating = ref(false);
 const validationError = ref('');
 const validationAttempted = ref(false);
@@ -47,7 +43,6 @@ const libraryLabel = computed(() => {
     return t('plex.libraryCount', { n: count }, count);
 });
 
-// ---- PIN auth ------------------------------------------------------------
 const startPINAuth = async () => {
     authError.value = '';
     authStep.value = 'loading';
@@ -60,10 +55,8 @@ const startPINAuth = async () => {
         authStep.value = 'waiting';
         pinPollFailures.value = 0;
 
-        // Start polling for authorization
         checkInterval.value = setInterval(checkPINStatus, 2000);
 
-        // Open browser automatically
         BrowserOpenURL(authURL.value);
     } catch (error) {
         console.error('Failed to start PIN auth:', error);
@@ -85,7 +78,6 @@ const checkPINStatus = async () => {
         pinPollFailures.value = 0;
 
         if (result.authorized) {
-            // Success! Save the token
             setupStore.setPlexToken(result.authToken);
             authStep.value = 'success';
             stopPinPolling();
@@ -96,8 +88,6 @@ const checkPINStatus = async () => {
         }
     } catch (error) {
         console.error('Error checking PIN status:', error);
-        // Bail out after repeated failures so the interval doesn't loop
-        // forever on a persistent network/backend failure.
         pinPollFailures.value += 1;
         if (pinPollFailures.value >= MAX_PIN_POLL_FAILURES) {
             authError.value = error?.message || t('plex.errPinStatus');
@@ -116,7 +106,6 @@ const cancelPINAuth = () => {
     authError.value = '';
 };
 
-// ---- Discovery (auto-runs on auth success — F23) -------------------------
 const discoverServers = async () => {
     isDiscovering.value = true;
     discoveryError.value = '';
@@ -145,7 +134,6 @@ watch(
     { immediate: true }
 );
 
-// ---- Validation (auto-runs on selection — F23) ---------------------------
 const validateConnection = async () => {
     if (!canValidate.value || isValidating.value) {
         return;
@@ -157,15 +145,12 @@ const validateConnection = async () => {
     setupStore.clearValidation();
 
     try {
-        // Save the token to keychain first
         await SavePlexToken(setupStore.plexToken);
 
-        // Validate the connection
         const result = await ValidatePlexConnection(setupStore.plexServerUrl);
         setupStore.setValidationResult(result);
         validationError.value = '';
 
-        // Save server URL to backend config after successful validation
         await SaveServerURL(setupStore.plexServerUrl);
     } catch (error) {
         console.error('Connection validation failed:', error);
@@ -188,7 +173,6 @@ const serverUrlOf = (server) => `http://${server.address}:${server.port}`;
 
 const isSelected = (server) => !showManualEntry.value && setupStore.selectedServer?.id === server.id;
 
-// Selecting a server auto-validates it (spec §5.4 step 2.3)
 const selectServer = async (server) => {
     if (isSelected(server) && setupStore.isConnectionValidated) {
         return;
@@ -210,7 +194,6 @@ const serverDotClass = (server) => {
     return 'pc-dot--idle';
 };
 
-// ---- Manual entry --------------------------------------------------------
 const enterManually = () => {
     showManualEntry.value = true;
     setupStore.toggleManualEntry(true);
@@ -244,7 +227,6 @@ const handleManualUrlBlur = () => {
     }
 };
 
-// Valid manual URL + Enter auto-validates (spec §5.4 step 2.3)
 const submitManualUrl = () => {
     handleManualUrlChange();
     if (isManualUrlValid.value) {
@@ -257,7 +239,6 @@ const retryValidation = () => {
     validateConnection();
 };
 
-// ---- Clear stale validation when inputs change ---------------------------
 watch(
     () => setupStore.plexServerUrl,
     (newUrl, oldUrl) => {
@@ -280,8 +261,6 @@ watch(
     }
 );
 
-// ---- Wizard integration ---------------------------------------------------
-// Enter submits this step's primary action while sign-in is pending (§5.4)
 const primaryAction = () => {
     if (authStep.value === 'initial' || authStep.value === 'error') {
         startPINAuth();
@@ -309,11 +288,9 @@ onUnmounted(() => {
         <p class="setup-lede">{{ $t('plex.lede') }}</p>
 
         <div class="setup-panels">
-            <!-- Sign-in panel -->
             <section class="pc-panel">
                 <span class="pc-eyebrow">{{ $t('plex.accountEyebrow') }}</span>
                 <Transition name="pc-state" mode="out-in">
-                    <!-- initial / loading -->
                     <div v-if="authStep === 'initial' || authStep === 'loading'" key="initial" class="auth-initial">
                         <button type="button" class="pc-btn pc-btn--primary pc-btn--lg auth-signin" :disabled="authStep === 'loading'" @click="startPINAuth">
                             <i v-if="authStep === 'loading'" class="pi pi-spin pi-spinner" aria-hidden="true"></i>
@@ -322,7 +299,6 @@ onUnmounted(() => {
                         <span class="auth-caption">{{ $t('plex.signInCaption') }}</span>
                     </div>
 
-                    <!-- waiting for authorization -->
                     <div v-else-if="authStep === 'waiting'" key="waiting" class="auth-waiting">
                         <span class="auth-pin" :aria-label="$t('plex.pinAria')">{{ pinCode }}</span>
                         <span class="auth-caption"><i class="pi pi-spin pi-spinner auth-spinner" aria-hidden="true"></i> {{ $t('plex.enterCode') }}</span>
@@ -332,13 +308,11 @@ onUnmounted(() => {
                         </div>
                     </div>
 
-                    <!-- signed in (collapsed row) -->
                     <div v-else-if="authStep === 'success'" key="success" class="auth-done">
                         <DrawnCheck :size="14" />
                         <span>{{ $t('plex.signedIn') }}</span>
                     </div>
 
-                    <!-- error -->
                     <div v-else key="error" class="auth-error" role="alert">
                         <p class="auth-error-text"><i class="pi pi-exclamation-circle" aria-hidden="true"></i> {{ authError }}</p>
                         <button type="button" class="pc-btn pc-btn--secondary pc-btn--sm" @click="startPINAuth">{{ $t('common.tryAgain') }}</button>
@@ -346,29 +320,24 @@ onUnmounted(() => {
                 </Transition>
             </section>
 
-            <!-- Server panel (appears once signed in; discovery auto-runs) -->
             <section v-if="signedIn" class="pc-panel">
                 <div class="server-head">
                     <span class="pc-eyebrow">{{ $t('plex.serverEyebrow') }}</span>
                     <button v-if="!showManualEntry && hasDiscovered && !isDiscovering" type="button" class="server-head-link" @click="discoverServers">{{ $t('common.searchAgain') }}</button>
                 </div>
 
-                <!-- Discovery mode -->
                 <template v-if="!showManualEntry">
-                    <!-- skeleton rows while discovering (M20) -->
                     <div v-if="isDiscovering" class="server-skeletons" :aria-label="$t('plex.searchingAria')">
                         <div class="pc-skeleton server-skeleton"></div>
                         <div class="pc-skeleton server-skeleton"></div>
                         <div class="pc-skeleton server-skeleton"></div>
                     </div>
 
-                    <!-- discovery error -->
                     <div v-else-if="discoveryError" class="server-note" role="alert">
                         <p class="server-note-text server-note-text--danger"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ discoveryError }}</p>
                         <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="discoverServers">{{ $t('common.searchAgain') }}</button>
                     </div>
 
-                    <!-- selectable server rows -->
                     <ul v-else-if="setupStore.discoveredServers.length > 0" class="server-list">
                         <li v-for="server in setupStore.discoveredServers" :key="server.id">
                             <button
@@ -388,20 +357,17 @@ onUnmounted(() => {
                         </li>
                     </ul>
 
-                    <!-- no servers found -->
                     <div v-else-if="hasDiscovered" class="server-note">
                         <p class="server-note-text">{{ $t('plex.noServersFound') }}</p>
                         <button type="button" class="pc-btn pc-btn--ghost pc-btn--sm" @click="discoverServers">{{ $t('common.searchAgain') }}</button>
                     </div>
 
-                    <!-- persistent manual-entry hint (F25) -->
                     <p class="server-hint">
                         {{ $t('plex.dockerHint') }}
                         <a href="#" @click.prevent="enterManually">{{ $t('plex.enterManually') }}</a>
                     </p>
                 </template>
 
-                <!-- Manual entry mode -->
                 <template v-else>
                     <div class="manual-entry">
                         <label class="manual-label" for="manual-server-url">{{ $t('plex.serverAddress') }}</label>
@@ -433,7 +399,6 @@ onUnmounted(() => {
                     </p>
                 </template>
 
-                <!-- Validation outcome -->
                 <div v-if="isValidating && showManualEntry" class="validate-pending">
                     <i class="pi pi-spin pi-spinner server-spinner" aria-hidden="true"></i>
                     <span>{{ $t('plex.testingConnection') }}</span>
@@ -449,7 +414,6 @@ onUnmounted(() => {
                     </span>
                 </div>
 
-                <!-- Validation failure detail (M17) -->
                 <div class="pc-collapse" :class="{ 'pc-collapse--open': validationError && !isValidating }">
                     <div>
                         <div class="validate-error" role="alert">
@@ -466,7 +430,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* ---- Sign-in panel ---- */
 .auth-initial {
     display: flex;
     align-items: center;
@@ -527,7 +490,6 @@ onUnmounted(() => {
     color: var(--pc-danger);
 }
 
-/* ---- Server panel ---- */
 .server-head {
     display: flex;
     align-items: center;
@@ -633,7 +595,6 @@ onUnmounted(() => {
     text-decoration: underline;
 }
 
-/* ---- Manual entry ---- */
 .manual-entry {
     display: flex;
     flex-direction: column;
@@ -663,7 +624,6 @@ onUnmounted(() => {
     color: var(--pc-success);
 }
 
-/* ---- Validation outcome ---- */
 .validate-pending {
     display: flex;
     align-items: center;

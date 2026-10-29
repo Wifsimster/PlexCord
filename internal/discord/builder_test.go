@@ -112,7 +112,6 @@ func TestTVBuilder_CustomFormatWithTokens(t *testing.T) {
 
 func TestBuildActivityForMediaType_DefaultsToMusic(t *testing.T) {
 	data := &PresenceData{
-		// No MediaType set
 		Track:  "Song",
 		Artist: "Artist",
 		State:  "playing",
@@ -120,7 +119,6 @@ func TestBuildActivityForMediaType_DefaultsToMusic(t *testing.T) {
 
 	activity := buildActivityForMediaType(data)
 
-	// Should fall through to music builder
 	if activity.Details != "Song" {
 		t.Errorf("expected music builder to be used, got Details %q", activity.Details)
 	}
@@ -128,7 +126,7 @@ func TestBuildActivityForMediaType_DefaultsToMusic(t *testing.T) {
 
 func TestBuildActivityForMediaType_UnknownFallsBackToMusic(t *testing.T) {
 	data := &PresenceData{
-		MediaType: "audiobook", // unregistered
+		MediaType: "audiobook",
 		Track:     "Chapter 1",
 		Artist:    "Author",
 		State:     "playing",
@@ -156,8 +154,6 @@ func TestBuildActivityForMediaType_DispatchesToMovie(t *testing.T) {
 }
 
 func TestRegisterPresenceBuilder_Custom(t *testing.T) {
-	// An isolated registry: registering a media type must not require mutating
-	// (and then restoring) shared global state.
 	reg := NewBuilderRegistry()
 	reg.Register("custom", &customBuilder{marker: "CUSTOM"})
 
@@ -166,20 +162,16 @@ func TestRegisterPresenceBuilder_Custom(t *testing.T) {
 		t.Errorf("expected custom builder, got %q", activity.Details)
 	}
 
-	// Registering a new type leaves the built-in ones untouched (OCP).
 	music := reg.Build(&PresenceData{MediaType: MediaTypeMusic, Track: "Song"})
 	if music.Details != "Song" {
 		t.Errorf("music builder changed after registering a new type: %q", music.Details)
 	}
 
-	// A media type nobody registered falls back to music rather than panicking.
 	if got := reg.Builder("no-such-type"); got != reg.Builder(MediaTypeMusic) {
 		t.Error("unknown media type should fall back to the music builder")
 	}
 }
 
-// TestBuilderRegistryConcurrent exercises registration racing with dispatch,
-// the case the previous package-level map could not survive under -race.
 func TestBuilderRegistryConcurrent(t *testing.T) {
 	reg := NewBuilderRegistry()
 	var wg sync.WaitGroup
@@ -204,10 +196,6 @@ type customBuilder struct {
 func (c *customBuilder) Build(*PresenceData) ipc.Activity {
 	return ipc.Activity{Details: c.marker}
 }
-
-// ----------------------------------------------------------------------------
-// Activity type & status-display (US-002)
-// ----------------------------------------------------------------------------
 
 func TestActivityType_PerMediaType(t *testing.T) {
 	tests := []struct {
@@ -283,10 +271,6 @@ func TestStatusDisplay_EmptyLeavesNil(t *testing.T) {
 	}
 }
 
-// ----------------------------------------------------------------------------
-// Progress-bar timestamps (US-003)
-// ----------------------------------------------------------------------------
-
 func TestApplyTimestamps_PlayingWithDurationSendsStartAndEnd(t *testing.T) {
 	start := time.Unix(1000, 0)
 	end := start.Add(240 * time.Second)
@@ -312,7 +296,6 @@ func TestApplyTimestamps_ZeroDurationSendsStartOnly(t *testing.T) {
 		State:     "playing",
 		Duration:  0,
 		StartTime: &start,
-		// EndTime intentionally nil, mirroring UpdatePresenceFromPlayback.
 	})
 	if activity.Timestamps == nil || activity.Timestamps.Start == nil {
 		t.Fatal("expected start timestamp")

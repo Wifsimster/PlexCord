@@ -10,14 +10,9 @@ import (
 	"plexcord/internal/plex"
 )
 
-// ConnectDiscord establishes a connection to Discord using the provided Client ID.
-// If clientID is empty, the default PlexCord Client ID is used.
-// Returns an error if connection fails (e.g., Discord not running).
-// Emits DiscordConnected or DiscordDisconnected Wails event based on result.
 func (a *App) ConnectDiscord(clientID string) error {
 	log.Printf("Attempting Discord connection...")
 
-	// Use configured client ID if not provided
 	if clientID == "" {
 		clientID = a.config.DiscordClientID
 	}
@@ -25,7 +20,6 @@ func (a *App) ConnectDiscord(clientID string) error {
 	err := a.discord.Connect(clientID)
 	if err != nil {
 		log.Printf("ERROR: Discord connection failed: %v", err)
-		// Emit disconnected event with error
 		a.bus.Emit(events.DiscordDisconnected, discord.ConnectionEvent{
 			Connected: false,
 			Error: &discord.Error{
@@ -36,7 +30,6 @@ func (a *App) ConnectDiscord(clientID string) error {
 		return err
 	}
 
-	// Save client ID to config if connection successful
 	if clientID != "" && clientID != a.config.DiscordClientID {
 		a.config.DiscordClientID = clientID
 		if err := a.saveConfig(); err != nil {
@@ -44,13 +37,10 @@ func (a *App) ConnectDiscord(clientID string) error {
 		}
 	}
 
-	// Update connection history
 	a.updateDiscordConnectionTime()
 
-	// Stop any pending retries
 	a.stopDiscordRetry()
 
-	// Emit connected event
 	a.bus.Emit(events.DiscordConnected, discord.ConnectionEvent{
 		Connected: true,
 		ClientID:  a.discord.ClientID(),
@@ -60,9 +50,6 @@ func (a *App) ConnectDiscord(clientID string) error {
 	return nil
 }
 
-// DisconnectDiscord closes the connection to Discord.
-// Clears any active presence before disconnecting.
-// Emits DiscordDisconnected Wails event.
 func (a *App) DisconnectDiscord() error {
 	log.Printf("Disconnecting from Discord...")
 
@@ -72,7 +59,6 @@ func (a *App) DisconnectDiscord() error {
 		return err
 	}
 
-	// Emit disconnected event
 	a.bus.Emit(events.DiscordDisconnected, discord.ConnectionEvent{
 		Connected: false,
 	})
@@ -81,26 +67,18 @@ func (a *App) DisconnectDiscord() error {
 	return nil
 }
 
-// IsDiscordConnected returns whether a Discord connection is active.
 func (a *App) IsDiscordConnected() bool {
 	return a.discord.IsConnected()
 }
 
-// GetDefaultDiscordClientID returns the default PlexCord Discord Application Client ID.
 func (a *App) GetDefaultDiscordClientID() string {
 	return discord.DefaultClientID
 }
 
-// GetDiscordClientID returns the currently configured Discord Client ID.
-// Returns the config value if set, otherwise the default.
 func (a *App) GetDiscordClientID() string {
 	return a.effectiveDiscordClientID()
 }
 
-// presenceDisplayOptions projects the user's persisted presence preferences
-// onto the options the Discord layer consumes. Having one place build them
-// keeps every presence path — session updates, artwork re-issues, the manual
-// binding — telling Discord the same story.
 func (a *App) presenceDisplayOptions() discord.Options {
 	if a.config == nil {
 		return discord.Options{}
@@ -113,9 +91,6 @@ func (a *App) presenceDisplayOptions() discord.Options {
 	}
 }
 
-// effectiveDiscordClientID is the Client ID PlexCord actually connects with:
-// the configured one, or the built-in PlexCord application. It is the single
-// answer to that question, shared by the binding and by the silent reconnect.
 func (a *App) effectiveDiscordClientID() string {
 	if a.config != nil && a.config.DiscordClientID != "" {
 		return a.config.DiscordClientID
@@ -123,18 +98,11 @@ func (a *App) effectiveDiscordClientID() string {
 	return discord.DefaultClientID
 }
 
-// ValidateDiscordClientID validates a Discord Client ID format.
-// Returns nil if valid, or an error with code DISCORD_CLIENT_ID_INVALID.
-// Empty string is valid (means "use default Client ID").
 func (a *App) ValidateDiscordClientID(clientID string) error {
 	return discord.ValidateClientID(clientID)
 }
 
-// SaveDiscordClientID saves a custom Discord Client ID to configuration.
-// Pass empty string to reset to default.
-// Returns an error if the Client ID format is invalid.
 func (a *App) SaveDiscordClientID(clientID string) error {
-	// Validate before saving
 	if err := discord.ValidateClientID(clientID); err != nil {
 		log.Printf("ERROR: Invalid Discord client ID: %v", err)
 		return err
@@ -149,8 +117,6 @@ func (a *App) SaveDiscordClientID(clientID string) error {
 	return nil
 }
 
-// UpdateDiscordPresence updates the Discord Rich Presence with current playback info.
-// This is called internally when playback state changes.
 func (a *App) UpdateDiscordPresence(track, artist, album, state string, duration, position int64) error {
 	session := &plex.MediaSession{
 		MediaType:  plex.MediaTypeMusic,
@@ -169,19 +135,13 @@ func (a *App) UpdateDiscordPresence(track, artist, album, state string, duration
 	return nil
 }
 
-// ClearDiscordPresence removes the Discord Rich Presence.
-// Called when playback stops.
 func (a *App) ClearDiscordPresence() error {
 	return a.discord.Clear()
 }
 
-// TestDiscordPresence sends a test presence message to Discord to verify the connection.
-// This displays a sample "Now Playing" message on the user's Discord profile.
-// Returns an error if not connected or if the test fails.
 func (a *App) TestDiscordPresence() error {
 	log.Printf("Sending test presence to Discord...")
 
-	// Create test presence data
 	testPresence := &discord.PresenceData{
 		Track:  "Test Song - PlexCord",
 		Artist: "PlexCord Test",
@@ -202,24 +162,16 @@ func (a *App) TestDiscordPresence() error {
 	return nil
 }
 
-// updateDiscordFromSession publishes a playback session to Discord. The
-// mechanics — cached-vs-background artwork, silent reconnect, the generation
-// guard on a late cover — live in discordService.
 func (a *App) updateDiscordFromSession(session *plex.MediaSession) {
 	a.discord.Publish(session)
 }
 
-// clearDiscordOnStop clears Discord Rich Presence when playback stops. It runs
-// on the poll path, where there is nobody to report a failure to, so a failed
-// clear is logged and the next update overwrites the stale presence anyway.
 func (a *App) clearDiscordOnStop() {
 	if err := a.discord.Clear(); err != nil {
 		log.Printf("Warning: Failed to clear Discord presence: %v", err)
 	}
 }
 
-// updateDiscordConnectionTime updates the last successful Discord connection time.
-// Called internally when Discord connection is established.
 func (a *App) updateDiscordConnectionTime() {
 	now := time.Now()
 	a.config.DiscordLastConnected = &now
@@ -228,23 +180,14 @@ func (a *App) updateDiscordConnectionTime() {
 	}
 }
 
-// ============================================================================
-// Presence Pause Toggle & Hide When Paused
-// ============================================================================
-
-// TogglePresencePause toggles the manual presence pause state.
-// When paused, all Discord presence updates are skipped.
-// Returns the new paused state.
 func (a *App) TogglePresencePause() bool {
 	paused := a.presence.Toggle()
 
 	if paused {
 		log.Printf("Presence manually paused")
-		// Clear current presence immediately
 		a.clearDiscordOnStop()
 	} else {
 		log.Printf("Presence manually resumed")
-		// Restore presence from current session if available
 		if session := a.sessions.Get(); session != nil {
 			a.updateDiscordFromSession(session)
 		}
@@ -253,12 +196,10 @@ func (a *App) TogglePresencePause() bool {
 	return paused
 }
 
-// IsPresencePaused returns whether presence updates are manually paused.
 func (a *App) IsPresencePaused() bool {
 	return a.presence.IsPaused()
 }
 
-// GetHideWhenPaused returns the hide-when-paused settings.
 func (a *App) GetHideWhenPaused() map[string]interface{} {
 	return map[string]interface{}{
 		"enabled":      a.config.HideWhenPaused,
@@ -266,7 +207,6 @@ func (a *App) GetHideWhenPaused() map[string]interface{} {
 	}
 }
 
-// SetHideWhenPaused updates the hide-when-paused settings.
 func (a *App) SetHideWhenPaused(enabled bool, delaySeconds int) error {
 	if delaySeconds < 0 {
 		delaySeconds = 0
@@ -281,17 +221,11 @@ func (a *App) SetHideWhenPaused(enabled bool, delaySeconds int) error {
 	return nil
 }
 
-// ============================================================================
-// Custom Presence Format Strings
-// ============================================================================
-
-// PresenceFormatSettings represents the presence format configuration for the frontend.
 type PresenceFormatSettings struct {
 	DetailsFormat string `json:"detailsFormat"`
 	StateFormat   string `json:"stateFormat"`
 }
 
-// GetPresenceFormat returns the current presence format strings.
 func (a *App) GetPresenceFormat() PresenceFormatSettings {
 	return PresenceFormatSettings{
 		DetailsFormat: a.config.PresenceDetailsFormat,
@@ -299,8 +233,6 @@ func (a *App) GetPresenceFormat() PresenceFormatSettings {
 	}
 }
 
-// SetPresenceFormat updates the presence format strings.
-// Pass empty strings to reset to defaults.
 func (a *App) SetPresenceFormat(details, state string) error {
 	a.config.PresenceDetailsFormat = details
 	a.config.PresenceStateFormat = state
@@ -312,19 +244,12 @@ func (a *App) SetPresenceFormat(details, state string) error {
 	return nil
 }
 
-// ============================================================================
-// Presence Display Options (activity style, member-list line, artwork lookup)
-// ============================================================================
-
-// PresenceOptions represents the presence display configuration for the frontend.
 type PresenceOptions struct {
-	ActivityStyle string `json:"activityStyle"` // "media" | "game"
-	StatusDisplay string `json:"statusDisplay"` // "app" | "state" | "details"
+	ActivityStyle string `json:"activityStyle"`
+	StatusDisplay string `json:"statusDisplay"`
 	ArtworkLookup bool   `json:"artworkLookup"`
 }
 
-// GetPresenceOptions returns the current presence display options, normalizing
-// unset values to their defaults so the frontend always has a concrete choice.
 func (a *App) GetPresenceOptions() PresenceOptions {
 	style := a.config.PresenceActivityStyle
 	if style == "" {
@@ -341,9 +266,6 @@ func (a *App) GetPresenceOptions() PresenceOptions {
 	}
 }
 
-// SetPresenceOptions updates the presence display options. Invalid values are
-// rejected so a bad frontend value cannot corrupt the presence output. The new
-// options take effect on the next presence update — no reconnect required.
 func (a *App) SetPresenceOptions(opts PresenceOptions) error {
 	switch opts.ActivityStyle {
 	case discord.ActivityStyleMedia, discord.ActivityStyleGame:

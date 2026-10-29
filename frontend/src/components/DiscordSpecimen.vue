@@ -6,39 +6,16 @@ import { mediaTypeOf, renderPresenceLines } from '@/utils/presenceFormat';
 
 const { t } = useI18n();
 
-/**
- * <DiscordSpecimen> — pixel-faithful, theme-exempt Discord activity card
- * (spec §5.0.4). The single source of truth for "what does Discord show":
- * used by the Dashboard Presence panel, the Settings format editor and the
- * wizard Complete step. Pure renderer — no store lifecycle of its own (F35).
- *
- * Uses the --pc-discord-* specimen palette exclusively for the card itself
- * (it does not follow the app theme, per §1.2).
- */
 const props = defineProps({
-    /** Session object (MediaSession shape). null → idle ghost. */
     track: { type: Object, default: null },
-    /**
-     * Presence format strings: { details, state }. Also accepts the raw
-     * GetPresenceFormat() shape ({ detailsFormat, stateFormat }). When both
-     * are empty the backend's default rendering is reproduced.
-     */
     formats: { type: Object, default: null },
-    /** Presence paused (M13): grayscale card + PAUSED badge. */
     paused: { type: Boolean, default: false },
-    /** Sample data indicator: shows a SAMPLE badge. */
     sample: { type: Boolean, default: false },
-    /** Loading state: skeleton card (M20). */
     loading: { type: Boolean, default: false },
-    /** Idle ghost caption (page-specific per spec §5.2/§5.4). Empty → default. */
     idleTitle: { type: String, default: '' },
-    /** Caption beneath the specimen well; empty string hides it, undefined → default. */
     caption: { type: String, default: undefined }
 });
 
-// Resolve i18n defaults here so callers can still override or hide them:
-// idleTitle falls back to the default when empty; caption shows the default
-// only when the prop is omitted (an explicit '' still hides it).
 const resolvedIdleTitle = computed(() => props.idleTitle || t('specimen.idleTitle'));
 const resolvedCaption = computed(() => (props.caption === undefined ? t('specimen.caption') : props.caption));
 
@@ -51,8 +28,6 @@ const lines = computed(() => renderPresenceLines(normalizedFormats.value, props.
 
 const albumLine = computed(() => props.track?.album ?? '');
 
-// Discord labels the card by what the activity is, and so does the specimen:
-// music is listened to, a film or an episode is watched.
 const isVideo = computed(() => mediaTypeOf(props.track) !== 'music');
 const headerGlyph = computed(() => (isVideo.value ? 'pi-video' : 'pi-headphones'));
 const headerLabel = computed(() => (isVideo.value ? t('specimen.watchingOnPlex') : t('specimen.listeningToPlex')));
@@ -87,11 +62,8 @@ const duration = computed(() => formatTime(props.track?.duration));
 <template>
     <div class="pc-specimen">
         <div class="pc-specimen-well">
-            <!-- Ambient artwork backdrop slot (§4.1) — the Dashboard Presence
-                 panel is the ONLY consumer allowed to fill this. -->
             <slot name="backdrop"></slot>
 
-            <!-- Skeleton (M20) -->
             <div v-if="loading" class="specimen-card specimen-card--skeleton" aria-hidden="true">
                 <div class="pc-skeleton skeleton-art"></div>
                 <div class="skeleton-lines">
@@ -101,14 +73,12 @@ const duration = computed(() => formatTime(props.track?.duration));
                 </div>
             </div>
 
-            <!-- Idle ghost -->
             <div v-else-if="!track" class="specimen-ghost">
                 <span class="ghost-glyph" aria-hidden="true">–</span>
                 <p class="ghost-title">{{ resolvedIdleTitle }}</p>
                 <slot name="idle-caption"></slot>
             </div>
 
-            <!-- The specimen card -->
             <div v-else class="specimen-card" :class="{ 'specimen-card--paused': paused }">
                 <div class="card-header">
                     <i class="pi card-header-glyph" :class="headerGlyph" aria-hidden="true"></i>
@@ -149,7 +119,6 @@ const duration = computed(() => formatTime(props.track?.duration));
 </template>
 
 <style scoped>
-/* ---- Well framing comes from .pc-specimen-well (components.css) ---- */
 .specimen-caption {
     margin: 8px 0 0;
     text-align: center;
@@ -157,7 +126,6 @@ const duration = computed(() => formatTime(props.track?.duration));
     color: var(--pc-text-muted);
 }
 
-/* ---- Idle ghost (dashed frame, centered – glyph) ---- */
 .specimen-ghost {
     display: flex;
     flex-direction: column;
@@ -184,7 +152,6 @@ const duration = computed(() => formatTime(props.track?.duration));
     color: var(--pc-text-muted);
 }
 
-/* ---- The theme-exempt Discord card (--pc-discord-* only) ---- */
 .specimen-card {
     width: 340px;
     max-width: 100%;
@@ -193,7 +160,7 @@ const duration = computed(() => formatTime(props.track?.duration));
     border-radius: 8px;
     background: var(--pc-discord-bg);
     font-family: var(--pc-discord-font);
-    transition: filter var(--pc-dur-3) var(--pc-ease-out); /* M13 */
+    transition: filter var(--pc-dur-3) var(--pc-ease-out);
 }
 .specimen-card--paused {
     filter: grayscale(0.9) brightness(0.8);
@@ -291,7 +258,7 @@ const duration = computed(() => formatTime(props.track?.duration));
     height: 100%;
     border-radius: 2px;
     background: var(--pc-discord-text);
-    transition: width 300ms linear; /* M12 — matches poll cadence */
+    transition: width 300ms linear;
 }
 .card-time {
     font-family: var(--pc-font-mono);
@@ -299,7 +266,6 @@ const duration = computed(() => formatTime(props.track?.duration));
     color: var(--pc-discord-muted);
 }
 
-/* ---- Skeleton (M20) ---- */
 .specimen-card--skeleton {
     display: flex;
     gap: 10px;
@@ -321,7 +287,6 @@ const duration = computed(() => formatTime(props.track?.duration));
     height: 12px;
 }
 
-/* ---- M10 — track change: text lines slide up 6px + fade, staggered ---- */
 .specimen-swap-enter-active .card-line {
     transition:
         opacity 240ms var(--pc-ease-out),

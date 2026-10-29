@@ -12,9 +12,6 @@ import (
 	"plexcord/internal/platform"
 )
 
-// TestResolveWindowLaunchState covers how the "Start minimized" and "Minimize
-// to tray" settings, and how PlexCord was launched, combine into Wails' window
-// start options.
 func TestResolveWindowLaunchState(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -36,17 +33,13 @@ func TestResolveWindowLaunchState(t *testing.T) {
 			wantState:  options.Normal,
 		},
 		{
-			name: "start minimized without tray minimizes to the taskbar",
-			// Hiding outright would leave no restore affordance: closing to
-			// the tray is off, so the taskbar button is the way back.
+			name:       "start minimized without tray minimizes to the taskbar",
 			cfg:        &config.Config{StartMinimized: true, MinimizeToTray: false},
 			wantHidden: false,
 			wantState:  options.Minimised,
 		},
 		{
-			name: "login launch starts in the tray even without start minimized",
-			// Nobody asked for a window at boot: the OS started PlexCord, and
-			// an unset StartMinimizedOnLogin means the default, which is on.
+			name:       "login launch starts in the tray even without start minimized",
 			cfg:        &config.Config{StartMinimized: false, MinimizeToTray: true},
 			launch:     launchContext{IsAutoStart: true},
 			wantHidden: true,
@@ -72,8 +65,6 @@ func TestResolveWindowLaunchState(t *testing.T) {
 		},
 		{
 			name: "start minimized still applies with the login toggle off",
-			// The two settings cover different launches; turning off the login
-			// one does not undo "Start minimized".
 			cfg: &config.Config{
 				StartMinimized:        true,
 				MinimizeToTray:        true,
@@ -91,9 +82,7 @@ func TestResolveWindowLaunchState(t *testing.T) {
 			wantState:  options.Normal,
 		},
 		{
-			name: "update relaunch wins over a login launch",
-			// An update that restarted into the tray would read as a crash,
-			// even if the flag came along from the entry that started it.
+			name:       "update relaunch wins over a login launch",
 			cfg:        &config.Config{StartMinimized: false, MinimizeToTray: true},
 			launch:     launchContext{IsUpdateRelaunch: true, IsAutoStart: true},
 			wantHidden: false,
@@ -120,21 +109,14 @@ func TestResolveWindowLaunchState(t *testing.T) {
 	}
 }
 
-// TestDefaultConfigStartsVisible verifies PlexCord opens its window when the
-// user launches it themselves: starting in the background is opt-in, except at
-// login (covered above).
 func TestDefaultConfigStartsVisible(t *testing.T) {
 	if got := resolveWindowLaunchState(config.DefaultConfig(), launchContext{}); got.StartHidden || got.StartState != options.Normal {
 		t.Fatalf("default config launch state = %+v, want a normal visible window", got)
 	}
 }
 
-// boolPtr mirrors the config package's helper for the optional bool fields.
 func boolPtr(b bool) *bool { return &b }
 
-// TestIsAutoStartLaunch covers recognizing the flag the auto-start entries are
-// registered with — the only thing that tells a login launch apart from the
-// user opening PlexCord.
 func TestIsAutoStartLaunch(t *testing.T) {
 	tests := []struct {
 		name string
@@ -157,8 +139,6 @@ func TestIsAutoStartLaunch(t *testing.T) {
 	}
 }
 
-// TestFitWindowToScreen covers shrinking the content-derived window size onto
-// the display it actually opens on.
 func TestFitWindowToScreen(t *testing.T) {
 	preferred := windowSize{Width: preferredWindowWidth, Height: preferredWindowHeight}
 
@@ -178,8 +158,6 @@ func TestFitWindowToScreen(t *testing.T) {
 			want:   preferred,
 		},
 		{
-			// The case the old 1024×768 minimum made impossible: a window
-			// taller than the screen it opens on.
 			name:   "1366x768 laptop leaves room for the taskbar",
 			screen: windowSize{Width: 1366, Height: 768},
 			want:   windowSize{Width: 1248, Height: 691},
@@ -195,8 +173,6 @@ func TestFitWindowToScreen(t *testing.T) {
 			want:   windowSize{Width: minWindowWidth, Height: minWindowHeight},
 		},
 		{
-			// Even the minimum must not push the window off a tiny display:
-			// unreachable window controls are worse than a cramped layout.
 			name:   "never larger than the screen itself",
 			screen: windowSize{Width: 800, Height: 560},
 			want:   windowSize{Width: 800, Height: 560},
@@ -217,13 +193,8 @@ func TestFitWindowToScreen(t *testing.T) {
 	}
 }
 
-// TestPreferredWindowSizeFitsItsContent guards the numbers against drifting
-// below what the views measure (docs/design-system.md §5.2/§5.4).
 func TestPreferredWindowSizeFitsItsContent(t *testing.T) {
-	// Dashboard in its tallest (idle) state: 64px top gutter + 525px of panels
-	// + 46px footer + 24px bottom gutter.
 	const dashboardHeight = 663
-	// Dashboard grid: 1200px content cap + 2×24px page gutter.
 	const widestViewWidth = 1248
 
 	if preferredWindowHeight < dashboardHeight {
@@ -232,20 +203,15 @@ func TestPreferredWindowSizeFitsItsContent(t *testing.T) {
 	if preferredWindowWidth < widestViewWidth {
 		t.Errorf("preferredWindowWidth = %d, want >= %d so the Dashboard grid reaches its full width", preferredWindowWidth, widestViewWidth)
 	}
-	// Wizard rail (240) + step column (560) + 2×24px gutter.
 	const wizardMinWidth = 848
 	if minWindowWidth < wizardMinWidth {
 		t.Errorf("minWindowWidth = %d, want >= %d so the wizard step column is not squeezed", minWindowWidth, wizardMinWidth)
 	}
-	// A minimum taller than this cannot fit a 1366×768 screen with a taskbar.
 	if minWindowHeight > 691 {
 		t.Errorf("minWindowHeight = %d, want <= 691 so the window fits a 1366x768 display", minWindowHeight)
 	}
 }
 
-// screen builds a runtime.Screen with a logical size. Wails does not export
-// the ScreenSize type from pkg/runtime (only the Screen alias), so the field is
-// filled by assignment rather than in a composite literal.
 func screen(width, height int) runtime.Screen {
 	var s runtime.Screen
 	s.Size.Width = width
@@ -265,7 +231,6 @@ func primaryScreen(width, height int) runtime.Screen {
 	return s
 }
 
-// TestScreenForWindow covers which display the window is sized against.
 func TestScreenForWindow(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -293,8 +258,6 @@ func TestScreenForWindow(t *testing.T) {
 			want:    windowSize{Width: 1600, Height: 900},
 		},
 		{
-			// The Windows backend reports a zeroed Screen for a monitor whose
-			// DPI it could not read; a working monitor's numbers are better.
 			name:    "skips a screen with no dimensions",
 			screens: []runtime.Screen{{IsCurrent: true}, primaryScreen(1600, 900)},
 			want:    windowSize{Width: 1600, Height: 900},
@@ -315,9 +278,6 @@ func TestScreenForWindow(t *testing.T) {
 	}
 }
 
-// TestShowWindowBeforeReadyIsDeferred verifies a restore request arriving
-// before startup (a second instance launched while PlexCord is still booting)
-// is parked rather than dropped — and does not run against a nil context.
 func TestShowWindowBeforeReadyIsDeferred(t *testing.T) {
 	desktop := &fakeDesktop{}
 	app := newTestApp(config.DefaultConfig())
@@ -326,7 +286,6 @@ func TestShowWindowBeforeReadyIsDeferred(t *testing.T) {
 
 	app.ShowWindow()
 
-	// Nothing reached the runtime: there was no context to drive it with.
 	if shown, _, _ := desktop.counts(); shown != 0 {
 		t.Fatalf("ShowWindow before startup drove the window %d time(s)", shown)
 	}
@@ -338,15 +297,12 @@ func TestShowWindowBeforeReadyIsDeferred(t *testing.T) {
 		t.Fatal("MarkReady() replayed the same request twice")
 	}
 
-	// Replaying now reaches the runtime.
 	app.ShowWindow()
 	if shown, _, _ := desktop.counts(); shown != 1 {
 		t.Fatalf("ShowWindow after ready drove the window %d time(s), want 1", shown)
 	}
 }
 
-// TestWindowContextAfterReady verifies that once the window is ready, show
-// requests run against the published context instead of being parked.
 func TestWindowContextAfterReady(t *testing.T) {
 	ctx := context.Background()
 	desktop := &fakeDesktop{}
@@ -358,16 +314,11 @@ func TestWindowContextAfterReady(t *testing.T) {
 	if windows.Context() == nil {
 		t.Fatal("Context() = nil after the window became ready")
 	}
-	// Reading the context on a ready window must not park a restore request.
 	if windows.MarkReady(ctx) {
 		t.Fatal("Context() parked a request even though the window was ready")
 	}
 }
 
-// TestLoadLaunchConfigFallsBackToDefaults verifies a config that cannot be read
-// never keeps the window from opening. This path runs in main(), before the app
-// and its collaborators exist, so it is reachable only because the loader is a
-// parameter.
 func TestLoadLaunchConfigFallsBackToDefaults(t *testing.T) {
 	cfg := loadLaunchConfig(func() (*config.Config, error) {
 		return nil, errors.New("config file is corrupt")
@@ -381,8 +332,6 @@ func TestLoadLaunchConfigFallsBackToDefaults(t *testing.T) {
 	}
 }
 
-// TestLoadLaunchConfigUsesLoadedConfig verifies the persisted choice is what
-// decides the launch state when the config does read.
 func TestLoadLaunchConfigUsesLoadedConfig(t *testing.T) {
 	want := &config.Config{StartMinimized: true}
 

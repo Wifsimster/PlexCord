@@ -62,8 +62,6 @@ linters:
       - third_party$
       - builtin$
       - examples$
-      # The `flatted` package ships a Go reference implementation under
-      # frontend/node_modules; it is third-party and not our code to lint.
       - frontend/node_modules
 issues:
   max-issues-per-linter: 0

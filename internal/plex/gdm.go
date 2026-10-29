@@ -14,25 +14,20 @@ const (
 	gdmRequest       = "M-SEARCH * HTTP/1.0\r\n\r\n"
 )
 
-// GDMScanner performs Plex server discovery using GDM protocol
 type GDMScanner struct {
 	timeout time.Duration
 }
 
-// NewGDMScanner creates a new GDM scanner with specified timeout
 func NewGDMScanner(timeout time.Duration) *GDMScanner {
 	return &GDMScanner{timeout: timeout}
 }
 
-// Scan sends GDM discovery packet and listens for responses
 func (s *GDMScanner) Scan() ([]Server, error) {
-	// Resolve multicast address
 	addr, err := net.ResolveUDPAddr("udp4", gdmMulticastAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve GDM address: %w", err)
 	}
 
-	// Create UDP connection
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create UDP connection: %w", err)
@@ -43,32 +38,27 @@ func (s *GDMScanner) Scan() ([]Server, error) {
 		}
 	}()
 
-	// Send GDM discovery packet
 	_, err = conn.WriteToUDP([]byte(gdmRequest), addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send GDM packet: %w", err)
 	}
 
-	// Set read timeout
 	if err := conn.SetReadDeadline(time.Now().Add(s.timeout)); err != nil {
 		return nil, fmt.Errorf("failed to set read deadline: %w", err)
 	}
 
-	// Collect responses
 	servers := make([]Server, 0)
 	buf := make([]byte, 1024)
 
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			// Timeout reached, stop listening
 			break
 		}
 
-		// Parse GDM response
 		server, err := parseGDMResponse(buf[:n], remoteAddr.IP.String())
 		if err != nil {
-			continue // Skip malformed responses
+			continue
 		}
 
 		servers = append(servers, server)
@@ -77,7 +67,6 @@ func (s *GDMScanner) Scan() ([]Server, error) {
 	return deduplicateServers(servers), nil
 }
 
-// parseGDMResponse parses a GDM response packet
 func parseGDMResponse(data []byte, ip string) (Server, error) {
 	server := Server{
 		Address: ip,
@@ -101,7 +90,6 @@ func parseGDMResponse(data []byte, ip string) (Server, error) {
 		return server, fmt.Errorf("invalid GDM response: missing Name")
 	}
 
-	// Default to standard Plex port if not provided
 	if server.Port == "" {
 		server.Port = "32400"
 	}
@@ -109,18 +97,15 @@ func parseGDMResponse(data []byte, ip string) (Server, error) {
 	return server, nil
 }
 
-// isLocalIP checks if an IP address is on a local network
 func isLocalIP(ip string) bool {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return false
 	}
 
-	// Check for private IP ranges
 	return parsedIP.IsPrivate() || parsedIP.IsLoopback()
 }
 
-// deduplicateServers removes duplicate servers based on ID
 func deduplicateServers(servers []Server) []Server {
 	seen := make(map[string]bool)
 	result := make([]Server, 0)

@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-// deadPID starts a helper process that exits immediately, reaps it, and returns
-// its now-defunct PID. Skips the test if a helper cannot be started.
 func deadPID(t *testing.T) int {
 	t.Helper()
 	var cmd *exec.Cmd
@@ -24,20 +22,16 @@ func deadPID(t *testing.T) int {
 		t.Skipf("could not start helper process: %v", err)
 	}
 	pid := cmd.Process.Pid
-	_ = cmd.Wait() // reap it so the PID is fully released
+	_ = cmd.Wait()
 	return pid
 }
 
-// TestProcessExistsSelf verifies the current process is reported as alive.
 func TestProcessExistsSelf(t *testing.T) {
 	if !processExists(os.Getpid()) {
 		t.Fatalf("processExists(self) = false, want true")
 	}
 }
 
-// TestProcessExistsDead verifies a process that has already exited is reported
-// as not running. This underpins the relaunch wait: the new instance must be
-// able to observe the old one going away.
 func TestProcessExistsDead(t *testing.T) {
 	pid := deadPID(t)
 	if processExists(pid) {
@@ -45,8 +39,6 @@ func TestProcessExistsDead(t *testing.T) {
 	}
 }
 
-// TestWaitForPreviousInstanceExitNoEnv returns immediately when the relaunch
-// marker is absent (the normal-launch path).
 func TestWaitForPreviousInstanceExitNoEnv(t *testing.T) {
 	_ = os.Unsetenv(relaunchPIDEnv)
 
@@ -62,9 +54,6 @@ func TestWaitForPreviousInstanceExitNoEnv(t *testing.T) {
 	}
 }
 
-// TestWaitForPreviousInstanceExitAlreadyGone returns promptly (well under the
-// timeout) when the referenced PID is already dead, and clears the env var so
-// this instance does not inherit a stale predecessor PID.
 func TestWaitForPreviousInstanceExitAlreadyGone(t *testing.T) {
 	pid := deadPID(t)
 	t.Setenv(relaunchPIDEnv, strconv.Itoa(pid))

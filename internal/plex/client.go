@@ -14,14 +14,12 @@ import (
 	"plexcord/internal/errors"
 )
 
-// Client handles Plex Media Server communication
 type Client struct {
 	httpClient *http.Client
 	serverURL  string
 	token      string
 }
 
-// NewClient creates a new Plex client with the given token and server URL
 func NewClient(token, serverURL string) *Client {
 	return &Client{
 		token:     token,
@@ -32,28 +30,24 @@ func NewClient(token, serverURL string) *Client {
 	}
 }
 
-// IdentityResponse represents the XML response from /identity endpoint
 type IdentityResponse struct {
 	XMLName           xml.Name `xml:"MediaContainer"`
 	MachineIdentifier string   `xml:"machineIdentifier,attr"`
 	Version           string   `xml:"version,attr"`
 	Claimed           string   `xml:"claimed,attr"`
-	FriendlyName      string   `xml:"friendlyName,attr"` // May be empty on some servers
+	FriendlyName      string   `xml:"friendlyName,attr"`
 	Size              int      `xml:"size,attr"`
 }
 
-// LibraryResponse represents the XML response from /library/sections endpoint
 type LibraryResponse struct {
 	XMLName xml.Name `xml:"MediaContainer"`
 	Size    int      `xml:"size,attr"`
 }
 
-// ValidateConnection validates the Plex server connection by querying server info and library count
 func (c *Client) ValidateConnection() (*ValidationResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Check if this is a claim token (not valid for API authentication)
 	if strings.HasPrefix(c.token, "claim-") {
 		return nil, errors.New(errors.PLEX_AUTH_FAILED,
 			"Invalid token type: You provided a claim token (starts with 'claim-'). "+
@@ -62,8 +56,6 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 				"Visit: https://www.plex.tv/claim and sign in, then go to Settings > Account to get your X-Plex-Token.")
 	}
 
-	// Step 1: Get server identity using /identity endpoint
-	// Note: This endpoint doesn't require authentication
 	identityURL := fmt.Sprintf("%s/identity", c.serverURL)
 	identityReq, err := http.NewRequestWithContext(ctx, "GET", identityURL, nil)
 	if err != nil {
@@ -97,7 +89,6 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid server response format")
 	}
 
-	// Step 2: Get library count
 	libraryURL := fmt.Sprintf("%s/library/sections/?X-Plex-Token=%s", c.serverURL, url.QueryEscape(c.token))
 
 	libraryReq, err := http.NewRequestWithContext(ctx, "GET", libraryURL, nil)
@@ -121,7 +112,6 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 	log.Printf("Library validation response status: %d %s", libraryResp.StatusCode, libraryResp.Status)
 
 	if libraryResp.StatusCode != http.StatusOK {
-		// Read the response body for debugging
 		if bodyBytes, err := io.ReadAll(libraryResp.Body); err == nil {
 			log.Printf("Library validation failed with status %d, body: %s", libraryResp.StatusCode, string(bodyBytes))
 		}
@@ -138,8 +128,6 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid library response format")
 	}
 
-	// Step 3: Return validation result
-	// Use a default server name if friendlyName is not provided
 	serverName := identity.FriendlyName
 	if serverName == "" {
 		serverName = "Plex Media Server"
@@ -154,7 +142,6 @@ func (c *Client) ValidateConnection() (*ValidationResult, error) {
 	}, nil
 }
 
-// GetUsers retrieves the list of Plex users/accounts that can be monitored
 func (c *Client) GetUsers() ([]PlexUser, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -195,7 +182,6 @@ func (c *Client) GetUsers() ([]PlexUser, error) {
 	users := make([]PlexUser, len(accounts.Accounts))
 	for i, acc := range accounts.Accounts {
 		name := acc.Name
-		// Use fallback name if account name is empty
 		if name == "" {
 			name = fmt.Sprintf("User %s", acc.ID)
 		}
@@ -210,12 +196,7 @@ func (c *Client) GetUsers() ([]PlexUser, error) {
 	return users, nil
 }
 
-// GetSessions retrieves active playback sessions from the Plex server.
-// It filters sessions to only include those belonging to the specified userID.
-// Returns an empty slice (not error) when no sessions are active.
-// Uses 500ms timeout per NFR5 performance requirement.
 func (c *Client) GetSessions(userID string) ([]Session, error) {
-	// Use 500ms timeout for polling performance (NFR5)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
@@ -252,11 +233,9 @@ func (c *Client) GetSessions(userID string) ([]Session, error) {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "invalid sessions response format")
 	}
 
-	// Filter and convert sessions for the specified user (all media types)
 	allEntries := sessionsResp.AllEntries()
 	sessions := make([]Session, 0, len(allEntries))
 	for _, entry := range allEntries {
-		// Filter by user ID if specified
 		if userID != "" && entry.User.ID != userID {
 			continue
 		}
@@ -271,7 +250,6 @@ func (c *Client) GetSessions(userID string) ([]Session, error) {
 		})
 	}
 
-	// Return empty slice (not nil) when no sessions - this is not an error
 	if sessions == nil {
 		sessions = []Session{}
 	}
@@ -279,9 +257,6 @@ func (c *Client) GetSessions(userID string) ([]Session, error) {
 	return sessions, nil
 }
 
-// GetMusicSessions retrieves active music sessions for the specified user.
-// This is a thin wrapper that delegates fetching to the transport layer
-// and filtering/mapping to pure functions in mapper.go. See Client.fetchSessions.
 func (c *Client) GetMusicSessions(userID string) ([]MusicSession, error) {
 	sessionsResp, err := c.fetchSessions()
 	if err != nil {
@@ -290,9 +265,6 @@ func (c *Client) GetMusicSessions(userID string) ([]MusicSession, error) {
 	return filterMusicSessions(sessionsResp, userID, c.buildArtworkURL), nil
 }
 
-// GetMediaSessions retrieves active media sessions of the specified types for the specified user.
-// Thin wrapper over the transport fetch + filter pipeline.
-// If mediaTypes is nil or empty, all media types are returned.
 func (c *Client) GetMediaSessions(userID string, mediaTypes []string) ([]MediaSession, error) {
 	sessionsResp, err := c.fetchSessions()
 	if err != nil {
@@ -301,10 +273,7 @@ func (c *Client) GetMediaSessions(userID string, mediaTypes []string) ([]MediaSe
 	return filterMediaSessions(sessionsResp, userID, mediaTypes, c.buildArtworkURL), nil
 }
 
-// fetchSessions performs the HTTP GET to /status/sessions and parses the XML.
-// Centralized so all three GetXxxSessions methods share one transport path.
 func (c *Client) fetchSessions() (*SessionsResponse, error) {
-	// Use 500ms timeout for polling performance (NFR5)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
@@ -315,8 +284,6 @@ func (c *Client) fetchSessions() (*SessionsResponse, error) {
 	return parseSessionsResponse(body)
 }
 
-// transport returns a transport bound to this client's URL and token.
-// Lazy construction keeps the existing Client struct unchanged.
 func (c *Client) transport() *transport {
 	return &transport{
 		httpClient: c.httpClient,
@@ -325,28 +292,20 @@ func (c *Client) transport() *transport {
 	}
 }
 
-// buildArtworkURL constructs an absolute URL for album artwork.
-// Combines server URL, thumb path, and authentication token.
-// Returns empty string if thumbPath is empty.
 func (c *Client) buildArtworkURL(thumbPath string) string {
 	if thumbPath == "" {
 		return ""
 	}
-	// Build absolute URL: {serverURL}{thumb}?X-Plex-Token={token}
 	return fmt.Sprintf("%s%s?X-Plex-Token=%s", c.serverURL, thumbPath, url.QueryEscape(c.token))
 }
 
-// mapHTTPError maps HTTP client errors to appropriate error codes
 func mapHTTPError(err error, ctx context.Context) error {
-	// Check for timeout first
 	if ctx.Err() == context.DeadlineExceeded {
 		return errors.New(errors.TIMEOUT, "connection timed out after 5 seconds")
 	}
 
-	// Check for network/connection errors
 	if err != nil {
 		errStr := strings.ToLower(err.Error())
-		// URL errors (DNS, connection refused, etc.)
 		if urlErr, ok := err.(*url.Error); ok {
 			if urlErr.Timeout() {
 				return errors.New(errors.TIMEOUT, "connection timed out")
@@ -363,11 +322,9 @@ func mapHTTPError(err error, ctx context.Context) error {
 	return errors.New(errors.PLEX_CONN_FAILED, "connection failed")
 }
 
-// mapHTTPStatusCode maps HTTP status codes to appropriate error codes
 func mapHTTPStatusCode(statusCode int) error {
 	switch statusCode {
 	case http.StatusBadRequest:
-		// 400 Bad Request - often indicates token format issues
 		return errors.New(errors.PLEX_AUTH_FAILED, "invalid request - check token format")
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return errors.New(errors.PLEX_AUTH_FAILED, "invalid Plex token - authentication failed")

@@ -2,10 +2,6 @@ package plex
 
 import "testing"
 
-// These tests exercise the pure filter/map functions without any HTTP.
-// They demonstrate the testability win from splitting Client into
-// transport + mapper layers.
-
 func TestFilterMusicSessions_FiltersByUser(t *testing.T) {
 	resp := &SessionsResponse{
 		Tracks: []SessionEntry{
@@ -98,19 +94,16 @@ func TestFilterMediaSessions_FiltersByMediaType(t *testing.T) {
 		},
 	}
 
-	// Only music
 	got := filterMediaSessions(resp, "u", []string{"music"}, nil)
 	if len(got) != 1 {
 		t.Errorf("expected 1 music session, got %d", len(got))
 	}
 
-	// Music + movie
 	got = filterMediaSessions(resp, "u", []string{"music", "movie"}, nil)
 	if len(got) != 2 {
 		t.Errorf("expected 2 sessions (music + movie), got %d", len(got))
 	}
 
-	// Empty filter = all
 	got = filterMediaSessions(resp, "u", nil, nil)
 	if len(got) != 4 {
 		t.Errorf("expected 4 sessions with empty filter, got %d", len(got))

@@ -21,7 +21,6 @@ const discordStore = useDiscordConnectionStore();
 const presenceStore = usePresenceStore();
 const { status, severity, tally, trackTitle, isErrored } = usePresenceStatus();
 
-// ---- Right-side actions -------------------------------------------------
 const isSettings = computed(() => route.path.startsWith('/settings'));
 
 const toggleSettings = () => {
@@ -37,7 +36,6 @@ const keyTooltip = (label, combo) => ({
 });
 const shortcutTooltip = (label, keys) => keyTooltip(label, `${modKey}+${keys}`);
 
-// ---- Node dot states -----------------------------------------------------
 const plexDotClass = computed(() => {
     if (plexStore.hasError) return 'pc-dot--danger';
     if (plexStore.isRetrying) return 'pc-dot--warn pc-dot--blink';
@@ -52,16 +50,12 @@ const discordDotClass = computed(() => {
     return 'pc-dot--idle';
 });
 
-// Connectors tint success when both adjacent ends are healthy (§5.1).
 const plexOk = computed(() => plexStore.connected && !plexStore.hasError);
 const discordOk = computed(() => discordStore.connected && !discordStore.hasError);
 const centerOk = computed(() => status.value === 'live' || status.value === 'idle' || status.value === 'track-paused');
 const leftConnectorOk = computed(() => plexOk.value && centerOk.value);
 const rightConnectorOk = computed(() => centerOk.value && discordOk.value);
 
-// ---- Headline node: the tally lamp + what is on air ------------------------
-// The lamp carries the state; the title rides beside it only while live or
-// held (the two states in which something is actually on the profile).
 const headlineTitleText = computed(() => (status.value === 'live' || status.value === 'track-paused' ? trackTitle.value : ''));
 
 const headlineTitle = computed(() => {
@@ -77,7 +71,6 @@ const onHeadlineClick = () => {
     presenceStore.toggle();
 };
 
-// ---- Popovers -------------------------------------------------------------
 const plexPopover = ref(null);
 const discordPopover = ref(null);
 
@@ -121,25 +114,20 @@ const reconnectDiscord = async () => {
     }
 };
 
-// ---- Window controls (frameless title bar, spec §5.1) --------------------
 const isMaximised = ref(false);
 
 const syncMaximised = async () => {
     try {
         isMaximised.value = await WindowIsMaximised();
     } catch {
-        // Runtime unavailable (e.g. browser preview) — leave as-is.
     }
 };
 
 const minimiseWindow = () => WindowMinimise();
 const toggleMaximise = () => {
     WindowToggleMaximise();
-    // The runtime has no maximise event; re-read shortly after the toggle.
     setTimeout(syncMaximised, 60);
 };
-// Mirrors the native close button: Quit() runs the OnBeforeClose hook, which
-// hides to the background or quits depending on the "Minimize to tray" setting.
 const closeWindow = () => Quit();
 
 onMounted(() => {
@@ -153,12 +141,10 @@ onBeforeUnmount(() => {
 
 <template>
     <header class="layout-topbar" style="--wails-draggable: drag">
-        <!-- Left: brand lockup -->
         <router-link to="/" class="topbar-brand" :aria-label="$t('topbar.dashboardAria')" style="--wails-draggable: no-drag">
             <BrandMark />
         </router-link>
 
-        <!-- Center: the signal path -->
         <nav class="signal-path" :aria-label="$t('topbar.signalPathAria')" style="--wails-draggable: no-drag">
             <button type="button" class="signal-node" aria-haspopup="dialog" @click="togglePlexPopover">
                 <span class="pc-dot" :class="plexDotClass" aria-hidden="true"></span>
@@ -185,7 +171,6 @@ onBeforeUnmount(() => {
             </button>
         </nav>
 
-        <!-- Right: global actions + window controls -->
         <div class="topbar-right">
             <div class="topbar-actions" style="--wails-draggable: no-drag">
                 <button
@@ -209,7 +194,6 @@ onBeforeUnmount(() => {
                 </button>
             </div>
 
-            <!-- Window caption buttons (frameless title bar) -->
             <div class="window-controls" style="--wails-draggable: no-drag">
                 <button type="button" class="caption-btn" :aria-label="$t('topbar.minimise')" @click="minimiseWindow">
                     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0" y="4.5" width="10" height="1" fill="currentColor" /></svg>
@@ -227,7 +211,6 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
-        <!-- Plex node popover -->
         <Popover ref="plexPopover">
             <div class="node-popover">
                 <span class="pc-eyebrow">{{ $t('topbar.plex') }}</span>
@@ -249,7 +232,6 @@ onBeforeUnmount(() => {
             </div>
         </Popover>
 
-        <!-- Discord node popover -->
         <Popover ref="discordPopover">
             <div class="node-popover">
                 <span class="pc-eyebrow">{{ $t('topbar.discord') }}</span>
@@ -270,7 +252,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* The signal strip (spec §5.1) — Plex ● ── [tally] title ── ● Discord: fixed 48px, overlay surface, hairline bottom. */
 .layout-topbar {
     position: fixed;
     top: 0;
@@ -280,17 +261,11 @@ onBeforeUnmount(() => {
     z-index: 997;
     display: flex;
     align-items: center;
-    /* No right gutter: window caption buttons sit flush in the corner. */
     padding: 0 0 0 var(--pc-page-gutter);
     background: var(--pc-overlay);
     border-bottom: 1px solid var(--pc-border);
 
-    /* Width of the right cluster — the wider of the two flanks the centered
-       signal path must not run into: 2×32px actions + 1×8px gap + the 24px
-       gutter before the divider + 4px + 1px rule + 3×46px caption buttons.
-       Kept here (not inlined in the calc below) so the two stay in step. */
     --topbar-flank: 239px;
-    /* Breathing room between the signal path and either flank. */
     --topbar-flank-gap: 12px;
 }
 
@@ -304,7 +279,6 @@ onBeforeUnmount(() => {
     flex: none;
 }
 
-/* ---- Center signal path ---- */
 .signal-path {
     position: absolute;
     left: 50%;
@@ -312,11 +286,6 @@ onBeforeUnmount(() => {
     transform: translate(-50%, -50%);
     display: flex;
     align-items: center;
-    /* Centered on the window, so the flanks are not part of its layout — the
-       third term is what keeps it from growing into them (the headline title
-       ellipsizes instead). 100% is the header's padding box, hence one flank
-       plus gap on each side. Binds below ~1200px; above that the 640px spec
-       cap wins. */
     max-width: min(60vw, 640px, calc(100% - 2 * (var(--topbar-flank) + var(--topbar-flank-gap))));
 }
 
@@ -341,7 +310,7 @@ onBeforeUnmount(() => {
     color: var(--pc-text);
 }
 .signal-node .pc-dot {
-    transition: color var(--pc-dur-2) var(--pc-ease-out); /* M6 dot color crossfade */
+    transition: color var(--pc-dur-2) var(--pc-ease-out);
 }
 .signal-node-name {
     font-size: 12.5px;
@@ -359,7 +328,6 @@ onBeforeUnmount(() => {
     background: var(--pc-success);
 }
 
-/* ---- Headline node: tally lamp + on-air title ---- */
 .signal-node--headline {
     min-width: 0;
     gap: 10px;
@@ -382,7 +350,6 @@ onBeforeUnmount(() => {
     text-overflow: ellipsis;
 }
 
-/* ---- Right cluster: app actions + window caption buttons ---- */
 .topbar-right {
     margin-left: auto;
     display: flex;
@@ -391,13 +358,11 @@ onBeforeUnmount(() => {
     flex: none;
 }
 
-/* ---- App actions (32px ghost icon buttons) ---- */
 .topbar-actions {
     display: flex;
     align-items: center;
     gap: 8px;
     flex: none;
-    /* Divider between app actions and the window caption buttons. */
     padding: 0 var(--pc-page-gutter) 0 0;
     margin-right: 4px;
     border-right: 1px solid var(--pc-border);
@@ -426,7 +391,6 @@ onBeforeUnmount(() => {
     font-size: 14px;
 }
 
-/* ---- Window caption buttons (full-height, flush to the corner) ---- */
 .window-controls {
     display: flex;
     align-self: stretch;
@@ -462,7 +426,6 @@ onBeforeUnmount(() => {
     filter: brightness(0.9);
 }
 
-/* ---- Node popovers (overlay recipe; content teleports with scoped attrs) ---- */
 .node-popover {
     display: flex;
     flex-direction: column;
@@ -493,7 +456,6 @@ onBeforeUnmount(() => {
     border-top: 1px solid var(--pc-border-subtle);
 }
 
-/* Narrow windows: keep the strip usable — hide the path labels first. */
 @media (max-width: 720px) {
     .signal-headline-title {
         max-width: 140px;

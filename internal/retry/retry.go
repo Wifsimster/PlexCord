@@ -1,5 +1,3 @@
-// Package retry provides exponential backoff retry functionality.
-// This implements NFR18: automatic retry with 5s → 10s → 30s → 60s max backoff.
 package retry
 
 import (
@@ -9,15 +7,13 @@ import (
 	"time"
 )
 
-// BackoffSchedule defines the retry intervals (NFR18).
 var BackoffSchedule = []time.Duration{
 	5 * time.Second,
 	10 * time.Second,
 	30 * time.Second,
-	60 * time.Second, // Max interval - continues at this rate
+	60 * time.Second,
 }
 
-// RetryState represents the current state of retry attempts.
 type RetryState struct {
 	NextRetryAt        time.Time     `json:"nextRetryAt"`
 	LastError          string        `json:"lastError,omitempty"`
@@ -28,14 +24,10 @@ type RetryState struct {
 	MaxIntervalReached bool          `json:"maxIntervalReached"`
 }
 
-// RetryCallback is called when a retry should be attempted.
-// Returns nil on success, or error to continue retrying.
 type RetryCallback func() error
 
-// StateChangeCallback is called when the retry state changes.
 type StateChangeCallback func(state RetryState)
 
-// Manager handles automatic retry with exponential backoff.
 type Manager struct {
 	lastError     error
 	timer         *time.Timer
@@ -51,15 +43,12 @@ type Manager struct {
 	running       bool
 }
 
-// NewManager creates a new retry manager.
-// name is used for logging identification.
 func NewManager(name string) *Manager {
 	return &Manager{
 		name: name,
 	}
 }
 
-// SetCallbacks configures the retry and state change callbacks.
 func (m *Manager) SetCallbacks(retry RetryCallback, stateChange StateChangeCallback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -67,13 +56,10 @@ func (m *Manager) SetCallbacks(retry RetryCallback, stateChange StateChangeCallb
 	m.stateCallback = stateChange
 }
 
-// Start begins the retry cycle after a failure.
-// err is the error that triggered the retry, code is the error code (optional).
 func (m *Manager) Start(err error, code string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// If already retrying, just update the error
 	if m.running {
 		m.lastError = err
 		m.lastErrorCode = code
@@ -85,14 +71,11 @@ func (m *Manager) Start(err error, code string) {
 	m.attemptNumber = 0
 	m.running = true
 
-	// Create cancellation context
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 
-	// Schedule first retry
 	m.scheduleNextRetry()
 }
 
-// Stop cancels any pending retries.
 func (m *Manager) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -100,7 +83,6 @@ func (m *Manager) Stop() {
 	m.stopInternal()
 }
 
-// stopInternal stops the retry cycle (must be called with lock held).
 func (m *Manager) stopInternal() {
 	if m.timer != nil {
 		m.timer.Stop()
@@ -114,7 +96,6 @@ func (m *Manager) stopInternal() {
 	m.attemptNumber = 0
 }
 
-// Reset stops retrying and clears state (call on success).
 func (m *Manager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -123,7 +104,6 @@ func (m *Manager) Reset() {
 	m.lastError = nil
 	m.lastErrorCode = ""
 
-	// Emit cleared state
 	if m.stateCallback != nil {
 		m.stateCallback(RetryState{
 			AttemptNumber: 0,
@@ -132,31 +112,25 @@ func (m *Manager) Reset() {
 	}
 }
 
-// ManualRetry triggers an immediate retry and resets the backoff schedule.
 func (m *Manager) ManualRetry() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Ensure retry context exists so manual retry works even if not already running
 	if m.ctx == nil || m.ctx.Err() != nil {
 		m.ctx, m.cancel = context.WithCancel(context.Background())
 		m.running = true
 	}
 
-	// Stop any pending timer
 	if m.timer != nil {
 		m.timer.Stop()
 		m.timer = nil
 	}
 
-	// Reset attempt number for fresh backoff schedule
 	m.attemptNumber = 0
 
-	// Attempt retry immediately
 	go m.doRetry()
 }
 
-// GetState returns the current retry state.
 func (m *Manager) GetState() RetryState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -180,29 +154,25 @@ func (m *Manager) GetState() RetryState {
 	return state
 }
 
-// IsRetrying returns whether a retry cycle is active.
 func (m *Manager) IsRetrying() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.running
 }
 
-// getInterval returns the backoff interval for the given attempt number.
 func (m *Manager) getInterval(attempt int) time.Duration {
 	if attempt >= len(BackoffSchedule) {
-		return BackoffSchedule[len(BackoffSchedule)-1] // Max interval
+		return BackoffSchedule[len(BackoffSchedule)-1]
 	}
 	return BackoffSchedule[attempt]
 }
 
-// scheduleNextRetry schedules the next retry attempt (must be called with lock held).
 func (m *Manager) scheduleNextRetry() {
 	interval := m.getInterval(m.attemptNumber)
 	m.nextRetryAt = time.Now().Add(interval)
 
 	log.Printf("[%s] Retry scheduled in %v (attempt %d)", m.name, interval, m.attemptNumber+1)
 
-	// Emit state change
 	if m.stateCallback != nil {
 		lastErr := ""
 		if m.lastError != nil {
@@ -224,11 +194,9 @@ func (m *Manager) scheduleNextRetry() {
 	})
 }
 
-// doRetry performs the actual retry attempt.
 func (m *Manager) doRetry() {
 	m.mu.Lock()
 
-	// Check if cancelled
 	if m.ctx == nil || m.ctx.Err() != nil {
 		m.mu.Unlock()
 		return
@@ -248,19 +216,16 @@ func (m *Manager) doRetry() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if cancelled during callback
 	if m.ctx == nil || m.ctx.Err() != nil {
 		return
 	}
 
 	if err == nil {
-		// Success! Reset everything
 		log.Printf("[%s] Retry succeeded", m.name)
 		m.stopInternal()
 		m.lastError = nil
 		m.lastErrorCode = ""
 
-		// Emit success state
 		if m.stateCallback != nil {
 			m.stateCallback(RetryState{
 				AttemptNumber: 0,
@@ -270,7 +235,6 @@ func (m *Manager) doRetry() {
 		return
 	}
 
-	// Failed - schedule next retry
 	log.Printf("[%s] Retry failed: %v", m.name, err)
 	m.lastError = err
 	m.attemptNumber++

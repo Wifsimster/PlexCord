@@ -11,13 +11,10 @@ const router = useRouter();
 const setupStore = useSetupStore();
 const wizard = inject('setupWizard', null);
 
-// Loading and error state
 const isLoading = ref(false);
 const error = ref('');
 const autoSelected = ref(false);
 
-// Auto-advance (F27): a short beat with a `Stay` link; disabled entirely
-// under prefers-reduced-motion (Continue is enabled and focused instead).
 const prefersReducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const autoAdvancePending = ref(false);
 let autoAdvanceTimer = null;
@@ -35,7 +32,6 @@ const cancelAutoAdvance = () => {
 
 const scheduleAutoAdvance = () => {
     if (prefersReducedMotion || !wizard) {
-        // No auto-advance for reduced-motion/AT users — focus Continue instead
         wizard?.focusContinue();
         return;
     }
@@ -47,7 +43,6 @@ const scheduleAutoAdvance = () => {
     }, 800);
 };
 
-// Fetch users from the Plex server
 const fetchUsers = async () => {
     if (!setupStore.plexServerUrl) {
         error.value = t('user.errNoServer');
@@ -62,12 +57,10 @@ const fetchUsers = async () => {
         const fetchedUsers = await GetPlexUsers(setupStore.plexServerUrl);
         setupStore.setPlexUsers(fetchedUsers || []);
 
-        // Exactly one user: auto-select + auto-advance (F27/F28)
         if (fetchedUsers && fetchedUsers.length === 1) {
             setupStore.selectPlexUser(fetchedUsers[0]);
             autoSelected.value = true;
 
-            // Persist auto-selection to Go config
             try {
                 await SavePlexUserSelection(fetchedUsers[0].id, fetchedUsers[0].name);
             } catch (saveErr) {
@@ -95,18 +88,15 @@ const fetchUsers = async () => {
     }
 };
 
-// Select a user and persist to config
 const selectUser = async (user) => {
     cancelAutoAdvance();
     setupStore.selectPlexUser(user);
     autoSelected.value = false;
 
-    // Persist selection to Go config for application restart persistence
     try {
         await SavePlexUserSelection(user.id, user.name);
     } catch (err) {
         console.error('Failed to save user selection to config:', err);
-        // Don't surface — localStorage persistence still works
     }
 };
 
@@ -115,8 +105,6 @@ const goBack = () => {
 };
 
 onMounted(() => {
-    // If we already have users and a selection, don't refetch (and never
-    // auto-advance a restored selection — only a fresh auto-select does)
     if (users.value.length === 0 || !selectedUser.value) {
         fetchUsers();
     } else if (users.value.length === 1 && selectedUser.value) {
@@ -135,12 +123,10 @@ onUnmounted(() => {
         <p class="setup-lede">{{ $t('user.lede') }}</p>
 
         <div class="setup-panels">
-            <!-- Loading: skeleton cards (M20) -->
             <div v-if="isLoading" class="user-grid" :aria-label="$t('user.loadingAria')">
                 <div v-for="i in 4" :key="i" class="pc-skeleton user-skeleton"></div>
             </div>
 
-            <!-- Error: inline danger panel + Retry / Back -->
             <section v-else-if="error" class="pc-panel user-error" role="alert">
                 <p class="user-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> {{ $t('user.couldntLoadTitle') }}</p>
                 <p class="user-error-text">{{ error }}</p>
@@ -150,7 +136,6 @@ onUnmounted(() => {
                 </div>
             </section>
 
-            <!-- No users found -->
             <section v-else-if="users.length === 0" class="pc-panel user-error">
                 <p class="user-error-title user-error-title--warn"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ $t('user.noUsersTitle') }}</p>
                 <p class="user-error-text">{{ $t('user.noUsersText') }}</p>
@@ -159,7 +144,6 @@ onUnmounted(() => {
                 </div>
             </section>
 
-            <!-- Exactly one user: done-panel (F27) -->
             <section v-else-if="users.length === 1 && selectedUser" class="pc-panel user-done">
                 <p class="user-done-title">
                     <DrawnCheck :size="14" />
@@ -175,7 +159,6 @@ onUnmounted(() => {
                 </p>
             </section>
 
-            <!-- Multiple users: select-card grid (the selected card IS the confirmation) -->
             <div v-else class="user-grid" role="listbox" :aria-label="$t('user.usersAria')">
                 <button v-for="user in users" :key="user.id" type="button" class="user-card" :class="{ 'user-card--selected': selectedUser?.id === user.id }" role="option" :aria-selected="selectedUser?.id === user.id" @click="selectUser(user)">
                     <span class="user-avatar">
@@ -191,7 +174,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* ---- Grid + skeletons ---- */
 .user-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -202,7 +184,6 @@ onUnmounted(() => {
     border-radius: var(--pc-radius-md);
 }
 
-/* ---- Select cards ---- */
 .user-card {
     position: relative;
     display: flex;
@@ -259,7 +240,6 @@ onUnmounted(() => {
     right: 8px;
 }
 
-/* ---- Single-user done panel ---- */
 .user-done-title {
     display: flex;
     align-items: center;
@@ -281,7 +261,6 @@ onUnmounted(() => {
     text-decoration: underline;
 }
 
-/* ---- Error / empty panels ---- */
 .user-error-title {
     display: flex;
     align-items: center;

@@ -5,7 +5,6 @@ import { CheckSetupComplete } from '../../wailsjs/go/main/App';
 const router = createRouter({
     history: createWebHashHistory(import.meta.env.BASE_URL),
     routes: [
-        // Setup wizard routes (no layout wrapper)
         {
             path: '/setup',
             component: () => import('@/views/SetupWizard.vue'),
@@ -38,7 +37,6 @@ const router = createRouter({
                 }
             ]
         },
-        // Main app routes (with layout)
         {
             path: '/',
             component: AppLayout,
@@ -53,14 +51,12 @@ const router = createRouter({
                     name: 'settings',
                     component: () => import('@/views/pages/Settings.vue')
                 },
-                // Legacy route redirect
                 {
                     path: 'pages/dashboard',
                     redirect: '/'
                 }
             ]
         },
-        // Error pages
         {
             path: '/:pathMatch(.*)*',
             name: 'notfound',
@@ -69,27 +65,22 @@ const router = createRouter({
     ]
 });
 
-// Navigation guard to check setup completion
 router.beforeEach(async (to, from, next) => {
-    // Skip check if already going to setup pages
     if (to.path.startsWith('/setup')) {
         next();
         return;
     }
 
     try {
-        // Check if setup is complete via Go backend
         const isSetupComplete = await CheckSetupComplete();
 
         if (!isSetupComplete) {
-            // Redirect to setup wizard if not complete
             next('/setup/welcome');
         } else {
             next();
         }
     } catch (error) {
         console.error('Failed to check setup status:', error);
-        // On error, allow navigation (fail open)
         next();
     }
 });

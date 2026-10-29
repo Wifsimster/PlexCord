@@ -2,8 +2,6 @@ import { computed, reactive } from 'vue';
 
 const THEME_STORAGE_KEY = 'plexcord-theme';
 
-// main.js applies the persisted theme to <html> before mount; this state
-// mirrors it so components can react. Default is dark.
 const layoutConfig = reactive({
     darkTheme: localStorage.getItem(THEME_STORAGE_KEY) !== 'light'
 });
@@ -15,8 +13,6 @@ export function useLayout() {
         localStorage.setItem(THEME_STORAGE_KEY, dark ? 'dark' : 'light');
     };
 
-    // Wraps the swap in a view transition (M-transition path) unless the
-    // platform lacks the API or the user asked for reduced motion.
     const transition = (apply) => {
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

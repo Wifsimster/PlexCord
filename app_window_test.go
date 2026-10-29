@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// The window manager is the piece that used to be untestable: every path went
-// straight into the Wails runtime. These tests drive all of it against a fake.
-
 func TestWindowManagerShowRaisesWindow(t *testing.T) {
 	desktop := &fakeDesktop{}
 	w := newWindowManager(desktop, desktop)
@@ -19,8 +16,6 @@ func TestWindowManagerShowRaisesWindow(t *testing.T) {
 	if shown != 1 {
 		t.Fatalf("Show() drove the window %d time(s), want 1", shown)
 	}
-	// The always-on-top flick is what actually raises the window; it must be
-	// turned back off, or PlexCord would sit on top of everything.
 	want := []bool{true, false}
 	if len(desktop.alwaysOnTop) != len(want) {
 		t.Fatalf("always-on-top calls = %v, want %v", desktop.alwaysOnTop, want)
@@ -33,8 +28,6 @@ func TestWindowManagerShowRaisesWindow(t *testing.T) {
 }
 
 func TestWindowManagerUnminimisesOnlyWhenMinimised(t *testing.T) {
-	// A window hidden while maximised must not be dropped back to its normal
-	// size by an unconditional restore.
 	desktop := &fakeDesktop{isMinimised: false}
 	w := newWindowManager(desktop, desktop)
 	w.MarkReady(context.Background())
@@ -55,8 +48,6 @@ func TestWindowManagerUnminimisesOnlyWhenMinimised(t *testing.T) {
 }
 
 func TestWindowManagerIgnoresHideAndMinimiseBeforeReady(t *testing.T) {
-	// Hiding or minimising a window that does not exist yet is meaningless —
-	// and against a nil context it used to panic inside the Wails runtime.
 	desktop := &fakeDesktop{}
 	w := newWindowManager(desktop, desktop)
 
@@ -95,7 +86,6 @@ func TestWindowManagerQuitMarksExplicitExit(t *testing.T) {
 }
 
 func TestWindowManagerMarkQuittingDoesNotExit(t *testing.T) {
-	// The update restart flags the exit itself, then quits through its own path.
 	desktop := &fakeDesktop{}
 	w := newWindowManager(desktop, desktop)
 	w.MarkReady(context.Background())
@@ -120,15 +110,11 @@ func TestWindowManagerResizeCentersWindow(t *testing.T) {
 	if len(desktop.sizes) != 1 || desktop.sizes[0] != [2]int{1024, 768} {
 		t.Fatalf("sizes = %v, want one 1024x768 call", desktop.sizes)
 	}
-	// Wails centered the window against the previous size, so it has to be
-	// re-centered after a resize.
 	if desktop.centered != 1 {
 		t.Errorf("center calls = %d, want 1 after a resize", desktop.centered)
 	}
 }
 
-// TestBeforeCloseHidesWhenMinimizingToTray covers the close-button behaviour
-// that depends on both the quit flag and the setting.
 func TestBeforeCloseHidesWhenMinimizingToTray(t *testing.T) {
 	app := newTestApp(defaultTestConfig())
 	app.config.MinimizeToTray = true
@@ -141,7 +127,6 @@ func TestBeforeCloseHidesWhenMinimizingToTray(t *testing.T) {
 		t.Errorf("window hide calls = %d, want 1", hidden)
 	}
 
-	// An explicit quit must get through.
 	app.windows.MarkQuitting()
 	if prevent := app.beforeClose(context.Background()); prevent {
 		t.Error("beforeClose() prevented an explicit quit")

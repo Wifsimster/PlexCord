@@ -1,15 +1,3 @@
-/* ============================================================
-   PlexCord "ON AIR" motion catalogue (spec §4).
-   Single home for global keyframes, ambient-loop utility classes,
-   and Vue <Transition> class sets. Durations/easings come from
-   tokens.css (--pc-dur-*, --pc-ease-*, --pc-loop-*).
-   Rules: ≤320ms except ambient loops; transform/opacity only
-   (background/border/color allowed on ≤180ms state changes).
-   ============================================================ */
-
-/* ---------------- Global keyframes ---------------- */
-
-/* M4 — live status-dot pulse ring (apply to a ::after ring) */
 @keyframes pc-pulse {
     0% {
         transform: scale(1);
@@ -21,7 +9,6 @@
     }
 }
 
-/* M5 — retrying dot blink */
 @keyframes pc-blink {
     from {
         opacity: 0.4;
@@ -31,7 +18,6 @@
     }
 }
 
-/* M11 — playing equalizer bar (phase-shift via animation-duration/delay) */
 @keyframes pc-eq {
     0%,
     100% {
@@ -42,7 +28,6 @@
     }
 }
 
-/* M20 — skeleton shimmer (background-position sweep) */
 @keyframes pc-shimmer {
     from {
         background-position: -200% 0;
@@ -52,9 +37,6 @@
     }
 }
 
-/* M22 / §4.1 — stage artwork wash: a slow breathe between 80% and 100% of
-   the scheme's --pc-backdrop-opacity, plus a barely-there drift. Light mode
-   uses the same keyframes (the token carries the difference). */
 @keyframes pc-breathe {
     0%,
     100% {
@@ -78,7 +60,6 @@
     }
 }
 
-/* M9 — panel entrance (use with animation-delay for the 40ms stagger) */
 @keyframes pc-enter-up {
     from {
         opacity: 0;
@@ -90,9 +71,6 @@
     }
 }
 
-/* ---------------- Ambient/loop utility classes ---------------- */
-
-/* M4 — attach to .pc-dot when connected & playing */
 .pc-dot--pulse::after {
     content: '';
     position: absolute;
@@ -102,12 +80,10 @@
     animation: pc-pulse var(--pc-loop-pulse) var(--pc-ease-out) infinite;
 }
 
-/* M5 — attach to .pc-dot when retrying */
 .pc-dot--blink {
     animation: pc-blink var(--pc-loop-blink) ease-in-out infinite alternate;
 }
 
-/* M11 — equalizer bars: <span class="pc-eq"><i/><i/><i/></span> */
 .pc-eq {
     display: inline-flex;
     align-items: flex-end;
@@ -132,7 +108,6 @@
     animation-duration: 1.3s;
     animation-delay: -0.4s;
 }
-/* paused → freeze at 30% height, tint warn (M11) */
 .pc-eq--paused > i {
     animation-play-state: paused;
     transform: scaleY(0.3);
@@ -140,7 +115,6 @@
     transition: background-color var(--pc-dur-2) var(--pc-ease-out);
 }
 
-/* M20 — skeleton block */
 .pc-skeleton {
     background: linear-gradient(
         90deg,
@@ -162,7 +136,6 @@
     background-size: 200% 100%;
 }
 
-/* M9 — panel entrance; add .pc-panel-enter (+ stagger index class, max 4) */
 .pc-panel-enter {
     animation: pc-enter-up 280ms var(--pc-ease-out) both;
 }
@@ -176,9 +149,6 @@
     animation-delay: 120ms;
 }
 
-/* ---------------- Vue <Transition> class sets ---------------- */
-
-/* M7 — route transition (Dashboard ⇄ Settings): <Transition name="pc-route" mode="out-in"> */
 .pc-route-enter-active {
     transition:
         opacity 240ms var(--pc-ease-out),
@@ -198,8 +168,6 @@
     transform: translateY(-4px);
 }
 
-/* M8 — wizard step slide, direction-aware:
-   <Transition :name="goingForward ? 'pc-step-next' : 'pc-step-prev'" mode="out-in"> */
 .pc-step-next-enter-active,
 .pc-step-prev-enter-active {
     transition:
@@ -229,7 +197,6 @@
     transform: translateX(24px);
 }
 
-/* M6 — status label/dot change: <Transition name="pc-state" mode="out-in"> */
 .pc-state-enter-active {
     transition:
         opacity var(--pc-dur-2) var(--pc-ease-out),
@@ -249,7 +216,6 @@
     transform: translateY(-4px);
 }
 
-/* Generic fade (idle unmounts, M10 crossfades): <Transition name="pc-fade"> */
 .pc-fade-enter-active {
     transition: opacity var(--pc-dur-3) var(--pc-ease-out);
 }
@@ -261,8 +227,6 @@
     opacity: 0;
 }
 
-/* Slow fade for the ambient backdrop unmount (M22, 320ms):
-   <Transition name="pc-fade-slow"> */
 .pc-fade-slow-enter-active,
 .pc-fade-slow-leave-active {
     transition: opacity var(--pc-dur-4) var(--pc-ease-out);
@@ -272,7 +236,6 @@
     opacity: 0;
 }
 
-/* M16 — toast enter/exit: <Transition name="pc-toast"> */
 .pc-toast-enter-active {
     transition:
         opacity 240ms var(--pc-ease-out),
@@ -292,7 +255,6 @@
     transform: translateX(8px);
 }
 
-/* M21 — dialog: <Transition name="pc-dialog"> */
 .pc-dialog-enter-active {
     transition:
         opacity 240ms var(--pc-ease-out),
@@ -309,8 +271,6 @@
     transform: scale(0.97);
 }
 
-/* M17 — collapse/expand grid rows: wrap content in a 1-row grid;
-   toggle .pc-collapse--open on the wrapper */
 .pc-collapse {
     display: grid;
     grid-template-rows: 0fr;
@@ -329,7 +289,6 @@
     opacity: 1;
 }
 
-/* ---------------- Reduced-motion policy (spec §4) ---------------- */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -338,7 +297,6 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
-    /* Whitelist: pure-opacity communication stays perceivable */
     .pc-fade-ok {
         transition: opacity 80ms linear !important;
     }

@@ -8,8 +8,6 @@ import (
 )
 
 func TestGetMediaSyncDefaultsToEverything(t *testing.T) {
-	// A config written before PlexCord handled video carries no media types at
-	// all; the feature must arrive switched on rather than hidden.
 	cfg := config.DefaultConfig()
 	cfg.PresenceMediaTypes = nil
 	app := newTestApp(cfg)
@@ -43,8 +41,6 @@ func TestSetMediaSyncPersistsTheSelection(t *testing.T) {
 }
 
 func TestSetMediaSyncRejectsSwitchingEverythingOff(t *testing.T) {
-	// An empty list means "all of them" everywhere else, so storing one would
-	// show three switches off while still relaying all three.
 	app := newTestApp(config.DefaultConfig())
 
 	if err := app.SetMediaSync(MediaSyncSettings{}); err == nil {
@@ -83,7 +79,6 @@ func TestStartSessionPollingAsksPlexForTheConfiguredMediaTypes(t *testing.T) {
 	}
 }
 
-// movieSession is a film playing, as the Plex client would report it.
 func movieSession(title string) plex.MediaSession {
 	return plex.MediaSession{
 		SessionKey: title,
@@ -96,10 +91,6 @@ func movieSession(title string) plex.MediaSession {
 	}
 }
 
-// TestSetMediaSyncWithdrawsAPresenceOfANowDisabledKind covers the gap a plain
-// poller restart leaves: the restarted poller has no previous session, so
-// "nothing matching is playing" reads as no change rather than as a stop, and
-// the film the user just excluded would sit on their Discord profile.
 func TestSetMediaSyncWithdrawsAPresenceOfANowDisabledKind(t *testing.T) {
 	presence := &recordingPresence{connected: true}
 	app := newTestApp(config.DefaultConfig())
@@ -120,8 +111,6 @@ func TestSetMediaSyncWithdrawsAPresenceOfANowDisabledKind(t *testing.T) {
 	}
 }
 
-// TestSetMediaSyncLeavesAStillEnabledPresenceAlone is the other half: turning
-// films off must not interrupt the track that is playing.
 func TestSetMediaSyncLeavesAStillEnabledPresenceAlone(t *testing.T) {
 	presence := &recordingPresence{connected: true}
 	app := newTestApp(config.DefaultConfig())

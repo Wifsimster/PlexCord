@@ -55,7 +55,6 @@ func TestStore_UpdatePropagatesSaveError(t *testing.T) {
 	if !errors.Is(err, sentinel) {
 		t.Errorf("expected sentinel error, got %v", err)
 	}
-	// Mutation still applied even if save failed — the store reflects the attempt
 	if store.Get().ServerURL != "http://x" {
 		t.Errorf("mutation should still apply on save failure")
 	}
@@ -82,8 +81,6 @@ func TestStore_UpdateNoSaveDoesNotPersist(t *testing.T) {
 }
 
 func TestStore_DefaultSaveFnFallback(t *testing.T) {
-	// Passing nil saveFn should fall back to config.Save (not tested here,
-	// just verify the store is constructable).
 	cfg := &Config{}
 	store := NewStore(cfg, nil)
 	if store == nil {

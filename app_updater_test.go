@@ -8,9 +8,6 @@ import (
 	"plexcord/internal/version"
 )
 
-// TestUpdateNoticeWording covers how each updater state is presented in the
-// system tray — the only update notification a user running PlexCord in the
-// background ever sees.
 func TestUpdateNoticeWording(t *testing.T) {
 	info := &version.UpdateInfo{Available: true, CurrentVersion: "v1.4.0", LatestVersion: "v1.5.0"}
 
@@ -27,10 +24,9 @@ func TestUpdateNoticeWording(t *testing.T) {
 			wantActionable: true,
 		},
 		{
-			name:      "downloading is informational only",
-			status:    updater.Status{State: updater.StateDownloading, Info: info, Progress: 42},
-			wantLabel: "Downloading update v1.5.0…",
-			// Clicking would only interrupt work already under way.
+			name:           "downloading is informational only",
+			status:         updater.Status{State: updater.StateDownloading, Info: info, Progress: 42},
+			wantLabel:      "Downloading update v1.5.0…",
 			wantActionable: false,
 		},
 		{
@@ -44,8 +40,6 @@ func TestUpdateNoticeWording(t *testing.T) {
 			status: updater.Status{State: updater.StateIdle},
 		},
 		{
-			// Defensive: a state without info has no version to name, so there
-			// is nothing worth putting in the menu.
 			name:   "no info shows nothing",
 			status: updater.Status{State: updater.StateReady},
 		},
@@ -70,17 +64,12 @@ func TestUpdateNoticeWording(t *testing.T) {
 	}
 }
 
-// TestPublishUpdateNoticeWithoutTray verifies mirroring update state is safe
-// before the tray exists — the updater's listener fires as soon as it is
-// registered, and QuitApp can tear the tray down while a check is in flight.
 func TestPublishUpdateNoticeWithoutTray(t *testing.T) {
 	app := &App{}
 
 	app.publishUpdateNotice(updater.Status{State: updater.StateReady, Info: &version.UpdateInfo{LatestVersion: "v1.5.0"}})
 }
 
-// TestPublishUpdateNoticeReachesTray verifies the mapping is what the tray ends
-// up holding.
 func TestPublishUpdateNoticeReachesTray(t *testing.T) {
 	tray := &fakeTray{}
 	app := &App{tray: tray}
@@ -97,7 +86,6 @@ func TestPublishUpdateNoticeReachesTray(t *testing.T) {
 		t.Errorf("tray notice label = %q, want the restart invitation", notice.Label)
 	}
 
-	// Back to idle (for example after a reset): the notice must be withdrawn.
 	app.publishUpdateNotice(updater.Status{State: updater.StateIdle})
 	notice, _ = tray.lastNotice()
 	if notice != (platform.UpdateNotice{}) {
@@ -105,18 +93,11 @@ func TestPublishUpdateNoticeReachesTray(t *testing.T) {
 	}
 }
 
-// TestUpdaterStatusReachesTrayThroughListener covers the wiring the tray notice
-// depends on end to end: the updater announces a lifecycle transition and the
-// tray menu item follows it. Before the UpdateService and TrayController
-// interfaces existed, this needed a real GitHub poll and a real desktop tray.
 func TestUpdaterStatusReachesTrayThroughListener(t *testing.T) {
 	tray := &fakeTray{}
 	fake := &fakeUpdater{}
 	app := &App{tray: tray, updater: fake}
 
-	// Registering the listener is what startup does; it must deliver the
-	// current state immediately so a listener registered after an early
-	// transition is not left behind.
 	fake.OnStatusChange(app.publishUpdateNotice)
 
 	notice, ok := tray.lastNotice()
@@ -127,8 +108,6 @@ func TestUpdaterStatusReachesTrayThroughListener(t *testing.T) {
 		t.Errorf("initial tray notice = %+v, want none for an idle updater", notice)
 	}
 
-	// A download starting is informational: the tray says so but the item
-	// is not clickable, since a click could only interrupt work in progress.
 	fake.publish(updater.Status{
 		State: updater.StateDownloading,
 		Info:  &version.UpdateInfo{LatestVersion: "v2.0.0"},
@@ -141,7 +120,6 @@ func TestUpdaterStatusReachesTrayThroughListener(t *testing.T) {
 		t.Error("a download in progress was offered as an actionable tray item")
 	}
 
-	// Ready is the one worth acting on: the update is on disk, a restart applies it.
 	fake.publish(updater.Status{
 		State: updater.StateReady,
 		Info:  &version.UpdateInfo{LatestVersion: "v2.0.0"},
@@ -155,8 +133,6 @@ func TestUpdaterStatusReachesTrayThroughListener(t *testing.T) {
 	}
 }
 
-// TestGetUpdateStatusWithoutUpdater verifies the binding hydrates the frontend
-// with a sane state before the checker has been constructed.
 func TestGetUpdateStatusWithoutUpdater(t *testing.T) {
 	app := &App{}
 

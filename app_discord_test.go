@@ -10,7 +10,6 @@ import (
 	"plexcord/internal/plex"
 )
 
-// fakeArtworkResolver returns a preset cached URL.
 type fakeArtworkResolver struct {
 	cached string
 	ok     bool
@@ -21,9 +20,6 @@ func (f *fakeArtworkResolver) Resolve(context.Context, artwork.Query) (string, e
 	return f.cached, nil
 }
 
-// newPresenceTestApp wires an App around a presence fake with everything the
-// presence path touches, and nothing it does not: no Wails window, no tray, no
-// keychain, no Plex server.
 func newPresenceTestApp(presence DiscordPresence, cfg *config.Config) *App {
 	a := newTestApp(cfg)
 	a.discord = a.newDiscordService(presence, nil)
@@ -44,7 +40,6 @@ func newTokenedSession() *plex.MediaSession {
 
 func TestUpdateDiscordFromSession_NeverSendsPlexToken(t *testing.T) {
 	fake := &recordingPresence{connected: true}
-	// No resolver: artwork falls back to the Plex logo asset, never the URL.
 	a := newPresenceTestApp(fake, config.DefaultConfig())
 
 	a.updateDiscordFromSession(newTokenedSession())
@@ -75,8 +70,6 @@ func TestUpdateDiscordFromSession_UsesCachedPublicArtwork(t *testing.T) {
 }
 
 func TestGetPresenceOptions_NormalizesDefaults(t *testing.T) {
-	// A legacy config with empty presence options should read back as the
-	// media/state/artwork-on defaults.
 	a := newTestApp(&config.Config{})
 	opts := a.GetPresenceOptions()
 	if opts.ActivityStyle != "media" {
@@ -99,7 +92,6 @@ func TestSetPresenceOptions_RejectsInvalidValues(t *testing.T) {
 	if err := a.SetPresenceOptions(PresenceOptions{ActivityStyle: "media", StatusDisplay: "bogus"}); err == nil {
 		t.Error("expected error for invalid status display")
 	}
-	// Config must be untouched after a rejected update.
 	if a.config.PresenceActivityStyle != "media" {
 		t.Errorf("config mutated on rejected update: %q", a.config.PresenceActivityStyle)
 	}
@@ -110,7 +102,6 @@ func TestUpdateDiscordFromSession_ArtworkLookupDisabled(t *testing.T) {
 	cfg := config.DefaultConfig()
 	disabled := false
 	cfg.PresenceArtworkLookup = &disabled
-	// Even with a resolver that has a cached cover, lookup-disabled sends none.
 	a := newTestApp(cfg)
 	a.discord = a.newDiscordService(fake, &fakeArtworkResolver{cached: "https://cdn/cover.jpg", ok: true})
 

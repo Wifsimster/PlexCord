@@ -1,18 +1,3 @@
-/**
- * Dev-only mock of the Wails bridge (window.go / window.runtime).
- *
- * Lets the frontend run in a plain browser (`npm run dev`) without the Go
- * backend, so pages can be developed and visually tested. Never bundled in
- * production: only imported behind `import.meta.env.DEV` from main.js.
- *
- * URL flags:
- *   ?mock=empty  — nothing playing, everything disconnected (empty states)
- *   ?mock=error  — Plex unreachable + auto-retrying (error/countdown states)
- *   ?mock=users  — multiple Plex users (wizard Select User grid)
- *   ?mock=update — background auto-update completes shortly after load
- *                  (AppLayout "Update ready" toast + Settings restart row)
- */
-
 const ALBUM_ART =
     'data:image/svg+xml;utf8,' +
     encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
@@ -40,7 +25,6 @@ export function installWailsMock() {
 
     const listeners = new Map();
 
-    // ?mock=movie / ?mock=tv exercise the video presence; the default is music.
     const musicSession = {
         sessionKey: 'mock-1',
         mediaType: 'music',
@@ -89,9 +73,8 @@ export function installWailsMock() {
         else session = { ...musicSession };
     }
 
-    // ?mock=update — auto-download finishes ~2s after load
     const mockUpdateInfo = {
-        available: false, // matches the backend: false once the update is applied
+        available: false,
         currentVersion: '4.3.0-dev',
         latestVersion: 'v9.9.9',
         releaseUrl: 'https://github.com/Wifsimster/PlexCord/releases',
@@ -115,10 +98,8 @@ export function installWailsMock() {
         servers: empty ? [] : [{ name: 'Home Server', url: 'http://192.168.1.10:32400', userId: '1', userName: 'demo-user', active: true }]
     };
 
-    // Matches the Go retry.RetryState JSON shape (nextRetryIn is NANOSECONDS).
     const idleRetry = { isRetrying: false, attemptNumber: 0, nextRetryIn: 0, maxIntervalReached: false };
 
-    // ?mock=error — Plex unreachable, auto-retry countdown re-arming forever.
     const retrySim = plexError ? { attemptNumber: 3, deadline: Date.now() + 12000 } : null;
     const plexRetryState = () =>
         retrySim
@@ -137,10 +118,6 @@ export function installWailsMock() {
         GetVersion: () => ({ version: '4.3.0-dev', commit: 'a1b2c3d4e5f6', buildDate: nowIso() }),
         CheckSetupComplete: () => true,
         CheckForUpdate: () => (updateSim ? { ...mockUpdateInfo, available: true } : { available: false, latestVersion: '4.3.0' }),
-        // Browsers can't swap the running binary; false exercises the
-        // open-release-page fallback in Settings → About. The ?mock=update
-        // scenario pretends self-update works so the ready/restart flow and
-        // the AppLayout toast are exercisable.
         CanSelfUpdate: () => updateSim,
         DownloadAndInstallUpdate: () => {},
         RestartApplication: () => {},
@@ -202,7 +179,6 @@ export function installWailsMock() {
         SetStartMinimized: (v) => {
             state.startMinimized = v;
         },
-        // Matches the Go App.GetHideWhenPaused map shape
         GetHideWhenPaused: () => ({ enabled: state.hideWhenPaused, delaySeconds: state.hideWhenPausedDelay }),
         SetHideWhenPaused: (enabled, delaySeconds) => {
             state.hideWhenPaused = enabled;
@@ -224,12 +200,10 @@ export function installWailsMock() {
             state.presenceFormat = { detailsFormat: details, stateFormat };
         },
         GetDefaultDiscordClientID: () => '1234567890',
-        // Like the backend: returns the custom ID when set, else the default
         GetDiscordClientID: () => state.discordClientId || '1234567890',
         SaveDiscordClientID: (id) => {
             state.discordClientId = id;
         },
-        // Backend validates a Discord snowflake (17–20 digits); '' = default
         ValidateDiscordClientID: (id) => {
             if (id && !/^\d{17,20}$/.test(id)) {
                 throw new Error('Discord Client ID must be a 17–20 digit number');
@@ -261,10 +235,6 @@ export function installWailsMock() {
             }
             return [{ id: '1', name: 'demo-user', thumb: '' }];
         },
-        // Matches plex.Server (GDM discovery result shape). Superset of what
-        // both consumers read: SetupPlex keys rows by `id`; Settings builds
-        // URLs from `name`/`address`/`port`/`isLocal`. The first entry's URL
-        // matches the pre-seeded server so the "Added" state is exercisable.
         DiscoverPlexServers: () =>
             empty
                 ? []
@@ -272,8 +242,6 @@ export function installWailsMock() {
                       { id: 'srv-1', name: 'Home Server', address: '192.168.1.10', port: '32400', version: '1.40.0.7998', isLocal: true },
                       { id: 'srv-2', name: 'Remote NAS', address: 'plex.example.com', port: '32400', version: '1.40.0.7998', isLocal: false }
                   ],
-        // PIN auth: authorizes on the second status poll (~4s), like a user
-        // completing the code at plex.tv/link.
         StartPlexPINAuth: () => {
             state.pinPolls = 0;
             return { pinCode: 'ABCD', pinID: 314159, authURL: 'https://plex.tv/link?pin=ABCD', expiresIn: 900, expiresAt: nowIso(900000) };
@@ -288,7 +256,6 @@ export function installWailsMock() {
         StartSessionPolling: () => {},
         CompleteSetup: () => {},
         SkipSetup: () => {},
-        // Matches plex.ValidationResult; fails in the ?mock=error scenario
         ValidatePlexConnection: () => {
             if (plexError) {
                 throw new Error('connection refused');
@@ -335,9 +302,6 @@ export function installWailsMock() {
                         (listeners.get(name) || []).filter((f) => f !== cb)
                     );
             },
-            // The wailsjs runtime.js wrapper routes EventsOn/EventsOnce
-            // through EventsOnMultiple — without this, wrapper-based
-            // subscriptions are silent no-ops in the browser.
             EventsOnMultiple: (name, cb) => window.runtime.EventsOn(name, cb),
             EventsOnce: (name, cb) => window.runtime.EventsOn(name, cb),
             EventsOff: (name) => listeners.delete(name),
@@ -351,8 +315,6 @@ export function installWailsMock() {
         }
     );
 
-    // Simulate the automatic updater (?mock=update): announce, stream download
-    // progress, then flip to ready — same event sequence as the Go updater.
     if (updateSim) {
         setTimeout(() => {
             updateStatus.state = 'available';
@@ -374,7 +336,6 @@ export function installWailsMock() {
         }, 2000);
     }
 
-    // Simulate playback progress so time-based UI (progress bars) animates.
     if (session) {
         setInterval(() => {
             session.viewOffset = (session.viewOffset + 1000) % session.duration;
@@ -382,9 +343,6 @@ export function installWailsMock() {
         }, 1000);
     }
 
-    // Simulate the Plex failure + auto-retry cycle (?mock=error). Mirrors the
-    // backend: PlexConnectionError once, then a PlexRetryState per scheduled
-    // attempt (the frontend ticks the countdown locally from nextRetryAt).
     if (retrySim) {
         setTimeout(() => {
             window.runtime.EventsEmit('PlexConnectionError', { errorCode: 'PLEX_UNREACHABLE' });

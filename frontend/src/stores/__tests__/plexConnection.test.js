@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
-// Mock Wails runtime
 vi.mock('../../../wailsjs/runtime/runtime', () => ({
   EventsOn: vi.fn(),
   EventsOff: vi.fn()
 }))
 
-// Mock backend calls
 vi.mock('../../../wailsjs/go/main/App', () => ({
   GetPlexConnectionStatus: vi.fn().mockResolvedValue({
     connected: false,
@@ -209,7 +207,6 @@ describe('plexConnection store', () => {
 
         await store.refreshStatus()
 
-        // Should not throw, store retains previous state
         expect(store.connected).toBe(false)
         consoleSpy.mockRestore()
       })
@@ -288,9 +285,6 @@ describe('plexConnection store', () => {
       })
 
       it('resolves a stuck "Idle" snapshot into "Connected"', () => {
-        // Reproduces the startup race: the status snapshot was taken before
-        // the poller started, so the tile shows "Idle" + Reconnect while music
-        // is actually playing. A live poll must correct it.
         store.connected = false
         store.polling = false
         expect(store.statusLabel).toBe('Not Connected')
@@ -315,16 +309,14 @@ describe('plexConnection store', () => {
 
     describe('initialize', () => {
       it('only initializes once', async () => {
-        // Suppress console.log from autoReconnect
         const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
         await store.initialize()
         expect(store.initialized).toBe(true)
         expect(EventsOn).toHaveBeenCalledTimes(3)
 
-        // Second call should be a no-op
         await store.initialize()
-        expect(EventsOn).toHaveBeenCalledTimes(3) // unchanged
+        expect(EventsOn).toHaveBeenCalledTimes(3)
 
         consoleSpy.mockRestore()
       })
@@ -345,8 +337,6 @@ describe('plexConnection store', () => {
         eventHandlers['PlexConnectionRestored']()
 
         expect(store.connected).toBe(true)
-        // Recovery means the poller resumed — polling must flip on too, or the
-        // tile stays "Idle" (healthy = connected && polling) after recovery.
         expect(store.polling).toBe(true)
         expect(store.inErrorState).toBe(false)
         expect(store.lastConnected).toBeTruthy()
@@ -393,8 +383,6 @@ describe('plexConnection store', () => {
         store.autoReconnect()
         await vi.runAllTimersAsync()
 
-        // Without a configured server/user there is nothing to connect to,
-        // so the dashboard must not spin in a perpetual "Retrying..." state.
         expect(RetryPlexConnection).not.toHaveBeenCalled()
       })
 

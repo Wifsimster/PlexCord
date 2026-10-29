@@ -14,12 +14,9 @@ const router = useRouter();
 const route = useRoute();
 const setupStore = useSetupStore();
 
-// Restore persisted wizard progress before any step view mounts (child
-// setup/onMounted hooks run before the parent's onMounted).
 setupStore.loadState();
 const savedStep = setupStore.currentStep;
 
-// Rail steps (spec §5.4) — the signal path being assembled, left to right.
 const steps = [
     { labelKey: 'wizard.stepWelcome', route: '/setup/welcome' },
     { labelKey: 'wizard.stepPlex', route: '/setup/plex', brand: 'plex' },
@@ -34,7 +31,6 @@ const activeIndex = computed(() => {
     return idx === -1 ? 0 : idx;
 });
 
-// Keep the store's step index in sync with the route (route wins).
 watch(
     activeIndex,
     (idx) => {
@@ -45,18 +41,15 @@ watch(
     { immediate: true }
 );
 
-// ---- M8: direction-aware step transition -------------------------------
 const stepTransition = ref('pc-step-next');
 watch(activeIndex, (next, prev) => {
     stepTransition.value = next >= prev ? 'pc-step-next' : 'pc-step-prev';
 });
 
-// ---- Rail state ---------------------------------------------------------
 const isStepDone = (index) => index !== activeIndex.value && (index < activeIndex.value || setupStore.isStepCompleted(index));
 
 const canNavigateTo = (index) => index <= activeIndex.value || setupStore.isStepCompleted(index);
 
-// One-line mono summary of the accumulated result for done steps (§5.4).
 const stepSummary = (index) => {
     if (!isStepDone(index)) {
         return '';
@@ -73,8 +66,6 @@ const stepSummary = (index) => {
     }
 };
 
-// 2px accent progress line runs down the rail's left edge to the current
-// step; its height animates --pc-dur-3 --pc-ease-inout (M8 rail marker).
 const railList = ref(null);
 const progressHeight = ref(0);
 const updateProgress = async () => {
@@ -94,7 +85,6 @@ const onRailClick = (index) => {
     router.push(steps[index].route);
 };
 
-// ---- Navigation ---------------------------------------------------------
 const goToNextStep = () => {
     if (activeIndex.value >= lastIndex) {
         return;
@@ -117,8 +107,6 @@ const goToPreviousStep = () => {
     }
 };
 
-// ---- Footer gate (F18): Continue is always rendered, disabled when gated,
-// with an inline caption stating the reason. -------------------------------
 const gate = computed(() => {
     switch (activeIndex.value) {
         case 0:
@@ -140,7 +128,6 @@ const gate = computed(() => {
 
 const isLastStep = computed(() => activeIndex.value === lastIndex);
 
-// Escape hatch (F29): shown beside the gate caption on the Discord step.
 const showDiscordEscape = computed(() => activeIndex.value === 3 && !gate.value.enabled);
 
 const continueWithoutDiscord = () => {
@@ -148,8 +135,6 @@ const continueWithoutDiscord = () => {
     goToNextStep();
 };
 
-// ---- Finish (spec §5.4 step 5 / F32): side effects live in the store's
-// finishSetup action; failures render as a danger panel on the Complete step.
 const finishSetup = async () => {
     const ok = await setupStore.finishSetup();
     if (ok) {
@@ -173,7 +158,6 @@ const focusContinue = () => {
     continueButton.value?.focus();
 };
 
-// Steps may register their own primary action (Enter submits it — §5.4).
 const stepPrimary = ref(null);
 provide('setupWizard', {
     registerPrimary: (fn) => {
@@ -188,8 +172,6 @@ provide('setupWizard', {
     focusContinue
 });
 
-// ---- Skip setup (steps 2–4 only; sets the flag behind the Dashboard
-// resume tile — F22) ------------------------------------------------------
 const showSkipLink = computed(() => activeIndex.value > 0 && activeIndex.value < lastIndex);
 const isSkipping = ref(false);
 
@@ -200,15 +182,12 @@ const skipSetup = async () => {
     isSkipping.value = true;
 
     try {
-        // Save current progress via store (already persisted to localStorage)
         setupStore.saveState();
 
-        // Save Plex token to OS keychain if available
         if (setupStore.plexToken) {
             await SavePlexToken(setupStore.plexToken);
         }
 
-        // Mark setup as skipped in backend
         await SkipSetup();
 
         router.push('/');
@@ -225,7 +204,6 @@ const skipSetup = async () => {
     }
 };
 
-// ---- Keyboard (F17 / §6.7): early-return when an input has focus. -------
 const handleKeydown = (event) => {
     if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
@@ -235,18 +213,15 @@ const handleKeydown = (event) => {
     }
 
     if (event.key === 'ArrowRight') {
-        // Only advances when Continue is enabled (never finishes setup)
         if (gate.value.enabled && !isLastStep.value) {
             goToNextStep();
         }
     } else if (event.key === 'ArrowLeft') {
         goToPreviousStep();
     } else if (event.key === 'Enter') {
-        // A focused button/link already handles Enter natively
         if (event.target instanceof Element && event.target.closest('button, a, [role="button"]')) {
             return;
         }
-        // Submit the current step's primary action, else Continue
         if (typeof stepPrimary.value === 'function' && stepPrimary.value()) {
             return;
         }
@@ -255,8 +230,6 @@ const handleKeydown = (event) => {
 };
 
 onMounted(() => {
-    // Resume at the saved step when landing on the wizard's default route;
-    // a deep-linked step route wins otherwise (the watcher above adopts it).
     if (route.path === steps[0].route && savedStep > 0 && savedStep <= lastIndex) {
         setupStore.currentStep = savedStep;
         router.replace(steps[savedStep].route);
@@ -273,7 +246,6 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="wizard">
-        <!-- Left rail: the signal path being assembled (§5.4) -->
         <aside class="wizard-rail">
             <div class="rail-header">
                 <BrandMark :suffix="$t('wizard.suffix')" />
@@ -313,7 +285,6 @@ onBeforeUnmount(() => {
             </div>
         </aside>
 
-        <!-- Right pane: step content + footer bar -->
         <div class="wizard-main">
             <main class="wizard-content">
                 <router-view v-slot="{ Component }">
@@ -351,7 +322,6 @@ onBeforeUnmount(() => {
     background: var(--pc-bg);
 }
 
-/* ---- Rail ---- */
 .wizard-rail {
     display: flex;
     flex-direction: column;
@@ -379,7 +349,7 @@ onBeforeUnmount(() => {
     width: 2px;
     border-radius: 1px;
     background: var(--pc-accent);
-    transition: height var(--pc-dur-3) var(--pc-ease-inout); /* M8 rail marker */
+    transition: height var(--pc-dur-3) var(--pc-ease-inout);
 }
 .rail-step {
     display: flex;
@@ -424,8 +394,6 @@ onBeforeUnmount(() => {
     border: 1px solid var(--pc-border-strong);
     background: transparent;
 }
-/* 6px brand-pigment tick beside the glyph — the only brand color in the
-   wizard chrome (§5.4) */
 .rail-tick {
     position: absolute;
     right: -6px;
@@ -481,7 +449,6 @@ onBeforeUnmount(() => {
     opacity: 0.5;
 }
 
-/* ---- Right pane ---- */
 .wizard-main {
     display: flex;
     flex-direction: column;
@@ -526,8 +493,6 @@ onBeforeUnmount(() => {
 </style>
 
 <style>
-/* Shared step-content type recipe (§5.4: display heading + caption lede,
-   then panels). Global on purpose — each step view uses these classes. */
 .setup-title {
     margin: 0 0 10px;
     font-family: var(--pc-font-display);

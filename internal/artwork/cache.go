@@ -2,8 +2,6 @@ package artwork
 
 import "sync"
 
-// entry is a node in the LRU's intrusive doubly-linked list. Using a typed list
-// (rather than container/list's any-typed elements) avoids type assertions.
 type entry struct {
 	key  string
 	url  string
@@ -11,9 +9,6 @@ type entry struct {
 	next *entry
 }
 
-// lruCache is a small thread-safe LRU mapping a lookup key to a resolved public
-// artwork URL. An empty string is a valid, cached "no artwork found" result.
-// head is the most-recently-used node, tail the least.
 type lruCache struct {
 	mu    sync.Mutex
 	max   int
@@ -29,8 +24,6 @@ func newLRUCache(max int) *lruCache {
 	return &lruCache{max: max, items: make(map[string]*entry, max)}
 }
 
-// get returns the cached URL and whether the key was present, promoting a hit
-// to most-recently-used.
 func (c *lruCache) get(key string) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -42,7 +35,6 @@ func (c *lruCache) get(key string) (string, bool) {
 	return e.url, true
 }
 
-// put stores url for key, evicting the least-recently-used entry if over capacity.
 func (c *lruCache) put(key, url string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

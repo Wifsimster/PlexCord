@@ -1,73 +1,29 @@
 #!/usr/bin/env bash
-#
-# File: .claude/hooks/translate-manager.sh
-#
-# AgentVibes - Finally, your AI Agents can Talk Back! Text-to-Speech WITH personality for AI Assistants!
-# Website: https://agentvibes.org
-# Repository: https://github.com/paulpreibisch/AgentVibes
-#
-# Co-created by Paul Preibisch with Claude AI
-# Copyright (c) 2025 Paul Preibisch
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# DISCLAIMER: This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND,
-# express or implied. Use at your own risk. See the Apache License for details.
-#
-# ---
-#
-# @fileoverview Translation Manager - Auto-translate TTS to user's preferred language
-# @context Provides manual translation override for TTS
-# @architecture Manages translation settings, translates text via translator.py
-# @dependencies translator.py, language-manager.sh
-# @entrypoints Called by /agent-vibes:translate commands and play-tts.sh
-# @patterns Config cascade - manual override > default (no translation)
-# @related translator.py, play-tts.sh, language-manager.sh, learn-manager.sh
 
-# Only set strict mode when executed directly, not when sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     set -euo pipefail
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Use PWD for project dir when called from project context, fall back to script-relative
 if [[ -d "$PWD/.claude" ]]; then
     PROJECT_DIR="$PWD"
 else
     PROJECT_DIR="$SCRIPT_DIR/../.."
 fi
 
-# Configuration files
 TRANSLATE_FILE="$PROJECT_DIR/.claude/tts-translate-to.txt"
 GLOBAL_TRANSLATE_FILE="$HOME/.claude/tts-translate-to.txt"
 
-# Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# Supported languages (matching language-manager.sh)
 SUPPORTED_LANGUAGES="spanish french german italian portuguese chinese japanese korean russian polish dutch turkish arabic hindi swedish danish norwegian finnish czech romanian ukrainian greek bulgarian croatian slovak"
 
-# @function get_translate_to
-# @intent Get the target language for translation
-# @why Implements priority: manual override > default (no translation)
-# @returns Language name or empty if no translation
 get_translate_to() {
-    # Check manual override
     if [[ -f "$TRANSLATE_FILE" ]]; then
         local manual
         manual=$(cat "$TRANSLATE_FILE")
@@ -90,26 +46,15 @@ get_translate_to() {
         fi
     fi
 
-    # Default: No translation
     echo ""
 }
 
-# @function is_translation_enabled
-# @intent Check if translation should occur
-# @why Quick check for play-tts.sh to decide whether to translate
-# @returns 0 if enabled, 1 if disabled
 is_translation_enabled() {
     local translate_to
     translate_to=$(get_translate_to)
     [[ -n "$translate_to" ]] && [[ "$translate_to" != "english" ]]
 }
 
-# @function translate_text
-# @intent Translate text to target language using translator.py
-# @why Central translation function for all TTS
-# @param $1 text to translate
-# @param $2 target language (optional, auto-detected if not provided)
-# @returns Translated text (or original if translation fails/disabled)
 translate_text() {
     local text="$1"
     local target="${2:-}"
@@ -118,23 +63,17 @@ translate_text() {
         target=$(get_translate_to)
     fi
 
-    # Skip if no translation target or target is English
     if [[ -z "$target" ]] || [[ "$target" == "english" ]]; then
         echo "$text"
         return
     fi
 
-    # Call translator.py
     local translated
     translated=$(python3 "$SCRIPT_DIR/translator.py" "$text" "$target" 2>/dev/null) || translated="$text"
 
     echo "$translated"
 }
 
-# @function set_translate
-# @intent Set manual translation override
-# @why Allows users to force specific language
-# @param $1 language name, "auto", or "off"
 set_translate() {
     local lang="$1"
 
@@ -154,7 +93,6 @@ set_translate() {
         return
     fi
 
-    # Validate language
     local valid=false
     for supported in $SUPPORTED_LANGUAGES; do
         if [[ "$lang" == "$supported" ]]; then
@@ -175,7 +113,6 @@ set_translate() {
     echo -e "${GREEN}✓${NC} Translation set to: ${BLUE}$lang${NC}"
     echo "  All TTS will be translated to $lang before speaking"
 
-    # Show voice recommendation
     source "$SCRIPT_DIR/language-manager.sh" 2>/dev/null || true
     if command -v get_voice_for_language &>/dev/null; then
         local provider
@@ -189,16 +126,12 @@ set_translate() {
     fi
 }
 
-# @function show_status
-# @intent Display current translation settings
-# @why Help users understand what's configured
 show_status() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BLUE}   Translation Settings${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    # Check setting
     local setting=""
     if [[ -f "$TRANSLATE_FILE" ]]; then
         setting=$(cat "$TRANSLATE_FILE")
@@ -206,7 +139,6 @@ show_status() {
         setting=$(cat "$GLOBAL_TRANSLATE_FILE")
     fi
 
-    # Get effective translation
     local effective
     effective=$(get_translate_to)
 
@@ -229,7 +161,6 @@ show_status() {
     echo ""
 }
 
-# Main command handler - only run if script is executed directly, not sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 case "${1:-}" in
     get-translate-to)

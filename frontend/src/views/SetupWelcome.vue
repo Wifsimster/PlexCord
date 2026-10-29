@@ -1,6 +1,4 @@
 <script setup>
-// Step 1 — Welcome (spec §5.4). Pure hero content: the single CTA is the
-// wizard footer's Continue ("Get started") — no hero button (F21).
 import BrandSymbol from '@/components/BrandSymbol.vue';
 </script>
 
@@ -12,7 +10,6 @@ import BrandSymbol from '@/components/BrandSymbol.vue';
         </div>
 
         <div class="setup-panels">
-            <!-- Mini signal-path diagram (brand pigments at icon size only) -->
             <div class="pc-panel welcome-diagram pc-panel-enter pc-panel-enter--2" :aria-label="$t('welcome.diagramAria')">
                 <span class="diagram-node">
                     <svg class="diagram-glyph diagram-glyph--plex" width="28" height="28" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -44,7 +41,6 @@ import BrandSymbol from '@/components/BrandSymbol.vue';
                 </span>
             </div>
 
-            <!-- What you'll need: two 44px rows with muted check glyphs -->
             <div class="pc-panel welcome-checklist pc-panel-enter pc-panel-enter--3">
                 <span class="pc-eyebrow">{{ $t('welcome.whatYouNeed') }}</span>
                 <ul class="checklist">
@@ -69,7 +65,6 @@ import BrandSymbol from '@/components/BrandSymbol.vue';
 </template>
 
 <style scoped>
-/* ---- Mini signal-path diagram ---- */
 .welcome-diagram {
     position: relative;
     overflow: hidden;
@@ -79,7 +74,6 @@ import BrandSymbol from '@/components/BrandSymbol.vue';
     gap: 16px;
     padding: 32px 24px 28px;
 }
-/* The only glow in the wizard: the tally, faintly, behind the relay. */
 .welcome-diagram::before {
     content: '';
     position: absolute;
@@ -139,7 +133,6 @@ import BrandSymbol from '@/components/BrandSymbol.vue';
     background: repeating-linear-gradient(90deg, var(--pc-border-strong) 0 4px, transparent 4px 8px);
 }
 
-/* ---- Checklist rows (44px, hairline-divided) ---- */
 .welcome-checklist .pc-eyebrow {
     display: block;
     margin-bottom: 12px;

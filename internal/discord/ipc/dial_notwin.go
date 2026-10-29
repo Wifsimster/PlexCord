@@ -12,12 +12,8 @@ import (
 	"time"
 )
 
-// dialTimeout bounds a single socket dial attempt. A missing unix socket fails
-// immediately, so this only matters for a socket that exists but never accepts.
 const dialTimeout = 2 * time.Second
 
-// candidateDirs returns the directories that may hold a discord-ipc-N socket,
-// covering the plain runtime dir plus common Flatpak/Snap sandbox locations.
 func candidateDirs() []string {
 	var bases []string
 	for _, env := range []string{"XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"} {
@@ -39,7 +35,6 @@ func candidateDirs() []string {
 	return dirs
 }
 
-// dialDiscord connects to the first available discord-ipc-{0..9} unix socket.
 func dialDiscord() (net.Conn, error) {
 	dialer := net.Dialer{Timeout: dialTimeout}
 	ctx := context.Background()

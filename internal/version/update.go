@@ -18,24 +18,12 @@ import (
 	"github.com/minio/selfupdate"
 )
 
-// ErrUpdateNotSupported is returned when in-place self-update is not possible
-// for the current platform. macOS is distributed as a .dmg containing an .app
-// bundle, which cannot be swapped in place while running, so those users must
-// download and install updates manually from the releases page.
 var ErrUpdateNotSupported = errors.New("in-app update is not supported on this platform; please download the update manually")
 
-// ProgressFunc receives download progress. total is the expected size in bytes
-// (0 when the server does not report a Content-Length).
 type ProgressFunc func(downloaded, total int64)
 
-// sha256Pattern matches a bare 64-character hex SHA-256 digest. It is used to
-// pull the digest out of a checksum file regardless of the tool that produced
-// it (sha256sum, shasum, or Windows certutil all wrap the digest differently).
 var sha256Pattern = regexp.MustCompile(`[0-9a-fA-F]{64}`)
 
-// updatableAssetName returns the release-asset filename for the current
-// platform and whether an in-place self-update is supported. The names must
-// match the assets uploaded by .github/workflows/release.yml.
 func updatableAssetName() (name string, supported bool) {
 	switch runtime.GOOS {
 	case "windows":
@@ -47,22 +35,14 @@ func updatableAssetName() (name string, supported bool) {
 			return "PlexCord-linux-amd64.AppImage", true
 		}
 	}
-	// macOS (.dmg app bundle) and unsupported architectures fall through.
 	return "", false
 }
 
-// launchPath holds the absolute path used both as the self-update target and as
-// the executable to relaunch on restart. It is resolved once, up front, and
-// cached — see LaunchPath for why capturing it early matters.
 var (
 	launchPathOnce sync.Once
 	launchPathVal  string
 )
 
-// resolveLaunchPath determines the stable on-disk path of the application binary
-// that an update should replace and that a restart should relaunch. For AppImage
-// builds the running executable resolves to a read-only mount inside /tmp, so the
-// real .AppImage path is taken from $APPIMAGE. Elsewhere it is os.Executable().
 func resolveLaunchPath() string {
 	if runtime.GOOS == "linux" {
 		if p := os.Getenv("APPIMAGE"); p != "" {
@@ -75,26 +55,12 @@ func resolveLaunchPath() string {
 	return ""
 }
 
-// CaptureLaunchPath records the launch path while the running binary still has
-// its original name on disk. It MUST be called at startup, before any self-update
-// runs. This matters because minio/selfupdate replaces the binary in place by
-// renaming the running executable to ".<name>.old" and moving the freshly
-// downloaded binary into the original path. After that rename os.Executable() (on
-// Windows especially) resolves to the ".old" file, so relaunching it would start
-// the OLD version. Capturing the original path up front and reusing it for both
-// the update target and the relaunch guarantees we always point at the stable
-// path, which holds the NEW binary once the update completes. Repeat calls are
-// no-ops.
 func CaptureLaunchPath() {
 	launchPathOnce.Do(func() {
 		launchPathVal = resolveLaunchPath()
 	})
 }
 
-// LaunchPath returns the captured launch path, resolving (and caching) it on
-// first use if CaptureLaunchPath was never called — e.g. in tests. In normal
-// operation CaptureLaunchPath runs at startup so this returns the pre-update
-// path even when called after an update has renamed the running executable.
 func LaunchPath() string {
 	launchPathOnce.Do(func() {
 		launchPathVal = resolveLaunchPath()
@@ -102,23 +68,15 @@ func LaunchPath() string {
 	return launchPathVal
 }
 
-// updateTargetPath returns the path of the file that should be replaced by the
-// update. It is the same stable path used to relaunch the app, so the binary is
-// written to exactly the location the restart will exec.
 func updateTargetPath() string {
 	return LaunchPath()
 }
 
-// CanSelfUpdate reports whether the current platform supports applying updates
-// in place. The frontend uses this to decide between a "Download & Install"
-// button and a plain "Download" link.
 func CanSelfUpdate() bool {
 	_, supported := updatableAssetName()
 	return supported
 }
 
-// parseChecksum extracts the SHA-256 digest bytes from the contents of a
-// checksum file.
 func parseChecksum(content string) ([]byte, error) {
 	match := sha256Pattern.FindString(content)
 	if match == "" {
@@ -127,8 +85,6 @@ func parseChecksum(content string) ([]byte, error) {
 	return hex.DecodeString(match)
 }
 
-// progressReader wraps a reader and reports cumulative bytes read through a
-// callback, throttled so a large download does not flood the event bus.
 type progressReader struct {
 	reader     io.Reader
 	total      int64
@@ -142,7 +98,6 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	if n > 0 {
 		pr.downloaded += int64(n)
 		if pr.progress != nil {
-			// Emit at most every 256 KiB, plus a final update at EOF.
 			if pr.downloaded-pr.reported >= 256*1024 || err == io.EOF {
 				pr.progress(pr.downloaded, pr.total)
 				pr.reported = pr.downloaded
@@ -152,7 +107,6 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// findAsset returns the asset with the exact given name, if present.
 func findAsset(assets []ReleaseAsset, name string) (ReleaseAsset, bool) {
 	for _, a := range assets {
 		if a.Name == name {
@@ -162,33 +116,18 @@ func findAsset(assets []ReleaseAsset, name string) (ReleaseAsset, bool) {
 	return ReleaseAsset{}, false
 }
 
-// releaseIsInstallable reports whether a release carries the files this
-// platform needs in order to install it.
-//
-// A GitHub release exists several minutes before its binaries do:
-// semantic-release publishes the release and its notes, and the build
-// workflow attaches the assets when it finishes. In that window the release
-// is real, newer, and completely uninstallable — which is exactly when
-// PlexCord used to announce it.
 func releaseIsInstallable(release *GitHubRelease) bool {
 	assetName, supported := updatableAssetName()
 	if !supported {
-		// No in-place update here (macOS, other architectures): the user
-		// downloads from the releases page, so any attached asset means the
-		// release is ready to be offered.
 		return len(release.Assets) > 0
 	}
 	if _, ok := findAsset(release.Assets, assetName); !ok {
 		return false
 	}
-	// DownloadAndApplyUpdate verifies the SHA-256 companion before it writes
-	// anything, so a release missing that file cannot be applied either.
 	_, ok := findAsset(release.Assets, assetName+".sha256")
 	return ok
 }
 
-// downloadBody performs a GET and returns the response for streaming. The
-// caller is responsible for closing resp.Body.
 func downloadBody(ctx context.Context, client *http.Client, url string) (*http.Response, error) {
 	req, err := newGitHubRequest(ctx, url)
 	if err != nil {
@@ -207,14 +146,6 @@ func downloadBody(ctx context.Context, client *http.Client, url string) (*http.R
 	return resp, nil
 }
 
-// DownloadAndApplyUpdate downloads the latest release binary for the current
-// platform, verifies its SHA-256 checksum, and atomically replaces the running
-// executable. On success the caller should prompt the user to restart the
-// application for the new version to take effect.
-//
-// The provided progress callback is invoked periodically during the download.
-// It returns the release that was applied so the caller can surface the new
-// version.
 func DownloadAndApplyUpdate(ctx context.Context, progress ProgressFunc) (*UpdateInfo, error) {
 	assetName, supported := updatableAssetName()
 	if !supported {
@@ -234,16 +165,11 @@ func DownloadAndApplyUpdate(ctx context.Context, progress ProgressFunc) (*Update
 
 	asset, ok := findAsset(release.Assets, assetName)
 	if !ok {
-		// Reachable when the release was published moments ago and its build
-		// has not finished uploading (see releaseIsInstallable), so say that
-		// rather than naming a file the user cannot do anything about.
 		return nil, fmt.Errorf("release %s is published but its downloads are not ready yet; try again in a few minutes", release.TagName)
 	}
 
 	client := &http.Client{Timeout: 5 * time.Minute}
 
-	// Fetch and parse the checksum first so we fail fast on a bad release
-	// before downloading the (much larger) binary.
 	checksum, err := fetchChecksum(ctx, client, release.Assets, assetName)
 	if err != nil {
 		return nil, err
@@ -272,7 +198,6 @@ func DownloadAndApplyUpdate(ctx context.Context, progress ProgressFunc) (*Update
 		Checksum:   checksum,
 	}
 	if err := selfupdate.Apply(reader, opts); err != nil {
-		// Attempt rollback if selfupdate left the binary in a bad state.
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return nil, fmt.Errorf("failed to apply update and rollback also failed: %w (rollback: %v)", err, rerr)
 		}
@@ -291,8 +216,6 @@ func DownloadAndApplyUpdate(ctx context.Context, progress ProgressFunc) (*Update
 	}, nil
 }
 
-// fetchChecksum downloads and parses the ".sha256" companion asset for the
-// given binary asset.
 func fetchChecksum(ctx context.Context, client *http.Client, assets []ReleaseAsset, assetName string) ([]byte, error) {
 	checksumAsset, ok := findAsset(assets, assetName+".sha256")
 	if !ok {
@@ -309,7 +232,6 @@ func fetchChecksum(ctx context.Context, client *http.Client, assets []ReleaseAss
 		}
 	}()
 
-	// Checksum files are tiny; cap the read defensively.
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read checksum: %w", err)

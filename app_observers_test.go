@@ -148,9 +148,6 @@ type fakeObserver struct {
 func (f *fakeObserver) OnUpdate(s *plex.MediaSession) { f.updateFn(s) }
 func (f *fakeObserver) OnStop()                       { f.stopFn() }
 
-// TestHistoryObserverRecordsMusicOnly verifies a film passing through the same
-// pipeline does not land in the listening history, where it would make the
-// "most played artist" statistic nonsense.
 func TestHistoryObserverRecordsMusicOnly(t *testing.T) {
 	store := &fakeHistory{}
 	obs := newHistoryObserver(store)

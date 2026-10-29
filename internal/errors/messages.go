@@ -1,6 +1,5 @@
 package errors
 
-// ErrorInfo contains user-friendly error information for display.
 type ErrorInfo struct {
 	Code        string `json:"code"`
 	Title       string `json:"title"`
@@ -9,10 +8,7 @@ type ErrorInfo struct {
 	Retryable   bool   `json:"retryable"`
 }
 
-// errorInfoMap maps error codes to user-friendly information.
-// These messages are designed to be displayed to users (NFR25: clear, actionable).
 var errorInfoMap = map[string]ErrorInfo{
-	// Plex Errors
 	PLEX_UNREACHABLE: {
 		Code:        PLEX_UNREACHABLE,
 		Title:       "Plex Server Unreachable",
@@ -49,7 +45,6 @@ var errorInfoMap = map[string]ErrorInfo{
 		Retryable:   false,
 	},
 
-	// Discord Errors
 	DISCORD_NOT_RUNNING: {
 		Code:        DISCORD_NOT_RUNNING,
 		Title:       "Discord Not Running",
@@ -72,7 +67,6 @@ var errorInfoMap = map[string]ErrorInfo{
 		Retryable:   false,
 	},
 
-	// Config Errors
 	CONFIG_READ_FAILED: {
 		Code:        CONFIG_READ_FAILED,
 		Title:       "Configuration Error",
@@ -88,7 +82,6 @@ var errorInfoMap = map[string]ErrorInfo{
 		Retryable:   true,
 	},
 
-	// Keychain Errors
 	KEYCHAIN_UNAVAILABLE: {
 		Code:        KEYCHAIN_UNAVAILABLE,
 		Title:       "Secure Storage Unavailable",
@@ -125,7 +118,6 @@ var errorInfoMap = map[string]ErrorInfo{
 		Retryable:   false,
 	},
 
-	// General Errors
 	UNKNOWN_ERROR: {
 		Code:        UNKNOWN_ERROR,
 		Title:       "Unexpected Error",
@@ -135,8 +127,6 @@ var errorInfoMap = map[string]ErrorInfo{
 	},
 }
 
-// GetErrorInfo returns user-friendly information for an error code.
-// If the code is not found, returns information for UNKNOWN_ERROR.
 func GetErrorInfo(code string) ErrorInfo {
 	if info, ok := errorInfoMap[code]; ok {
 		return info
@@ -144,8 +134,6 @@ func GetErrorInfo(code string) ErrorInfo {
 	return errorInfoMap[UNKNOWN_ERROR]
 }
 
-// GetErrorInfoFromError extracts error info from an AppError.
-// If the error is not an AppError, returns UNKNOWN_ERROR info.
 func GetErrorInfoFromError(err error) ErrorInfo {
 	code := GetCode(err)
 	if code == "" {
@@ -154,21 +142,17 @@ func GetErrorInfoFromError(err error) ErrorInfo {
 	return GetErrorInfo(code)
 }
 
-// IsRetryable returns whether an error with the given code can be retried.
 func IsRetryable(code string) bool {
 	if info, ok := errorInfoMap[code]; ok {
 		return info.Retryable
 	}
-	return true // Default to retryable for unknown errors
+	return true
 }
 
-// IsAuthError returns whether the error indicates an authentication issue.
-// Used to detect when the user needs to re-authenticate.
 func IsAuthError(code string) bool {
 	return code == PLEX_AUTH_FAILED || code == KEYCHAIN_READ_FAILED || code == DECRYPTION_FAILED
 }
 
-// IsConnectionError returns whether the error is a connection-related issue.
 func IsConnectionError(code string) bool {
 	switch code {
 	case PLEX_UNREACHABLE, PLEX_CONN_FAILED, TIMEOUT,

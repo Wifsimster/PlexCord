@@ -12,7 +12,6 @@ func TestEncodeReadFrame_RoundTrip(t *testing.T) {
 	payload := []byte(`{"cmd":"SET_ACTIVITY"}`)
 	encoded := encodeFrame(opFrame, payload)
 
-	// Header: opcode + length, both little-endian.
 	if got := binary.LittleEndian.Uint32(encoded[0:4]); got != uint32(opFrame) {
 		t.Errorf("opcode header = %d, want %d", got, opFrame)
 	}
@@ -115,7 +114,6 @@ func TestActivity_ToPayload_OmitsStatusDisplayWhenNil(t *testing.T) {
 	if bytes.Contains(raw, []byte("status_display_type")) {
 		t.Errorf("status_display_type should be omitted when nil, got %s", raw)
 	}
-	// Type 0 is meaningful (Playing) and must always be present.
 	if !bytes.Contains(raw, []byte(`"type":0`)) {
 		t.Errorf("type should always be sent, got %s", raw)
 	}

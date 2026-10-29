@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// TestNew verifies that New() creates errors correctly
 func TestNew(t *testing.T) {
 	err := New(PLEX_UNREACHABLE, "server not responding")
 
@@ -24,7 +23,6 @@ func TestNew(t *testing.T) {
 	}
 }
 
-// TestError verifies that Error() method returns the message
 func TestError(t *testing.T) {
 	msg := "test error message"
 	err := New(CONFIG_READ_FAILED, msg)
@@ -34,7 +32,6 @@ func TestError(t *testing.T) {
 	}
 }
 
-// TestWrap verifies that Wrap() combines error messages
 func TestWrap(t *testing.T) {
 	originalErr := fmt.Errorf("original error")
 	wrappedErr := Wrap(originalErr, CONFIG_READ_FAILED, "failed to read config")
@@ -49,7 +46,6 @@ func TestWrap(t *testing.T) {
 	}
 }
 
-// TestWrapNilError verifies that Wrap() handles nil errors
 func TestWrapNilError(t *testing.T) {
 	wrappedErr := Wrap(nil, CONFIG_READ_FAILED, "failed to read config")
 
@@ -58,7 +54,6 @@ func TestWrapNilError(t *testing.T) {
 	}
 }
 
-// TestIs verifies that Is() correctly identifies error codes
 func TestIs(t *testing.T) {
 	err := New(PLEX_UNREACHABLE, "server not responding")
 
@@ -71,7 +66,6 @@ func TestIs(t *testing.T) {
 	}
 }
 
-// TestIsNonAppError verifies that Is() returns false for non-AppError
 func TestIsNonAppError(t *testing.T) {
 	err := fmt.Errorf("regular Go error")
 
@@ -80,7 +74,6 @@ func TestIsNonAppError(t *testing.T) {
 	}
 }
 
-// TestGetCode verifies that GetCode() extracts error codes
 func TestGetCode(t *testing.T) {
 	err := New(CONFIG_WRITE_FAILED, "failed to write config")
 
@@ -90,7 +83,6 @@ func TestGetCode(t *testing.T) {
 	}
 }
 
-// TestGetCodeNonAppError verifies that GetCode() returns empty for non-AppError
 func TestGetCodeNonAppError(t *testing.T) {
 	err := fmt.Errorf("regular Go error")
 
@@ -100,7 +92,6 @@ func TestGetCodeNonAppError(t *testing.T) {
 	}
 }
 
-// TestContainsSensitiveData verifies sensitive data detection
 func TestContainsSensitiveData(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -130,7 +121,6 @@ func TestContainsSensitiveData(t *testing.T) {
 	}
 }
 
-// TestJSONSerialization verifies JSON format
 func TestJSONSerialization(t *testing.T) {
 	err := New(PLEX_UNREACHABLE, "server not responding")
 
@@ -139,23 +129,19 @@ func TestJSONSerialization(t *testing.T) {
 		t.Fatalf("Failed to marshal error: %v", jsonErr)
 	}
 
-	// Verify JSON structure
 	var jsonMap map[string]interface{}
 	if err := json.Unmarshal(jsonData, &jsonMap); err != nil {
 		t.Fatalf("Failed to unmarshal JSON: %v", err)
 	}
 
-	// Check that 'code' field exists
 	if _, ok := jsonMap["code"]; !ok {
 		t.Error("JSON missing 'code' field")
 	}
 
-	// Check that 'message' field exists
 	if _, ok := jsonMap["message"]; !ok {
 		t.Error("JSON missing 'message' field")
 	}
 
-	// Verify camelCase (no Code or Message with capital)
 	if _, ok := jsonMap["Code"]; ok {
 		t.Error("JSON should use camelCase 'code', not PascalCase 'Code'")
 	}
@@ -165,23 +151,19 @@ func TestJSONSerialization(t *testing.T) {
 	}
 }
 
-// TestJSONRoundTrip verifies JSON serialization and deserialization
 func TestJSONRoundTrip(t *testing.T) {
 	original := New(DISCORD_CONN_FAILED, "connection failed")
 
-	// Marshal to JSON
 	jsonData, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("Failed to marshal: %v", err)
 	}
 
-	// Unmarshal back
 	var restored AppError
 	if err := json.Unmarshal(jsonData, &restored); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
 
-	// Verify data integrity
 	if restored.Code != original.Code {
 		t.Errorf("Code mismatch: got %s, want %s", restored.Code, original.Code)
 	}
@@ -191,7 +173,6 @@ func TestJSONRoundTrip(t *testing.T) {
 	}
 }
 
-// TestAllErrorCodes verifies all error codes are defined
 func TestAllErrorCodes(t *testing.T) {
 	errorCodes := []string{
 		PLEX_UNREACHABLE,
@@ -213,14 +194,12 @@ func TestAllErrorCodes(t *testing.T) {
 			t.Error("Found empty error code")
 		}
 
-		// Verify code is uppercase with underscores
 		if code != strings.ToUpper(code) {
 			t.Errorf("Error code %s should be uppercase", code)
 		}
 	}
 }
 
-// TestSanitizeForLogging verifies that sensitive data is masked in logs
 func TestSanitizeForLogging(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -299,28 +278,23 @@ func TestSanitizeForLogging(t *testing.T) {
 	}
 }
 
-// TestSanitizeForLoggingNoPlaintextLeak verifies that sensitive values never appear in output
 func TestSanitizeForLoggingNoPlaintextLeak(t *testing.T) {
 	sensitiveValue := "my-secret-plex-token-12345"
 	input := "token=" + sensitiveValue
 
 	result := SanitizeForLogging(input)
 
-	// Verify the sensitive value is NOT in the output
 	if result == input {
 		t.Error("Sanitized output should not be identical to input with sensitive data")
 	}
 
-	// Verify the sensitive value doesn't appear anywhere
 	if len(result) > 0 && len(input) > 0 {
-		// Check that the sensitive value is not present
 		if result == input {
 			t.Errorf("Sensitive value leaked in output: %q", result)
 		}
 	}
 }
 
-// TestMaskMiddle verifies the maskMiddle helper function
 func TestMaskMiddle(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -344,7 +318,6 @@ func TestMaskMiddle(t *testing.T) {
 	}
 }
 
-// TestSanitizeForLoggingWithRealTokens verifies sanitization with realistic token formats
 func TestSanitizeForLoggingWithRealTokens(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -368,24 +341,20 @@ func TestSanitizeForLoggingWithRealTokens(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SanitizeForLogging(tt.input)
 
-			// Result should be different from input
 			if result == tt.input {
 				t.Error("Sensitive token not sanitized")
 			}
 
-			// Result should not be empty (unless input was empty)
 			if tt.input != "" && result == "" {
 				t.Error("Sanitization produced empty result")
 			}
 
-			// Log both for manual inspection
 			t.Logf("Input:  %s", tt.input)
 			t.Logf("Output: %s", result)
 		})
 	}
 }
 
-// BenchmarkSanitizeForLogging benchmarks sanitization performance
 func BenchmarkSanitizeForLogging(b *testing.B) {
 	msg := "X-Plex-Token: abc123xyz789 and password=mySecretPassword"
 
@@ -395,7 +364,6 @@ func BenchmarkSanitizeForLogging(b *testing.B) {
 	}
 }
 
-// BenchmarkSanitizeForLoggingSafeMessage benchmarks sanitization of safe messages
 func BenchmarkSanitizeForLoggingSafeMessage(b *testing.B) {
 	msg := "failed to connect to server at http://plex.example.com"
 

@@ -9,8 +9,6 @@ import (
 	"plexcord/internal/plex"
 )
 
-// countingSource is a SessionSource that answers from memory, so the polling
-// lifecycle can be driven with no Plex server anywhere.
 type countingSource struct {
 	sessions  []plex.MediaSession
 	lastTypes []string
@@ -58,8 +56,6 @@ func TestPollingControllerStartsStopsAndReportsState(t *testing.T) {
 	}
 	defer ctrl.Stop()
 
-	// The poller performs an immediate first poll, so the session arrives
-	// without waiting out an interval.
 	select {
 	case session := <-ch:
 		if session == nil || session.Title != "Song" {
@@ -83,8 +79,6 @@ func TestPollingControllerRefusesConcurrentStart(t *testing.T) {
 	}
 	defer ctrl.Stop()
 
-	// A second start must report that nothing new was created, so the caller
-	// does not spawn a second consumer goroutine on a channel nobody feeds.
 	if ch := ctrl.Start(cfg); ch != nil {
 		t.Error("second Start() created a second poller")
 	}
@@ -92,7 +86,7 @@ func TestPollingControllerRefusesConcurrentStart(t *testing.T) {
 
 func TestPollingControllerStopIsSafeWhenIdle(t *testing.T) {
 	ctrl := &pollingController{}
-	ctrl.Stop() // must not panic
+	ctrl.Stop()
 	ctrl.Stop()
 }
 
@@ -111,8 +105,6 @@ func TestPollingControllerSetIntervalOnlyWhileRunning(t *testing.T) {
 	}
 }
 
-// TestPollingControllerSurfacesErrorState verifies a failing Plex server puts
-// the controller into the error state the dashboard reads.
 func TestPollingControllerSurfacesErrorState(t *testing.T) {
 	ctrl := &pollingController{}
 	failed := make(chan error, 1)
@@ -137,10 +129,6 @@ func TestPollingControllerSurfacesErrorState(t *testing.T) {
 	}, "State() never reported the error state after a failing poll")
 }
 
-// TestStartSessionPollingUsesInjectedFactory is the regression this refactor
-// was aimed at: session polling used to build a concrete plex.Client of its
-// own, so it was the one Plex path that ignored the injected factory and could
-// not be driven in a test.
 func TestStartSessionPollingUsesInjectedFactory(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.ServerURL = "http://plex.test:32400"
@@ -164,7 +152,6 @@ func TestStartSessionPollingUsesInjectedFactory(t *testing.T) {
 		t.Errorf("factory called with (%q, %q), want the stored token and configured server", gotToken, gotURL)
 	}
 
-	// The session reaches the cache the frontend restores from.
 	waitFor(t, func() bool {
 		s := app.GetCurrentSession()
 		return s != nil && s.Title == "Song"

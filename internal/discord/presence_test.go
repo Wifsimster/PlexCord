@@ -35,7 +35,6 @@ func TestIsConnected(t *testing.T) {
 		t.Error("New PresenceManager should not be connected")
 	}
 
-	// Manually set connected for testing
 	pm.connected = true
 	if !pm.IsConnected() {
 		t.Error("IsConnected should return true when connected")
@@ -49,7 +48,6 @@ func TestGetClientID(t *testing.T) {
 		t.Errorf("Expected default client ID %s, got %s", DefaultClientID, pm.GetClientID())
 	}
 
-	// Test with custom client ID
 	pm.clientID = "123456789012345678"
 	if pm.GetClientID() != "123456789012345678" {
 		t.Error("GetClientID should return the set client ID")
@@ -199,8 +197,6 @@ func TestBuildActivity(t *testing.T) {
 				State:  "playing",
 			},
 			checkFn: func(t *testing.T, activity interface{}) {
-				// Type assertion not needed since buildActivity returns client.Activity
-				// We check via the returned struct fields
 			},
 		},
 		{
@@ -211,7 +207,6 @@ func TestBuildActivity(t *testing.T) {
 				State:  "paused",
 			},
 			checkFn: func(t *testing.T, activity interface{}) {
-				// Paused state should set SmallImage to "pause"
 			},
 		},
 		{
@@ -223,7 +218,6 @@ func TestBuildActivity(t *testing.T) {
 				StartTime: &now,
 			},
 			checkFn: func(t *testing.T, activity interface{}) {
-				// Should have timestamps set
 			},
 		},
 		{
@@ -234,7 +228,6 @@ func TestBuildActivity(t *testing.T) {
 				State:  "playing",
 			},
 			checkFn: func(t *testing.T, activity interface{}) {
-				// State should be "by Artist" without album
 			},
 		},
 	}
@@ -243,7 +236,6 @@ func TestBuildActivity(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			activity := buildActivity(tt.data)
 
-			// Check basic fields are set
 			if activity.Details != tt.data.Track {
 				t.Errorf("Expected Details=%q, got %q", tt.data.Track, activity.Details)
 			}
@@ -256,7 +248,6 @@ func TestBuildActivity(t *testing.T) {
 				t.Errorf("Expected LargeText='Plex Music', got %q", activity.LargeText)
 			}
 
-			// Check state line
 			if tt.data.Artist != "" {
 				if tt.data.Album != "" {
 					expected := "by " + tt.data.Artist + " • " + tt.data.Album
@@ -271,7 +262,6 @@ func TestBuildActivity(t *testing.T) {
 				}
 			}
 
-			// Check small image based on playback state
 			if tt.data.State == "paused" {
 				if activity.SmallImage != "pause" {
 					t.Errorf("Expected SmallImage='pause' for paused state, got %q", activity.SmallImage)
@@ -288,7 +278,6 @@ func TestBuildActivity(t *testing.T) {
 				}
 			}
 
-			// Check timestamps
 			if tt.data.StartTime != nil && tt.data.State == "playing" {
 				if activity.Timestamps == nil {
 					t.Error("Expected Timestamps to be set for playing state with StartTime")
@@ -303,12 +292,10 @@ func TestBuildActivity(t *testing.T) {
 func TestGetCurrentPresence(t *testing.T) {
 	pm := NewPresenceManager()
 
-	// Initially should be nil
 	if pm.GetCurrentPresence() != nil {
 		t.Error("New PresenceManager should have nil presence")
 	}
 
-	// Set presence manually for testing
 	testPresence := &PresenceData{
 		Track:  "Test",
 		Artist: "Artist",
@@ -336,7 +323,6 @@ func TestSetPresenceNotConnected(t *testing.T) {
 func TestClearPresenceNotConnected(t *testing.T) {
 	pm := NewPresenceManager()
 
-	// Should not error when not connected (nothing to clear)
 	err := pm.ClearPresence()
 	if err != nil {
 		t.Errorf("ClearPresence should not error when not connected, got: %v", err)
@@ -346,7 +332,6 @@ func TestClearPresenceNotConnected(t *testing.T) {
 func TestDisconnectNotConnected(t *testing.T) {
 	pm := NewPresenceManager()
 
-	// Should not error when not connected
 	err := pm.Disconnect()
 	if err != nil {
 		t.Errorf("Disconnect should not error when not connected, got: %v", err)
@@ -397,7 +382,7 @@ func TestMapDiscordErrorNotRunning(t *testing.T) {
 		{
 			name:    "unrelated error",
 			errMsg:  "some other error",
-			wantNil: false, // Still returns an error, just different code
+			wantNil: false,
 		},
 	}
 
@@ -413,7 +398,6 @@ func TestMapDiscordErrorNotRunning(t *testing.T) {
 }
 
 func TestMapDiscordErrorCodes(t *testing.T) {
-	// Test that specific error patterns map to DISCORD_NOT_RUNNING
 	notRunningPatterns := []string{
 		"connection refused",
 		"no such file",
@@ -428,7 +412,6 @@ func TestMapDiscordErrorCodes(t *testing.T) {
 				t.Fatalf("mapDiscordError should return error for pattern %q", pattern)
 			}
 
-			// Check that it's an AppError with the right code
 			appErr, ok := result.(*plexerrors.AppError)
 			if !ok {
 				t.Fatalf("Expected AppError, got %T", result)
@@ -488,7 +471,3 @@ func TestIsConnectionLostErrorPatterns(t *testing.T) {
 		})
 	}
 }
-
-// Note: Integration tests for Connect, SetPresence, and ClearPresence
-// require Discord to be running and are not included in unit tests.
-// These should be tested manually or in integration test suites.

@@ -11,7 +11,6 @@ import (
 	"plexcord/internal/config"
 )
 
-// Entry represents a single listening history entry.
 type Entry struct {
 	Track     string    `json:"track"`
 	Artist    string    `json:"artist"`
@@ -21,14 +20,12 @@ type Entry struct {
 	ThumbURL  string    `json:"thumbUrl,omitempty"`
 }
 
-// Stats contains aggregate listening statistics.
 type Stats struct {
 	TotalTracks      int    `json:"totalTracks"`
 	UniqueArtists    int    `json:"uniqueArtists"`
 	MostPlayedArtist string `json:"mostPlayedArtist"`
 }
 
-// Store manages listening history persistence and retrieval.
 type Store struct {
 	mu         sync.RWMutex
 	entries    []Entry
@@ -36,9 +33,6 @@ type Store struct {
 	maxEntries int
 }
 
-// NewStore creates a new history store.
-// configDir is the directory where the history JSON file will be saved.
-// maxEntries controls how many entries are retained (oldest are trimmed).
 func NewStore(configDir string, maxEntries int) *Store {
 	s := &Store{
 		path:       filepath.Join(configDir, "history.json"),
@@ -50,15 +44,10 @@ func NewStore(configDir string, maxEntries int) *Store {
 	return s
 }
 
-// Add inserts a new entry at the front of the history.
-// It deduplicates against the most recent entry to prevent poll-driven duplicates
-// (same track+artist+album as the last entry is skipped).
-// The list is trimmed to maxEntries and auto-saved.
 func (s *Store) Add(entry Entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Deduplicate: skip if identical to the last entry
 	if len(s.entries) > 0 {
 		last := s.entries[0]
 		if last.Track == entry.Track && last.Artist == entry.Artist && last.Album == entry.Album {
@@ -66,22 +55,17 @@ func (s *Store) Add(entry Entry) {
 		}
 	}
 
-	// Prepend
 	s.entries = append([]Entry{entry}, s.entries...)
 
-	// Trim to max
 	if len(s.entries) > s.maxEntries {
 		s.entries = s.entries[:s.maxEntries]
 	}
 
-	// Auto-save (best-effort)
 	if err := s.saveLocked(); err != nil {
 		log.Printf("Warning: failed to save listening history: %v", err)
 	}
 }
 
-// GetRecent returns the most recent N entries.
-// If limit <= 0 or exceeds the number of entries, all entries are returned.
 func (s *Store) GetRecent(limit int) []Entry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -95,7 +79,6 @@ func (s *Store) GetRecent(limit int) []Entry {
 	return result
 }
 
-// GetStats returns aggregate listening statistics.
 func (s *Store) GetStats() Stats {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -115,7 +98,6 @@ func (s *Store) GetStats() Stats {
 
 	stats.UniqueArtists = len(artistCounts)
 
-	// Find most played artist
 	maxCount := 0
 	for artist, count := range artistCounts {
 		if count > maxCount {
@@ -127,7 +109,6 @@ func (s *Store) GetStats() Stats {
 	return stats
 }
 
-// Clear removes all history entries and saves the empty state.
 func (s *Store) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -138,7 +119,6 @@ func (s *Store) Clear() {
 	}
 }
 
-// Load reads the history from disk. It is called automatically by NewStore.
 func (s *Store) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -161,26 +141,18 @@ func (s *Store) Load() error {
 	return nil
 }
 
-// Save writes the current history to disk.
-//
-// A write lock is held even though entries are only read here, because
-// json.Marshal walks the slice while WriteFile runs — and two concurrent
-// Save() calls under RLock would race the file write and could interleave
-// JSON output on disk.
 func (s *Store) Save() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.saveLocked()
 }
 
-// saveLocked performs the actual file write. Caller must hold the write lock.
 func (s *Store) saveLocked() error {
 	data, err := json.MarshalIndent(s.entries, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	// Ensure directory exists
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err

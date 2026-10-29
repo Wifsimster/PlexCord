@@ -6,9 +6,6 @@ import (
 	"plexcord/internal/config"
 )
 
-// TestResetApplicationKeepsStoreInSync covers the wizard re-run after a reset:
-// the reset defaults must be what later saves persist, not the settings the
-// user just reset away.
 func TestResetApplicationKeepsStoreInSync(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.ServerURL = "http://old:32400"

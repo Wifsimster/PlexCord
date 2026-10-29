@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// clearRecorder counts presence clears for the gate tests.
 type clearRecorder struct{ n atomic.Int64 }
 
 func (c *clearRecorder) clear()       { c.n.Add(1) }
@@ -36,7 +35,6 @@ func TestPresenceGateHidesImmediatelyWithZeroDelay(t *testing.T) {
 
 	gate.ScheduleHide()
 
-	// A zero delay clears on its own goroutine; give it a moment to land.
 	waitFor(t, func() bool { return rec.count() == 1 }, "presence was never cleared with a zero delay")
 }
 
@@ -52,9 +50,6 @@ func TestPresenceGateHidesAfterDelay(t *testing.T) {
 	waitFor(t, func() bool { return rec.count() == 1 }, "presence was never cleared after the delay")
 }
 
-// TestPresenceGateCancelBeatsFiringTimer is the race the generation counter
-// exists for: playback resumes just as the hide timer fires, and the stale
-// callback must not clear the presence that was just restored.
 func TestPresenceGateCancelBeatsFiringTimer(t *testing.T) {
 	rec := &clearRecorder{}
 	gate := newPresenceGate(rec.clear, func() time.Duration { return 20 * time.Millisecond })
@@ -68,8 +63,6 @@ func TestPresenceGateCancelBeatsFiringTimer(t *testing.T) {
 	}
 }
 
-// TestPresenceGateRescheduleSupersedesPrevious verifies a second schedule
-// replaces the first rather than stacking a second clear behind it.
 func TestPresenceGateRescheduleSupersedesPrevious(t *testing.T) {
 	rec := &clearRecorder{}
 	gate := newPresenceGate(rec.clear, func() time.Duration { return 25 * time.Millisecond })
@@ -84,7 +77,6 @@ func TestPresenceGateRescheduleSupersedesPrevious(t *testing.T) {
 	}
 }
 
-// waitFor polls cond until it holds or the deadline passes.
 func waitFor(t *testing.T, cond func() bool, msg string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

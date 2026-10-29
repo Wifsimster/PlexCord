@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// testBackoffSchedule overrides the package-level BackoffSchedule for fast tests.
 func withShortBackoff(t *testing.T, schedule []time.Duration) {
 	t.Helper()
 	orig := make([]time.Duration, len(BackoffSchedule))
@@ -59,7 +58,6 @@ func TestStartAndSchedule(t *testing.T) {
 
 	m := NewManager("test-start")
 
-	// Use a channel to block the callback so we can inspect state while running
 	callbackCh := make(chan struct{}, 1)
 	m.SetCallbacks(func() error {
 		<-callbackCh
@@ -80,16 +78,14 @@ func TestStartAndSchedule(t *testing.T) {
 		t.Errorf("expected LastErrorCode 'CONN_FAIL', got %q", state.LastErrorCode)
 	}
 
-	// Unblock callback and cleanup
 	callbackCh <- struct{}{}
-	// Give the retry goroutine time to fire and re-schedule
 	time.Sleep(50 * time.Millisecond)
 	m.Stop()
 }
 
 func TestStopCancels(t *testing.T) {
 	withShortBackoff(t, []time.Duration{
-		500 * time.Millisecond, // long enough that it won't fire during the test
+		500 * time.Millisecond,
 	})
 
 	callbackCalled := make(chan struct{}, 1)
@@ -101,21 +97,17 @@ func TestStopCancels(t *testing.T) {
 
 	m.Start(errors.New("err"), "")
 
-	// Stop immediately before the timer fires
 	m.Stop()
 
-	// Verify state
 	state := m.GetState()
 	if state.IsRetrying {
 		t.Error("expected IsRetrying to be false after Stop")
 	}
 
-	// Wait to make sure the callback doesn't fire
 	select {
 	case <-callbackCalled:
 		t.Error("callback should not have been called after Stop")
 	case <-time.After(100 * time.Millisecond):
-		// good
 	}
 }
 
@@ -127,11 +119,9 @@ func TestResetClearsState(t *testing.T) {
 	m.SetCallbacks(func() error {
 		return errors.New("fail")
 	}, func(state RetryState) {
-		// Non-blocking send; we only care about the last emission from Reset
 		select {
 		case stateEmitted <- state:
 		default:
-			// drain and re-send to keep latest
 			<-stateEmitted
 			stateEmitted <- state
 		}
@@ -139,7 +129,6 @@ func TestResetClearsState(t *testing.T) {
 
 	m.Start(errors.New("some error"), "SOME_CODE")
 
-	// Drain the state emitted by Start's scheduleNextRetry
 	select {
 	case <-stateEmitted:
 	case <-time.After(100 * time.Millisecond):
@@ -147,7 +136,6 @@ func TestResetClearsState(t *testing.T) {
 
 	m.Reset()
 
-	// Check the emitted state from Reset
 	select {
 	case s := <-stateEmitted:
 		if s.IsRetrying {
@@ -160,7 +148,6 @@ func TestResetClearsState(t *testing.T) {
 		t.Error("expected state callback to be called on Reset")
 	}
 
-	// Verify internal state
 	state := m.GetState()
 	if state.IsRetrying {
 		t.Error("expected IsRetrying false after Reset")
@@ -192,23 +179,15 @@ func TestManualRetryResetsBackoff(t *testing.T) {
 		}
 	})
 
-	// Start, which will begin at attempt 0
 	m.Start(errors.New("initial"), "")
 
-	// Wait for a couple of retries to increase the attempt number
 	time.Sleep(80 * time.Millisecond)
 
-	// ManualRetry should reset attempt number to 0
 	m.ManualRetry()
 
-	// Wait for state callback from the immediate retry's reschedule
 	time.Sleep(40 * time.Millisecond)
 
-	// After ManualRetry, the doRetry will increment attemptNumber to 1,
-	// then scheduleNextRetry emits AttemptNumber = attemptNumber + 1 = 1 + 1 = 2.
-	// But the key thing is attempt was reset from a higher value.
 	state := m.GetState()
-	// The attempt number should be low (reset happened)
 	if state.AttemptNumber > 3 {
 		t.Errorf("expected low attempt number after ManualRetry, got %d", state.AttemptNumber)
 	}
@@ -217,7 +196,6 @@ func TestManualRetryResetsBackoff(t *testing.T) {
 }
 
 func TestBackoffSchedule(t *testing.T) {
-	// Test the default backoff schedule intervals
 	m := NewManager("test-backoff")
 
 	expected := []time.Duration{
@@ -234,7 +212,6 @@ func TestBackoffSchedule(t *testing.T) {
 		}
 	}
 
-	// Past the schedule length, it should cap at the last value
 	got := m.getInterval(10)
 	if got != 60*time.Second {
 		t.Errorf("attempt 10: expected 60s cap, got %v", got)
@@ -252,7 +229,7 @@ func TestCallbackSuccess(t *testing.T) {
 	successEmitted := make(chan struct{}, 1)
 	m := NewManager("test-success")
 	m.SetCallbacks(func() error {
-		return nil // success on first try
+		return nil
 	}, func(state RetryState) {
 		if !state.IsRetrying && state.AttemptNumber == 0 {
 			select {
@@ -266,7 +243,6 @@ func TestCallbackSuccess(t *testing.T) {
 
 	select {
 	case <-successEmitted:
-		// good
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timeout waiting for success state emission")
 	}
@@ -309,7 +285,6 @@ func TestCallbackFailure(t *testing.T) {
 
 	select {
 	case <-reachedSecondAttempt:
-		// good - retry scheduled and executed at least twice
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timeout waiting for second retry attempt")
 	}
@@ -332,7 +307,6 @@ func TestConcurrentManualRetry(t *testing.T) {
 
 	m.Start(errors.New("err"), "")
 
-	// Hammer ManualRetry from multiple goroutines
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
@@ -343,7 +317,6 @@ func TestConcurrentManualRetry(t *testing.T) {
 	}
 	wg.Wait()
 
-	// If we get here without panic, test passes
 	m.Stop()
 }
 
@@ -365,7 +338,6 @@ func TestStartWhileRunning(t *testing.T) {
 		t.Errorf("expected 'first error', got %q", state1.LastError)
 	}
 
-	// Start again while running - should update error but not restart
 	m.Start(errors.New("second error"), "CODE2")
 
 	state2 := m.GetState()
@@ -379,7 +351,6 @@ func TestStartWhileRunning(t *testing.T) {
 		t.Errorf("expected 'CODE2', got %q", state2.LastErrorCode)
 	}
 
-	// Attempt number should not have reset (no restart)
 	if state2.AttemptNumber != state1.AttemptNumber {
 		t.Errorf("attempt number should not change on re-start: was %d, now %d",
 			state1.AttemptNumber, state2.AttemptNumber)
@@ -403,14 +374,11 @@ func TestGetStateAccuracy(t *testing.T) {
 		t.Fatal("expected NextRetryAt to be set")
 	}
 
-	// NextRetryAt should be stored, not recalculated. Verify it stays the same
-	// across multiple GetState calls.
 	state2 := m.GetState()
 	if !state.NextRetryAt.Equal(state2.NextRetryAt) {
 		t.Errorf("NextRetryAt changed between calls: %v vs %v", state.NextRetryAt, state2.NextRetryAt)
 	}
 
-	// NextRetryIn should be approximately 200ms minus elapsed time
 	if state.NextRetryIn <= 0 || state.NextRetryIn > 200*time.Millisecond {
 		t.Errorf("NextRetryIn out of range: %v", state.NextRetryIn)
 	}
@@ -434,7 +402,6 @@ func TestStateCallback(t *testing.T) {
 
 	m.Start(errors.New("trigger error"), "TRIGGER")
 
-	// First state emission from scheduleNextRetry in Start
 	select {
 	case s := <-states:
 		if !s.IsRetrying {
@@ -459,7 +426,6 @@ func TestStateCallback(t *testing.T) {
 		t.Fatal("timeout waiting for first state emission")
 	}
 
-	// After the first retry fails, a second state emission happens
 	select {
 	case s := <-states:
 		if s.AttemptNumber != 2 {
@@ -486,8 +452,6 @@ func TestNilLastError(t *testing.T) {
 		states <- state
 	})
 
-	// Manually set up the manager with nil lastError and call scheduleNextRetry
-	// to exercise the nil-check path in scheduleNextRetry
 	m.mu.Lock()
 	m.lastError = nil
 	m.lastErrorCode = ""
@@ -496,7 +460,6 @@ func TestNilLastError(t *testing.T) {
 	m.scheduleNextRetry()
 	m.mu.Unlock()
 
-	// Should emit state with empty LastError, not panic
 	select {
 	case s := <-states:
 		if s.LastError != "" {

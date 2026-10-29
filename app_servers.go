@@ -8,10 +8,6 @@ import (
 	"plexcord/internal/errors"
 )
 
-// GetServers returns the list of configured Plex servers from config.
-// Returns an empty slice (never nil) so the frontend can iterate safely.
-// A copy is returned so the caller cannot mutate the in-store slice
-// outside of cfgStore.Update.
 func (a *App) GetServers() []config.ServerConfig {
 	if a.cfgStore == nil {
 		if a.config.Servers == nil {
@@ -28,15 +24,6 @@ func (a *App) GetServers() []config.ServerConfig {
 	return out
 }
 
-// activePlexServerURL returns the Plex server URL that PlexCord should
-// connect to. It prefers the first active server from the multi-server list
-// (config.Servers) and falls back to the legacy single-server ServerURL for
-// backward compatibility.
-//
-// Without this, servers added through the Settings "Add Server" dialog — which
-// only populate config.Servers — would be ignored by the connection path in
-// favour of the legacy field, leaving the dashboard endlessly retrying a stale
-// or empty target.
 func (a *App) activePlexServerURL() string {
 	for _, s := range a.config.Servers {
 		if s.Active && s.URL != "" {
@@ -46,14 +33,6 @@ func (a *App) activePlexServerURL() string {
 	return a.config.ServerURL
 }
 
-// AddServer appends a new server to the configuration. The URL must use
-// http or https and must be unique within the existing server list.
-// userID and userName are optional and may be filled in later via the
-// per-server user-selection flow.
-//
-// The uniqueness check and the append happen inside a single
-// cfgStore.Update so two concurrent AddServer calls with the same URL
-// can't both pass the check and end up adding duplicates.
 func (a *App) AddServer(name, serverURL, userID, userName string) error {
 	if name == "" {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server name cannot be empty")
@@ -92,8 +71,6 @@ func (a *App) AddServer(name, serverURL, userID, userName string) error {
 	return nil
 }
 
-// RemoveServer removes the server with the given URL from the configuration.
-// Returns an error if no server with that URL is configured.
 func (a *App) RemoveServer(serverURL string) error {
 	if serverURL == "" {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL cannot be empty")
@@ -119,8 +96,6 @@ func (a *App) RemoveServer(serverURL string) error {
 	return nil
 }
 
-// SetServerActive toggles a server's Active flag.
-// Returns an error if no server with that URL is configured.
 func (a *App) SetServerActive(serverURL string, active bool) error {
 	if serverURL == "" {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL cannot be empty")

@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// recordingSource is a lookup source that answers from memory and counts how
-// often it was consulted.
 type recordingSource struct {
 	name  string
 	url   string
@@ -22,9 +20,6 @@ func (s *recordingSource) Lookup(context.Context, Query) string {
 
 func (s *recordingSource) Name() string { return s.name }
 
-// TestResolverWalksSourceChainInOrder verifies the chain is consulted in order
-// and stops at the first hit — the later sources cost a network round trip
-// each, so they must not run once an answer exists.
 func TestResolverWalksSourceChainInOrder(t *testing.T) {
 	first := &recordingSource{name: "first", url: "https://cdn/first.jpg"}
 	second := &recordingSource{name: "second", url: "https://cdn/second.jpg"}
@@ -43,8 +38,6 @@ func TestResolverWalksSourceChainInOrder(t *testing.T) {
 	}
 }
 
-// TestResolverFallsThroughToLaterSources is the reason the chain exists: a
-// source that misses hands off rather than ending the lookup.
 func TestResolverFallsThroughToLaterSources(t *testing.T) {
 	miss := &recordingSource{name: "miss"}
 	hit := &recordingSource{name: "hit", url: "https://cdn/hit.jpg"}
@@ -63,13 +56,9 @@ func TestResolverFallsThroughToLaterSources(t *testing.T) {
 	}
 }
 
-// TestAppendSourceExtendsDefaultChain verifies a new provider can be added
-// without touching the existing ones (OCP).
 func TestAppendSourceExtendsDefaultChain(t *testing.T) {
 	extra := &recordingSource{name: "extra", url: "https://cdn/extra.jpg"}
 
-	// Replace the built-in chain with a miss so the appended source is reached
-	// without any network traffic.
 	r := NewResolver(
 		WithSources(&recordingSource{name: "builtin-miss"}),
 		AppendSource(extra),
@@ -84,8 +73,6 @@ func TestAppendSourceExtendsDefaultChain(t *testing.T) {
 	}
 }
 
-// TestResolverCachesMisses verifies a total miss is remembered, so a track
-// nobody has art for does not re-query every provider on every poll.
 func TestResolverCachesMisses(t *testing.T) {
 	miss := &recordingSource{name: "miss"}
 	r := NewResolver(WithSources(miss))
@@ -101,8 +88,6 @@ func TestResolverCachesMisses(t *testing.T) {
 	}
 }
 
-// TestResolverCachesHits verifies a resolved cover is served from memory, and
-// that Cached sees it without any lookup.
 func TestResolverCachesHits(t *testing.T) {
 	hit := &recordingSource{name: "hit", url: "https://cdn/cover.jpg"}
 	r := NewResolver(WithSources(hit))
@@ -123,8 +108,6 @@ func TestResolverCachesHits(t *testing.T) {
 	}
 }
 
-// TestResolverStopsOnCancelledContext verifies a caller that gave up does not
-// have a miss cached on its behalf — the lookup never actually concluded.
 func TestResolverStopsOnCancelledContext(t *testing.T) {
 	source := &recordingSource{name: "never-reached", url: "https://cdn/cover.jpg"}
 	r := NewResolver(WithSources(source))
@@ -143,8 +126,6 @@ func TestResolverStopsOnCancelledContext(t *testing.T) {
 	}
 }
 
-// TestResolverWithNoSourcesMisses verifies an empty chain is a clean miss
-// rather than a panic.
 func TestResolverWithNoSourcesMisses(t *testing.T) {
 	r := NewResolver(WithSources())
 

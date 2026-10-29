@@ -6,18 +6,11 @@ import Components from 'unplugin-vue-components/vite';
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 
-// https://vitejs.dev/config/
 export default defineConfig({
     optimizeDeps: {
         noDiscovery: true
     },
     server: {
-        // Explicitly configure host + protocol for HMR
-        // Needed for vite 5 (w/wails)
-        // Possibly not needed if you downgrade to vite 4-
-        // Not sure if it will be necessary in vite 6+
-        // To disable Hot Module Reload (see wails-nohmr.json + template README):
-        // hmr: false
         hmr: {
             host: 'localhost',
             protocol: 'ws'
