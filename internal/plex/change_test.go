@@ -2,11 +2,6 @@ package plex
 
 import "testing"
 
-// Change detection decides whether the rest of PlexCord hears about a poll.
-// ViewOffset advances on every single poll, so the one thing these tests must
-// pin down is that position alone never counts as a change — otherwise Discord
-// would be rewritten several times a second.
-
 func TestSessionChanged(t *testing.T) {
 	base := func() *MusicSession {
 		m := &MusicSession{Track: "Song", Artist: "Artist", Album: "Album", ViewOffset: 1000}

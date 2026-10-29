@@ -11,19 +11,15 @@ const { t } = useI18n();
 const setupStore = useSetupStore();
 const wizard = inject('setupWizard', null);
 
-// Connection state machine
-const connectionState = ref(setupStore.discordConnected ? 'connected' : 'initial'); // 'initial' | 'connecting' | 'connected' | 'error'
+const connectionState = ref(setupStore.discordConnected ? 'connected' : 'initial');
 const connectionError = ref('');
 const isConnecting = ref(false);
 
-// Test presence state (M15 — transient inline confirmation)
 const isTesting = ref(false);
 const testSent = ref(false);
 const testError = ref('');
 let testSentTimer = null;
 
-// Custom Client ID (Advanced) — the value persists when the section is
-// collapsed (F31); a CUSTOM ID badge marks it while hidden.
 const showAdvanced = ref(false);
 const customClientId = ref('');
 const defaultClientId = ref('');
@@ -47,7 +43,6 @@ const hasCustomClientId = computed(() => customClientId.value.trim().length > 0)
 
 const activeClientId = computed(() => (hasCustomClientId.value ? customClientId.value.trim() : defaultClientId.value));
 
-// ---- Client ID validation -------------------------------------------------
 const validateClientId = async () => {
     if (!hasCustomClientId.value) {
         isClientIdValid.value = true;
@@ -73,7 +68,6 @@ const handleClientIdChange = async () => {
 
 const saveCustomClientId = async () => {
     if (!hasCustomClientId.value) {
-        // Reset to default
         try {
             await SaveDiscordClientID('');
             return true;
@@ -98,13 +92,11 @@ const saveCustomClientId = async () => {
     }
 };
 
-// ---- Connect ---------------------------------------------------------------
 const connectToDiscord = async () => {
     if (isConnecting.value) {
         return;
     }
 
-    // Save client ID first if using custom
     const saved = await saveCustomClientId();
     if (!saved && hasCustomClientId.value) {
         showAdvanced.value = true;
@@ -118,7 +110,6 @@ const connectToDiscord = async () => {
     try {
         await ConnectDiscord(activeClientId.value);
 
-        // Verify connection
         const isConnected = await IsDiscordConnected();
         if (isConnected) {
             connectionState.value = 'connected';
@@ -132,7 +123,6 @@ const connectToDiscord = async () => {
         connectionState.value = 'error';
         setupStore.setDiscordConnected(false);
 
-        // Parse error message for user-friendly display
         let errorMessage = t('discord.errConnect');
         if (error && typeof error === 'string') {
             errorMessage = error;
@@ -157,7 +147,6 @@ const retryConnection = () => {
     connectToDiscord();
 };
 
-// ---- Test presence (M15) ----------------------------------------------------
 const testPresence = async () => {
     isTesting.value = true;
     testError.value = '';
@@ -169,7 +158,6 @@ const testPresence = async () => {
         if (testSentTimer) {
             clearTimeout(testSentTimer);
         }
-        // M15: hold 1600ms, then fade out via <Transition>
         testSentTimer = setTimeout(() => {
             testSent.value = false;
             testSentTimer = null;
@@ -182,7 +170,6 @@ const testPresence = async () => {
     }
 };
 
-// Collapsing keeps the entered value (F31)
 const toggleAdvanced = () => {
     showAdvanced.value = !showAdvanced.value;
 };
@@ -191,8 +178,6 @@ const openDeveloperPortal = () => {
     BrowserOpenURL('https://discord.com/developers/applications');
 };
 
-// ---- Wizard integration ------------------------------------------------------
-// Enter submits this step's primary action while unconnected (§5.4)
 const primaryAction = () => {
     if (connectionState.value === 'initial' || connectionState.value === 'error') {
         connectToDiscord();
@@ -205,7 +190,6 @@ onMounted(async () => {
     await loadClientId();
     wizard?.registerPrimary(primaryAction);
 
-    // Restore live connection state (e.g. connected in an earlier visit)
     try {
         const connected = await IsDiscordConnected();
         if (connected) {
@@ -235,24 +219,20 @@ onUnmounted(() => {
         <p class="setup-lede">{{ $t('discord.lede') }}</p>
 
         <div class="setup-panels">
-            <!-- Connection panel -->
             <section class="pc-panel">
                 <span class="pc-eyebrow">{{ $t('discord.richPresence') }}</span>
 
                 <Transition name="pc-state" mode="out-in">
-                    <!-- initial -->
                     <div v-if="connectionState === 'initial'" key="initial" class="discord-initial">
                         <p class="discord-notice">{{ $t('discord.mustBeRunning') }}</p>
                         <button type="button" class="pc-btn pc-btn--primary pc-btn--lg" :disabled="!isClientIdValid" @click="connectToDiscord">{{ $t('discord.connect') }}</button>
                     </div>
 
-                    <!-- connecting -->
                     <div v-else-if="connectionState === 'connecting'" key="connecting" class="discord-connecting">
                         <i class="pi pi-spin pi-spinner discord-spinner" aria-hidden="true"></i>
                         <span>{{ $t('discord.connecting') }}</span>
                     </div>
 
-                    <!-- connected -->
                     <div v-else-if="connectionState === 'connected'" key="connected" class="discord-done">
                         <p class="discord-done-title">
                             <DrawnCheck :size="14" />
@@ -275,7 +255,6 @@ onUnmounted(() => {
                         </p>
                     </div>
 
-                    <!-- error -->
                     <div v-else key="error" class="discord-error" role="alert">
                         <p class="discord-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> {{ $t('discord.connectionFailed') }}</p>
                         <p class="discord-error-text">{{ connectionError }}</p>
@@ -287,7 +266,6 @@ onUnmounted(() => {
                 </Transition>
             </section>
 
-            <!-- Advanced: custom Client ID (persistent value — F31) -->
             <section class="pc-panel">
                 <button type="button" class="advanced-toggle" :aria-expanded="showAdvanced" @click="toggleAdvanced">
                     <span class="pc-eyebrow">{{ $t('discord.advanced') }}</span>
@@ -345,7 +323,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* ---- Connection panel states ---- */
 .discord-initial {
     display: flex;
     flex-direction: column;
@@ -440,7 +417,6 @@ onUnmounted(() => {
     overflow-wrap: anywhere;
 }
 
-/* ---- Advanced section ---- */
 .advanced-toggle {
     display: flex;
     align-items: center;

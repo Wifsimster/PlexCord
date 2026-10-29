@@ -11,17 +11,12 @@ import (
 	"plexcord/internal/plex"
 )
 
-// StartPlexPINAuth initiates PIN-based authentication with Plex.
-// Returns a PIN code that the user must enter at plex.tv/link and the auth URL.
-// This is the easiest and most secure way for users to authenticate.
 func (a *App) StartPlexPINAuth() (map[string]interface{}, error) {
 	log.Println("Starting Plex PIN authentication")
 
 	a.plexAuthMu.Lock()
 	defer a.plexAuthMu.Unlock()
 
-	// Create a new authenticator for this PIN request
-	// This ensures we get a fresh client ID for this authentication session
 	a.plexAuth = a.authFactory()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -46,8 +41,6 @@ func (a *App) StartPlexPINAuth() (map[string]interface{}, error) {
 	}, nil
 }
 
-// CheckPlexPINAuth checks if the user has authorized the PIN.
-// Returns the auth token if authorized, or an error if still pending or expired.
 func (a *App) CheckPlexPINAuth(pinID int) (map[string]interface{}, error) {
 	a.plexAuthMu.Lock()
 	auth := a.plexAuth
@@ -68,7 +61,6 @@ func (a *App) CheckPlexPINAuth(pinID int) (map[string]interface{}, error) {
 	if pinResp.AuthToken != "" {
 		log.Printf("PIN authorized successfully, token received")
 
-		// Clear the authenticator after successful auth
 		a.plexAuthMu.Lock()
 		a.plexAuth = nil
 		a.plexAuthMu.Unlock()
@@ -79,9 +71,7 @@ func (a *App) CheckPlexPINAuth(pinID int) (map[string]interface{}, error) {
 		}, nil
 	}
 
-	// Check if expired
 	if time.Now().After(pinResp.ExpiresAt) {
-		// Clear the authenticator after expiration
 		a.plexAuthMu.Lock()
 		a.plexAuth = nil
 		a.plexAuthMu.Unlock()
@@ -98,13 +88,6 @@ func (a *App) CheckPlexPINAuth(pinID int) (map[string]interface{}, error) {
 	}, nil
 }
 
-// SavePlexToken stores the Plex token securely in OS keychain.
-// This method is called from the setup wizard after the user enters their token.
-// The token is stored using platform-specific secure storage:
-// - Windows: Credential Manager
-// - macOS: Keychain Access
-// - Linux: Secret Service API
-// If OS keychain is unavailable, it falls back to encrypted file storage.
 func (a *App) SavePlexToken(token string) error {
 	if token == "" {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "token cannot be empty")
@@ -120,9 +103,6 @@ func (a *App) SavePlexToken(token string) error {
 	return nil
 }
 
-// GetPlexToken retrieves the Plex token from OS keychain.
-// This method is called during application startup to authenticate with Plex.
-// Returns an error if the token cannot be retrieved or if no token has been set.
 func (a *App) GetPlexToken() (string, error) {
 	token, err := a.tokens.Get()
 	if err != nil {
@@ -138,16 +118,9 @@ func (a *App) GetPlexToken() (string, error) {
 	return token, nil
 }
 
-// DiscoverPlexServers scans the local network for Plex servers using GDM protocol.
-// This method uses Plex's Good Day Mate (GDM) multicast protocol to discover servers
-// on the same subnet. Discovery completes within 5 seconds maximum.
-//
-// Returns a slice of discovered servers with their name, address, port, and local/remote status.
-// An empty slice is returned if no servers are found (not an error condition).
 func (a *App) DiscoverPlexServers() ([]plex.Server, error) {
 	log.Printf("Starting Plex server discovery using GDM protocol...")
 
-	// Discover with 5 second timeout (as per AC1)
 	servers, err := a.discovery.Discover(5 * time.Second)
 	if err != nil {
 		log.Printf("ERROR: Discovery failed: %v", err)
@@ -158,20 +131,10 @@ func (a *App) DiscoverPlexServers() ([]plex.Server, error) {
 	return servers, nil
 }
 
-// ValidatePlexConnection validates the connection to a Plex server using the stored token.
-// This method is called from the setup wizard to verify that:
-// - The Plex server is reachable at the given URL
-// - The stored token has valid authentication
-// - The server has accessible libraries
-//
-// Returns validation details or an error with appropriate code.
-// Validation completes within 5 seconds maximum with automatic timeout.
-//
 //nolint:unparam // ValidationResult is part of the public API even if not always used by callers
 func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, error) {
 	log.Printf("Validating Plex connection to: %s", serverURL)
 
-	// Retrieve token from keychain
 	token, err := a.tokens.Get()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve token: %v", err)
@@ -183,7 +146,6 @@ func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, 
 		return nil, errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
 	}
 
-	// Create Plex client and validate connection
 	client := a.plexFactory(token, serverURL)
 	result, err := client.ValidateConnection()
 	if err != nil {
@@ -193,26 +155,16 @@ func (a *App) ValidatePlexConnection(serverURL string) (*plex.ValidationResult, 
 
 	log.Printf("Connection validated successfully: %s v%s (%d libraries)", result.ServerName, result.ServerVersion, result.LibraryCount)
 
-	// Update connection history
 	a.updatePlexConnectionTime()
 
-	// Stop any pending retries
 	a.stopPlexRetry()
 
 	return result, nil
 }
 
-// GetPlexUsers retrieves the list of Plex user accounts from the server.
-// This method is called from the setup wizard to display available users
-// that can be monitored for playback activity.
-//
-// Returns a slice of users with their ID, name, and avatar thumbnail URL.
-// The server URL must be configured in config before calling this method.
-// Retrieval completes within 5 seconds maximum with automatic timeout.
 func (a *App) GetPlexUsers(serverURL string) ([]plex.PlexUser, error) {
 	log.Printf("Retrieving Plex users from: %s", serverURL)
 
-	// Retrieve token from keychain
 	token, err := a.tokens.Get()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve token: %v", err)
@@ -224,7 +176,6 @@ func (a *App) GetPlexUsers(serverURL string) ([]plex.PlexUser, error) {
 		return nil, errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
 	}
 
-	// Create Plex client and get users
 	client := a.plexFactory(token, serverURL)
 	users, err := client.GetUsers()
 	if err != nil {
@@ -236,11 +187,6 @@ func (a *App) GetPlexUsers(serverURL string) ([]plex.PlexUser, error) {
 	return users, nil
 }
 
-// SavePlexUserSelection saves the selected Plex user to configuration.
-// This method is called from the setup wizard when a user selects which
-// Plex account to monitor for playback activity.
-//
-// The selection persists across application restarts via config.json.
 func (a *App) SavePlexUserSelection(userID, userName string) error {
 	log.Printf("Saving Plex user selection: ID=%s, Name=%s", userID, userName)
 
@@ -248,11 +194,9 @@ func (a *App) SavePlexUserSelection(userID, userName string) error {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "user ID cannot be empty")
 	}
 
-	// Update config with selected user
 	a.config.SelectedPlexUserID = userID
 	a.config.SelectedPlexUserName = userName
 
-	// Save config to disk
 	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save user selection: %v", err)
 		return err
@@ -262,8 +206,6 @@ func (a *App) SavePlexUserSelection(userID, userName string) error {
 	return nil
 }
 
-// SaveServerURL saves the Plex server URL to configuration.
-// This method is called from the setup wizard when a user selects a server.
 func (a *App) SaveServerURL(serverURL string) error {
 	log.Printf("Saving Plex server URL: %s", serverURL)
 
@@ -271,16 +213,13 @@ func (a *App) SaveServerURL(serverURL string) error {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL cannot be empty")
 	}
 
-	// Validate URL scheme to prevent SSRF/token exfiltration
 	parsed, err := url.Parse(serverURL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "server URL must use http or https scheme")
 	}
 
-	// Update config with server URL
 	a.config.ServerURL = serverURL
 
-	// Save config to disk
 	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save server URL: %v", err)
 		return err
@@ -290,18 +229,7 @@ func (a *App) SaveServerURL(serverURL string) error {
 	return nil
 }
 
-// StartSessionPolling begins polling the Plex server for playback sessions.
-// This method creates a background poller that periodically checks for active
-// playback — music, films and TV episodes, per the configured media types —
-// and emits Wails events when the session state changes:
-//   - PlaybackUpdated: Emitted when something is playing or the item changes
-//   - PlaybackStopped: Emitted when playback stops
-//
-// Polling uses the configured interval (default 2 seconds per NFR4).
-// Each poll completes within 500ms (NFR5).
-// Returns an error if required configuration is missing.
 func (a *App) StartSessionPolling() error {
-	// Validate configuration
 	serverURL := a.activePlexServerURL()
 	if serverURL == "" {
 		return errors.New(errors.CONFIG_READ_FAILED, "plex server URL not configured")
@@ -311,7 +239,6 @@ func (a *App) StartSessionPolling() error {
 		return errors.New(errors.CONFIG_READ_FAILED, "plex user not selected")
 	}
 
-	// Retrieve token from keychain
 	token, err := a.tokens.Get()
 	if err != nil {
 		log.Printf("ERROR: Failed to retrieve token for polling: %v", err)
@@ -322,8 +249,6 @@ func (a *App) StartSessionPolling() error {
 		return errors.New(errors.CONFIG_READ_FAILED, "plex token not found")
 	}
 
-	// Build the client through the injected factory, the same path validation
-	// and user lookup use, so polling can be driven by a fake in tests.
 	client, ok := a.plexFactory(token, serverURL).(plex.SessionSource)
 	if !ok {
 		return errors.New(errors.PLEX_CONN_FAILED, "plex client cannot supply sessions")
@@ -339,22 +264,17 @@ func (a *App) StartSessionPolling() error {
 		OnRecovered: a.onPlexPollRecovered,
 	})
 	if sessionCh == nil {
-		// Already polling; the running loop keeps serving updates.
 		return nil
 	}
 
 	log.Printf("Session polling started: user=%s, interval=%v, media=%v",
 		a.config.SelectedPlexUserID, a.pollingInterval(), mediaTypes)
 
-	// Start goroutine to handle session updates
 	go a.handleSessionUpdates(sessionCh)
 
 	return nil
 }
 
-// pollingInterval is the configured poll period, floored at the NFR4 default of
-// 2 seconds so a missing or nonsensical config value cannot slow detection of a
-// state change below what the requirement allows.
 func (a *App) pollingInterval() time.Duration {
 	interval := time.Duration(a.config.PollingInterval) * time.Second
 	if interval < time.Second {
@@ -363,43 +283,30 @@ func (a *App) pollingInterval() time.Duration {
 	return interval
 }
 
-// onPlexPollError handles the transition into a failed Plex connection
-// (Story 6.5): drop the now-stale presence, tell the frontend, and start the
-// retry loop.
 func (a *App) onPlexPollError(err error) {
 	log.Printf("Plex connection error detected, starting recovery...")
 
-	// Clear Discord presence so it doesn't show stale data
 	a.clearDiscordOnStop()
 
-	// Emit event for frontend to show error status
 	a.bus.Emit(events.PlexConnectionError, map[string]interface{}{
 		"error":     err.Error(),
 		"errorCode": errors.GetCode(err),
 	})
 
-	// Start automatic retry (backoff is handled by retry manager)
 	a.startPlexRetry(err)
 }
 
-// onPlexPollRecovered handles polling succeeding again after a failure.
 func (a *App) onPlexPollRecovered() {
 	log.Printf("Plex connection recovered")
 
-	// Stop retry and update connection history
 	a.stopPlexRetry()
 	a.updatePlexConnectionTime()
 
-	// Emit event for frontend to clear error status
 	a.bus.Emit(events.PlexConnectionRestored, nil)
 
-	// The error cleared the presence, but the poll loop only emits on a
-	// change: if the same item is still playing nothing would restore it.
 	a.restorePresenceAfterOutage()
 }
 
-// restorePresenceAfterOutage republishes the cached session, applying the same
-// gates as the discord observer (manual pause, hide-when-paused).
 func (a *App) restorePresenceAfterOutage() {
 	session := a.sessions.Get()
 	if session == nil || a.presence.IsPaused() {
@@ -411,14 +318,6 @@ func (a *App) restorePresenceAfterOutage() {
 	a.updateDiscordFromSession(session)
 }
 
-// handleSessionUpdates constructs the observer pipeline and runs it.
-// The actual event handling is delegated to individual observers for
-// separation of concerns; see app_observers.go.
-//
-// Observer order matters: cache → history → discord → events. The
-// discord observer is gated by the manual-pause flag and the
-// hide-when-paused config, and the event emitter always fires last so
-// the frontend sees the state after all side effects have run.
 func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MediaSession) {
 	observers := []SessionObserver{
 		newSessionCacheObserver(a.sessions),
@@ -437,20 +336,14 @@ func (a *App) handleSessionUpdates(sessionCh <-chan *plex.MediaSession) {
 	runSessionPipeline(sessionCh, observers)
 }
 
-// StopSessionPolling stops the background session polling.
-// This method is called during application shutdown or when the user
-// wants to temporarily stop monitoring playback.
-// It is safe to call this method even if polling is not running.
 func (a *App) StopSessionPolling() {
 	a.polling.Stop()
 }
 
-// IsPollingActive returns whether session polling is currently running.
 func (a *App) IsPollingActive() bool {
 	return a.polling.IsRunning()
 }
 
-// PlexConnectionStatus represents the current Plex connection status.
 type PlexConnectionStatus struct {
 	ServerURL    string `json:"serverUrl"`
 	UserID       string `json:"userId"`
@@ -460,7 +353,6 @@ type PlexConnectionStatus struct {
 	InErrorState bool   `json:"inErrorState"`
 }
 
-// GetPlexConnectionStatus returns the current Plex connection status (Story 6.5).
 func (a *App) GetPlexConnectionStatus() PlexConnectionStatus {
 	polling, inError := a.polling.State()
 
@@ -474,11 +366,7 @@ func (a *App) GetPlexConnectionStatus() PlexConnectionStatus {
 	}
 }
 
-// SetPollingInterval updates the session polling interval dynamically.
-// The interval is clamped to min 1 second, max 60 seconds (AC3).
-// Changes take effect on the next polling cycle without restart.
 func (a *App) SetPollingInterval(intervalSeconds int) error {
-	// Validate bounds
 	if intervalSeconds < 1 {
 		intervalSeconds = 1
 	}
@@ -486,14 +374,12 @@ func (a *App) SetPollingInterval(intervalSeconds int) error {
 		intervalSeconds = 60
 	}
 
-	// Update config
 	a.config.PollingInterval = intervalSeconds
 	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save polling interval: %v", err)
 		return err
 	}
 
-	// Update running poller if active
 	if a.polling.SetInterval(time.Duration(intervalSeconds) * time.Second) {
 		log.Printf("Polling interval updated to %d seconds", intervalSeconds)
 	}
@@ -501,24 +387,17 @@ func (a *App) SetPollingInterval(intervalSeconds int) error {
 	return nil
 }
 
-// GetPollingInterval returns the current polling interval in seconds.
-// Returns the configured value, or 2 seconds as default per NFR4 requirement.
 func (a *App) GetPollingInterval() int {
 	if a.config.PollingInterval < 1 {
-		return 2 // Default per NFR4: state changes detected within 2 seconds
+		return 2
 	}
 	return a.config.PollingInterval
 }
 
-// GetCurrentSession returns the session currently playing — a track, a film or
-// a TV episode — or nil when nothing is.
-// This is used by the frontend to restore playback state after page refresh.
 func (a *App) GetCurrentSession() *plex.MediaSession {
 	return a.sessions.Get()
 }
 
-// autoConnectPlex attempts to restore the Plex connection using persisted config.
-// This mirrors Discord auto-connect behavior by validating and restarting polling.
 func (a *App) autoConnectPlex() {
 	serverURL := a.activePlexServerURL()
 	if serverURL == "" {
@@ -557,8 +436,6 @@ func (a *App) autoConnectPlex() {
 	log.Printf("Plex connection restored and session polling started")
 }
 
-// updatePlexConnectionTime updates the last successful Plex connection time.
-// Called internally when Plex connection is successfully validated.
 func (a *App) updatePlexConnectionTime() {
 	now := time.Now()
 	a.config.PlexLastConnected = &now

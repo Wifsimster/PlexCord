@@ -11,7 +11,6 @@ const { display, buildDate } = useVersion();
 </template>
 
 <style scoped>
-/* One quiet caption line (spec §5.1) — the only version display. */
 .layout-footer {
     display: flex;
     align-items: center;

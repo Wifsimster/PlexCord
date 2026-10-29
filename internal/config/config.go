@@ -8,7 +8,6 @@ import (
 	"plexcord/internal/errors"
 )
 
-// ServerConfig represents a single Plex server configuration for multi-server support.
 type ServerConfig struct {
 	Name     string `json:"name"`
 	URL      string `json:"url"`
@@ -17,88 +16,53 @@ type ServerConfig struct {
 	Active   bool   `json:"active"`
 }
 
-// Config holds application configuration
 type Config struct {
-	// Connection history (Story 6.8)
-	PlexLastConnected    *time.Time `json:"plexLastConnected,omitempty"`    // Last successful Plex connection
-	DiscordLastConnected *time.Time `json:"discordLastConnected,omitempty"` // Last successful Discord connection
+	PlexLastConnected    *time.Time `json:"plexLastConnected,omitempty"`
+	DiscordLastConnected *time.Time `json:"discordLastConnected,omitempty"`
 
 	ServerURL            string `json:"serverUrl"`
 	DiscordClientID      string `json:"discordClientId"`
-	SelectedPlexUserID   string `json:"selectedPlexUserId"`   // ID of the Plex user to monitor
-	SelectedPlexUserName string `json:"selectedPlexUserName"` // Display name for UI purposes
-	PollingInterval      int    `json:"pollingInterval"`      // seconds
+	SelectedPlexUserID   string `json:"selectedPlexUserId"`
+	SelectedPlexUserName string `json:"selectedPlexUserName"`
+	PollingInterval      int    `json:"pollingInterval"`
 	MinimizeToTray       bool   `json:"minimizeToTray"`
 	AutoStart            bool   `json:"autoStart"`
-	StartMinimized       bool   `json:"startMinimized"` // Launch in the background (tray or taskbar) instead of showing the window
-	SetupCompleted       bool   `json:"setupCompleted"` // True when setup wizard is done
-	SetupSkipped         bool   `json:"setupSkipped"`   // True when user skipped setup
+	StartMinimized       bool   `json:"startMinimized"`
+	SetupCompleted       bool   `json:"setupCompleted"`
+	SetupSkipped         bool   `json:"setupSkipped"`
 
-	// Presence behavior
-	HideWhenPaused      bool `json:"hideWhenPaused"`      // Clear presence when playback is paused
-	HideWhenPausedDelay int  `json:"hideWhenPausedDelay"` // Seconds to wait before clearing (0 = immediate)
+	HideWhenPaused      bool `json:"hideWhenPaused"`
+	HideWhenPausedDelay int  `json:"hideWhenPausedDelay"`
 
-	// Custom presence format strings
-	PresenceDetailsFormat string `json:"presenceDetailsFormat"` // Format for Details line, e.g. "{track}"
-	PresenceStateFormat   string `json:"presenceStateFormat"`   // Format for State line, e.g. "by {artist} • {album}"
+	PresenceDetailsFormat string `json:"presenceDetailsFormat"`
+	PresenceStateFormat   string `json:"presenceStateFormat"`
 
-	// Presence display options
-	// ActivityStyle: "media" (Listening/Watching) or "game" (classic Playing).
-	// StatusDisplay: "app", "state", or "details" — which line shows in the member list.
 	PresenceActivityStyle string `json:"presenceActivityStyle"`
 	PresenceStatusDisplay string `json:"presenceStatusDisplay"`
 
-	// PresenceArtworkLookup enables resolving public album art (iTunes /
-	// MusicBrainz) so covers render on Discord. When disabled, PlexCord never
-	// sends external services the artist/album names and shows the Plex logo.
-	// A pointer distinguishes "unset" (legacy config → default on) from an
-	// explicit false; use ArtworkLookupEnabled() to read it.
 	PresenceArtworkLookup *bool `json:"presenceArtworkLookup,omitempty"`
 
-	// PresenceMediaTypes lists the kinds of Plex playback that reach Discord:
-	// any of "music", "movie" and "tv". An absent or empty list means all
-	// three, which is what a config written before PlexCord handled video
-	// carries — the feature arrives switched on rather than hidden.
 	PresenceMediaTypes []string `json:"presenceMediaTypes,omitempty"`
 
-	// Multi-server support
 	Servers []ServerConfig `json:"servers,omitempty"`
 
-	// AutoUpdateCheck enables the automatic background update checker.
-	// Pointer so the field being absent from existing config files means
-	// enabled (nil == true) rather than false.
 	AutoUpdateCheck *bool `json:"autoUpdateCheck,omitempty"`
 
-	// StartMinimizedOnLogin keeps the window closed when the OS starts
-	// PlexCord at login (AutoStart), independently of StartMinimized, which
-	// covers the launches the user starts themselves. Pointer so an absent
-	// field means the default (nil == true) rather than false.
 	StartMinimizedOnLogin *bool `json:"startMinimizedOnLogin,omitempty"`
 }
 
-// IsAutoUpdateCheckEnabled reports whether automatic update checks are
-// enabled. Defaults to true when the setting has never been persisted.
 func (c *Config) IsAutoUpdateCheckEnabled() bool {
 	return c.AutoUpdateCheck == nil || *c.AutoUpdateCheck
 }
 
-// boolPtr returns a pointer to b, for optional bool config fields.
 func boolPtr(b bool) *bool { return &b }
 
-// ArtworkLookupEnabled reports whether public artwork lookup is enabled,
-// defaulting to true when the field is unset (legacy configs).
 func (c *Config) ArtworkLookupEnabled() bool {
 	return c.PresenceArtworkLookup == nil || *c.PresenceArtworkLookup
 }
 
-// AllMediaTypes is every kind of playback PlexCord can relay, in the order the
-// settings UI presents them.
 var AllMediaTypes = []string{"music", "movie", "tv"}
 
-// EnabledMediaTypes reports which kinds of playback should reach Discord,
-// defaulting to all of them when the setting has never been persisted. Unknown
-// values are dropped so a hand-edited config cannot ask the poller for a media
-// type it has no builder for.
 func (c *Config) EnabledMediaTypes() []string {
 	enabled := make([]string, 0, len(AllMediaTypes))
 	for _, known := range AllMediaTypes {
@@ -115,7 +79,6 @@ func (c *Config) EnabledMediaTypes() []string {
 	return enabled
 }
 
-// IsMediaTypeEnabled reports whether one kind of playback reaches Discord.
 func (c *Config) IsMediaTypeEnabled(mediaType string) bool {
 	for _, t := range c.EnabledMediaTypes() {
 		if t == mediaType {
@@ -125,28 +88,18 @@ func (c *Config) IsMediaTypeEnabled(mediaType string) bool {
 	return false
 }
 
-// LoginStartsMinimized reports whether a launch the OS performs at login
-// should come up in the background, defaulting to true when the field is unset
-// (legacy configs): nobody asked for a window at boot, so that is the behavior
-// people expect from "Start on login" — the toggle is there for the ones who
-// want the window anyway.
 func (c *Config) LoginStartsMinimized() bool {
 	return c.StartMinimizedOnLogin == nil || *c.StartMinimizedOnLogin
 }
 
-// DefaultConfig returns a configuration with default values.
-// Default PollingInterval is 2 seconds to meet NFR4 requirement:
-// "Discord presence updates shall occur within 2 seconds of playback state change"
 func DefaultConfig() *Config {
 	return &Config{
-		ServerURL:       "",
-		PollingInterval: 2, // 2 seconds for NFR4 compliance
-		MinimizeToTray:  true,
-		AutoStart:       false,
-		StartMinimized:  false,
-		DiscordClientID: "", // Empty means use default from discord package
-		// Media-style presence (Listening/Watching) with the state line in the
-		// member list is the new default; users can revert to classic Playing.
+		ServerURL:             "",
+		PollingInterval:       2,
+		MinimizeToTray:        true,
+		AutoStart:             false,
+		StartMinimized:        false,
+		DiscordClientID:       "",
 		PresenceActivityStyle: "media",
 		PresenceStatusDisplay: "state",
 		PresenceArtworkLookup: boolPtr(true),
@@ -155,59 +108,46 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Load loads configuration from file
 func Load() (*Config, error) {
 	configPath, err := GetConfigPath()
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if config file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		// File doesn't exist - return default config (not an error)
 		return DefaultConfig(), nil
 	}
 
-	// Read config file
 	data, err := os.ReadFile(configPath) //nolint:gosec // configPath is derived from user config dir, not user input
 	if err != nil {
 		return nil, errors.New(errors.CONFIG_READ_FAILED, "failed to read config file: "+err.Error())
 	}
 
-	// Parse JSON
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, errors.New(errors.CONFIG_READ_FAILED, "invalid JSON in config file: "+err.Error())
 	}
 
-	// Migrate legacy single-server config to multi-server format
 	cfg.MigrateToMultiServer()
 
 	return &cfg, nil
 }
 
-// Save saves configuration to file
 func Save(cfg *Config) error {
-	// Ensure config directory exists
 	if err := EnsureConfigDir(); err != nil {
 		return err
 	}
 
-	// Get config file path
 	configPath, err := GetConfigPath()
 	if err != nil {
 		return err
 	}
 
-	// Marshal config to JSON with indentation
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "failed to marshal config: "+err.Error())
 	}
 
-	// Write atomically with 0600 permissions (owner read/write only): a crash
-	// mid-write must not leave a truncated file that the next start would
-	// fail to load and then overwrite with defaults.
 	if err := WriteFileAtomic(configPath, data, 0600); err != nil {
 		return errors.New(errors.CONFIG_WRITE_FAILED, "failed to write config file: "+err.Error())
 	}
@@ -215,7 +155,6 @@ func Save(cfg *Config) error {
 	return nil
 }
 
-// ConfigExists checks if the configuration file exists on disk
 func ConfigExists() bool {
 	configPath, err := GetConfigPath()
 	if err != nil {
@@ -226,37 +165,25 @@ func ConfigExists() bool {
 	return err == nil
 }
 
-// IsSetupComplete checks if the setup wizard has been completed or skipped
-// Setup is considered complete if:
-// 1. Config file exists
-// 2. Config file can be loaded successfully
-// 3. SetupCompleted OR SetupSkipped flag is true
 func IsSetupComplete() bool {
-	// First check if config file exists
 	if !ConfigExists() {
 		return false
 	}
 
-	// Try to load config
 	cfg, err := Load()
 	if err != nil {
 		return false
 	}
 
-	// Check if setup was explicitly completed or skipped
 	return cfg.SetupCompleted || cfg.SetupSkipped
 }
 
-// MigrateToMultiServer migrates a legacy single-server configuration to the
-// multi-server Servers slice. If Servers is already populated, no migration is
-// performed. The legacy ServerURL, SelectedPlexUserID, and SelectedPlexUserName
-// fields are preserved for backward compatibility.
 func (c *Config) MigrateToMultiServer() {
 	if len(c.Servers) > 0 {
-		return // Already migrated
+		return
 	}
 	if c.ServerURL == "" {
-		return // Nothing to migrate
+		return
 	}
 
 	c.Servers = []ServerConfig{
@@ -270,7 +197,6 @@ func (c *Config) MigrateToMultiServer() {
 	}
 }
 
-// GetActiveServers returns only the servers that are marked as active.
 func (c *Config) GetActiveServers() []ServerConfig {
 	active := make([]ServerConfig, 0, len(c.Servers))
 	for _, s := range c.Servers {
@@ -281,19 +207,14 @@ func (c *Config) GetActiveServers() []ServerConfig {
 	return active
 }
 
-// Delete removes the configuration file from disk.
-// This is used during application reset to clear all settings.
-// Returns nil if the file doesn't exist (idempotent).
 func Delete() error {
 	configPath, err := GetConfigPath()
 	if err != nil {
 		return err
 	}
 
-	// Remove the config file
 	if err := os.Remove(configPath); err != nil {
 		if os.IsNotExist(err) {
-			// File doesn't exist - that's fine
 			return nil
 		}
 		return errors.New(errors.CONFIG_WRITE_FAILED, "failed to delete config file: "+err.Error())

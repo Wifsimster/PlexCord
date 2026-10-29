@@ -6,14 +6,6 @@ import (
 	"time"
 )
 
-// runPollLoop runs a generic polling loop parameterized by a fetch function,
-// a change-detection function, and an emit function. This consolidates the
-// previously duplicated logic between pollLoop (music) and mediaPollLoop
-// (multi-media) into a single implementation (OCP + DRY).
-//
-// Type parameter T is the session type (*MusicSession or *MediaSession).
-// The nil-check of the session goes through fetch's second return value
-// (true = valid result including "no session"; false = error, skip update).
 func runPollLoop[T any](
 	ctx context.Context,
 	stopCh <-chan struct{},
@@ -30,7 +22,6 @@ func runPollLoop[T any](
 	var lastSession T
 	var isZero = true
 
-	// Perform immediate first poll
 	if session, ok := fetch(); ok {
 		emit(session)
 		lastSession = session
@@ -46,7 +37,6 @@ func runPollLoop[T any](
 			log.Printf("%s poller stopped: stop signal received", label)
 			return
 		case <-ticker.C:
-			// Refresh ticker if interval changed at runtime
 			newInterval := getInterval()
 			if newInterval != interval {
 				ticker.Reset(newInterval)
@@ -55,8 +45,6 @@ func runPollLoop[T any](
 			}
 
 			session, ok := fetch()
-			// Only emit if poll succeeded and session state changed.
-			// On error, keep lastSession unchanged to avoid false "stopped" events.
 			if !ok {
 				continue
 			}

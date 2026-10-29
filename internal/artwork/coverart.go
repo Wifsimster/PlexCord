@@ -13,13 +13,6 @@ type mbReleaseResponse struct {
 	} `json:"releases"`
 }
 
-// resolveCoverArt is the keyless MusicBrainz + Cover Art Archive fallback: it
-// finds a release MBID by artist+album, then confirms and returns the public
-// Cover Art Archive front-cover URL for it. MusicBrainz requests are throttled
-// to its 1 req/s policy and carry a descriptive User-Agent.
-//
-// It indexes music releases only, so a video query misses here and falls
-// through to whatever comes next in the chain.
 func (r *Resolver) resolveCoverArt(ctx context.Context, q Query) string {
 	if q.MediaType != MediaTypeMusic || strings.TrimSpace(q.Album) == "" {
 		return ""

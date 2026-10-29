@@ -8,32 +8,16 @@ import (
 	"plexcord/internal/discord/ipc"
 )
 
-// PresenceBuilder builds an ipc.Activity from PresenceData for a single
-// media type. Adding a new media type (photo slideshow, audiobook, etc.)
-// means implementing this interface and registering it — no changes to
-// existing builders (OCP).
 type PresenceBuilder interface {
-	// Build constructs a Discord Activity for the given presence data.
-	// The builder should only use fields relevant to its media type.
 	Build(data *PresenceData) ipc.Activity
 }
 
-// BuilderRegistry resolves a PresenceBuilder for a media type. It is the
-// extension point for new media types: register a builder and every presence
-// path picks it up, with no change to the existing builders or to the dispatch
-// (OCP).
-//
-// Registration is guarded by a mutex because a presence update can be built on
-// the poller goroutine while another goroutine registers a builder.
 type BuilderRegistry struct {
 	mu       sync.RWMutex
 	builders map[string]PresenceBuilder
-	// fallback formats media types nothing is registered for, so an unknown
-	// type degrades to a sensible presence rather than none at all.
 	fallback PresenceBuilder
 }
 
-// NewBuilderRegistry returns a registry preloaded with the built-in builders.
 func NewBuilderRegistry() *BuilderRegistry {
 	music := &musicBuilder{}
 	return &BuilderRegistry{
@@ -46,7 +30,6 @@ func NewBuilderRegistry() *BuilderRegistry {
 	}
 }
 
-// Register adds or replaces the builder for a media type.
 func (r *BuilderRegistry) Register(mediaType string, builder PresenceBuilder) {
 	if builder == nil {
 		return
@@ -56,8 +39,6 @@ func (r *BuilderRegistry) Register(mediaType string, builder PresenceBuilder) {
 	r.builders[mediaType] = builder
 }
 
-// Builder returns the builder for a media type, falling back to the music
-// builder for an empty or unregistered type (backward compatibility).
 func (r *BuilderRegistry) Builder(mediaType string) PresenceBuilder {
 	if mediaType == "" {
 		mediaType = MediaTypeMusic
@@ -70,37 +51,20 @@ func (r *BuilderRegistry) Builder(mediaType string) PresenceBuilder {
 	return r.fallback
 }
 
-// Build formats the presence data with the builder for its media type.
 func (r *BuilderRegistry) Build(data *PresenceData) ipc.Activity {
 	return r.Builder(data.MediaType).Build(data)
 }
 
-// defaultRegistry backs the package-level helpers used by PresenceManager.
 var defaultRegistry = NewBuilderRegistry()
 
-// RegisterPresenceBuilder registers a builder for a given media type on the
-// default registry. Intended for tests and future extensions.
 func RegisterPresenceBuilder(mediaType string, builder PresenceBuilder) {
 	defaultRegistry.Register(mediaType, builder)
 }
 
-// buildActivityForMediaType dispatches to the appropriate PresenceBuilder
-// based on data.MediaType, via the default registry.
 func buildActivityForMediaType(data *PresenceData) ipc.Activity {
 	return defaultRegistry.Build(data)
 }
 
-// ----------------------------------------------------------------------------
-// Common helpers shared by builders
-// ----------------------------------------------------------------------------
-
-// applyTimestamps sets the elapsed-time / progress-bar display when playing.
-//
-// Discord renders a live progress bar when both start and end are present, and
-// a plain elapsed timer with only a start. We therefore send:
-//   - playing + known duration → start + end (progress bar)
-//   - playing + unknown duration (streams) → start only (elapsed timer)
-//   - paused → no timestamps (Discord cannot freeze a bar)
 func applyTimestamps(activity *ipc.Activity, data *PresenceData) {
 	if data.StartTime == nil || data.State != "playing" {
 		return
@@ -112,9 +76,6 @@ func applyTimestamps(activity *ipc.Activity, data *PresenceData) {
 	activity.Timestamps = ts
 }
 
-// applyActivityType sets the Discord activity type and status-display line.
-// base is the media-appropriate type (Listening for music, Watching for video);
-// the "game" style overrides it back to classic Playing.
 func applyActivityType(activity *ipc.Activity, data *PresenceData, base ipc.ActivityType) {
 	if data.ActivityStyle == ActivityStyleGame {
 		activity.Type = ipc.ActivityPlaying
@@ -135,7 +96,6 @@ func applyActivityType(activity *ipc.Activity, data *PresenceData, base ipc.Acti
 	}
 }
 
-// applyPlaybackIcon sets the small image/text based on play state.
 func applyPlaybackIcon(activity *ipc.Activity, data *PresenceData) {
 	if data.State == "paused" {
 		activity.SmallImage = "pause"
@@ -146,9 +106,6 @@ func applyPlaybackIcon(activity *ipc.Activity, data *PresenceData) {
 	}
 }
 
-// applyArtwork sets the large image to the artwork URL or falls back to the
-// Plex logo. The hover text is the album for music; video has none, so each
-// builder supplies what the picture is of instead.
 func applyArtwork(activity *ipc.Activity, data *PresenceData, fallbackText string) {
 	if data.ArtworkURL != "" {
 		activity.LargeImage = data.ArtworkURL
@@ -162,8 +119,6 @@ func applyArtwork(activity *ipc.Activity, data *PresenceData, fallbackText strin
 	}
 }
 
-// orPlex returns text when there is any, and the bare product name otherwise,
-// so a poster's hover text never comes out empty.
 func orPlex(text string) string {
 	if text == "" {
 		return "Plex"
@@ -171,9 +126,6 @@ func orPlex(text string) string {
 	return text
 }
 
-// applyFormatTokens applies custom format strings with token replacement.
-// Supported tokens: {track}, {artist}, {album}, {year}, {player},
-// {show}, {season}, {episode}.
 func applyFormatTokens(format string, data *PresenceData) string {
 	if format == "" {
 		return ""
@@ -190,10 +142,6 @@ func applyFormatTokens(format string, data *PresenceData) string {
 	)
 	return replacer.Replace(format)
 }
-
-// ----------------------------------------------------------------------------
-// musicBuilder — the default builder, matches previous buildActivity behavior
-// ----------------------------------------------------------------------------
 
 type musicBuilder struct{}
 
@@ -228,10 +176,6 @@ func (musicBuilder) Build(data *PresenceData) ipc.Activity {
 	return activity
 }
 
-// ----------------------------------------------------------------------------
-// movieBuilder — formats a movie session
-// ----------------------------------------------------------------------------
-
 type movieBuilder struct{}
 
 func (movieBuilder) Build(data *PresenceData) ipc.Activity {
@@ -241,7 +185,7 @@ func (movieBuilder) Build(data *PresenceData) ipc.Activity {
 		activity.Details = applyFormatTokens(data.DetailsFormat, data)
 		activity.State = applyFormatTokens(data.StateFormat, data)
 	} else {
-		activity.Details = data.Track // Movie title stored in Track field
+		activity.Details = data.Track
 		if data.Year != "" {
 			activity.State = fmt.Sprintf("Movie • %s", data.Year)
 		} else {
@@ -256,10 +200,6 @@ func (movieBuilder) Build(data *PresenceData) ipc.Activity {
 	return activity
 }
 
-// ----------------------------------------------------------------------------
-// tvBuilder — formats a TV episode session
-// ----------------------------------------------------------------------------
-
 type tvBuilder struct{}
 
 func (tvBuilder) Build(data *PresenceData) ipc.Activity {
@@ -269,7 +209,6 @@ func (tvBuilder) Build(data *PresenceData) ipc.Activity {
 		activity.Details = applyFormatTokens(data.DetailsFormat, data)
 		activity.State = applyFormatTokens(data.StateFormat, data)
 	} else {
-		// Episode title as details, show + S/E as state
 		activity.Details = data.Track
 		switch {
 		case data.ShowTitle != "" && data.Season > 0 && data.Episode > 0:

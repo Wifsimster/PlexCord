@@ -9,9 +9,7 @@ import (
 	"path/filepath"
 )
 
-// getDesktopFilePath returns the path to the XDG autostart .desktop file.
 func (m *AutoStartManager) getDesktopFilePath() string {
-	// Check XDG_CONFIG_HOME first, fall back to ~/.config
 	configDir := os.Getenv("XDG_CONFIG_HOME")
 	if configDir == "" {
 		homeDir, err := os.UserHomeDir()
@@ -23,7 +21,6 @@ func (m *AutoStartManager) getDesktopFilePath() string {
 	return filepath.Join(configDir, "autostart", "plexcord.desktop")
 }
 
-// IsEnabled checks if PlexCord .desktop file exists in autostart.
 func (m *AutoStartManager) IsEnabled() bool {
 	desktopPath := m.getDesktopFilePath()
 	if desktopPath == "" {
@@ -33,9 +30,6 @@ func (m *AutoStartManager) IsEnabled() bool {
 	return err == nil
 }
 
-// desktopEntry is the .desktop file the session autostarts. Exec carries
-// AutoStartFlag so the launched process knows the session started it at login
-// rather than the user opening PlexCord.
 func (m *AutoStartManager) desktopEntry() string {
 	return fmt.Sprintf(`[Desktop Entry]
 Type=Application
@@ -49,11 +43,6 @@ X-GNOME-Autostart-enabled=true
 `, m.executable, AutoStartFlag)
 }
 
-// Enable creates an XDG autostart .desktop file.
-//
-// An existing file is rewritten unless it already matches, so an entry left by
-// an older version (or by the executable at a previous path) is brought up to
-// date instead of being left as it was.
 func (m *AutoStartManager) Enable() error {
 	desktopPath := m.getDesktopFilePath()
 	if desktopPath == "" {
@@ -61,13 +50,11 @@ func (m *AutoStartManager) Enable() error {
 	}
 
 	desktopContent := m.desktopEntry()
-	// #nosec G304 -- desktopPath is the fixed autostart path under the user config dir, not untrusted input
 	if current, err := os.ReadFile(desktopPath); err == nil && string(current) == desktopContent { //nolint:gosec
 		log.Printf("Auto-start already enabled")
 		return nil
 	}
 
-	// Ensure autostart directory exists
 	if err := os.MkdirAll(filepath.Dir(desktopPath), 0750); err != nil {
 		log.Printf("ERROR: Failed to create autostart directory: %v", err)
 		return err
@@ -82,7 +69,6 @@ func (m *AutoStartManager) Enable() error {
 	return nil
 }
 
-// Disable removes the XDG autostart .desktop file.
 func (m *AutoStartManager) Disable() error {
 	if !m.IsEnabled() {
 		log.Printf("Auto-start already disabled")

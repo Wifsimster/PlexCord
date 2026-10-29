@@ -109,9 +109,6 @@ func TestResolveLaunchPathFallsBackToExecutable(t *testing.T) {
 }
 
 func TestLaunchPathIsStableAcrossCalls(t *testing.T) {
-	// The whole point of caching the launch path is that it stays fixed even if
-	// the running binary is renamed underneath us by a self-update. Two reads
-	// must agree; updateTargetPath must return the same path a restart uses.
 	first := LaunchPath()
 	if second := LaunchPath(); first != second {
 		t.Errorf("LaunchPath() not stable: %q then %q", first, second)
@@ -145,16 +142,10 @@ func TestFindAsset(t *testing.T) {
 	}
 }
 
-// TestReleaseIsInstallable covers the window between a release being
-// published and its binaries being attached: semantic-release creates the
-// release, the build workflow uploads the assets minutes later, and in
-// between PlexCord must not offer an update it cannot install.
 func TestReleaseIsInstallable(t *testing.T) {
 	assetName, supported := updatableAssetName()
 
 	if !supported {
-		// Platforms without in-place update (macOS, other architectures)
-		// only need the release to carry something to download.
 		if releaseIsInstallable(&GitHubRelease{}) {
 			t.Error("a release with no assets should not be installable")
 		}
@@ -177,9 +168,7 @@ func TestReleaseIsInstallable(t *testing.T) {
 		{
 			name:   "binary present, checksum still uploading",
 			assets: []ReleaseAsset{{Name: assetName}},
-			// DownloadAndApplyUpdate verifies the digest before writing, so a
-			// release without it is just as uninstallable.
-			want: false,
+			want:   false,
 		},
 		{
 			name:   "another platform's assets only",

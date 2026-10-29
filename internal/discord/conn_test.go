@@ -7,7 +7,6 @@ import (
 	"plexcord/internal/discord/ipc"
 )
 
-// fakeConn is a Discord IPC connection that never touches a socket.
 type fakeConn struct {
 	loginErr    error
 	activityErr error
@@ -31,15 +30,12 @@ func (c *fakeConn) Close() error {
 	return nil
 }
 
-// newFakeManager builds a PresenceManager over a fake connection.
 func newFakeManager(conn *fakeConn) *PresenceManager {
 	return NewPresenceManager(WithDialer(func() Conn { return conn }))
 }
 
 const testClientID = "1463211692656689172"
 
-// TestPresenceManagerConnectsThroughDialer is the point of the Conn seam: the
-// whole connection lifecycle runs with no Discord installed.
 func TestPresenceManagerConnectsThroughDialer(t *testing.T) {
 	conn := &fakeConn{}
 	pm := newFakeManager(conn)
@@ -102,14 +98,11 @@ func TestPresenceManagerUpdatePlaybackBuildsActivity(t *testing.T) {
 	if activity.State != "by Artist • Album" {
 		t.Errorf("State = %q, want the artist and album line", activity.State)
 	}
-	// A known duration must produce both ends of the progress bar.
 	if activity.Timestamps == nil || activity.Timestamps.Start == nil || activity.Timestamps.End == nil {
 		t.Errorf("timestamps = %+v, want a start and an end for a known duration", activity.Timestamps)
 	}
 }
 
-// TestPresenceManagerUpdatePlaybackUnknownDuration covers live streams: an
-// elapsed timer, not a progress bar Discord cannot fill.
 func TestPresenceManagerUpdatePlaybackUnknownDuration(t *testing.T) {
 	conn := &fakeConn{}
 	pm := newFakeManager(conn)
@@ -152,8 +145,6 @@ func TestPresenceManagerClearSendsEmptyActivity(t *testing.T) {
 		t.Fatalf("ClearPresence() error: %v", err)
 	}
 
-	// Clearing sends an empty activity rather than logging out, so the link
-	// stays usable for the next track.
 	if got := conn.activities[len(conn.activities)-1]; got.Details != "" || got.State != "" {
 		t.Errorf("clear sent %+v, want an empty activity", got)
 	}
@@ -197,8 +188,6 @@ func TestPresenceManagerDisconnectIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestPresenceManagerClosesLostConnection verifies a connection found dead
-// mid-update is closed (not leaked) and the next Connect dials afresh.
 func TestPresenceManagerClosesLostConnection(t *testing.T) {
 	conn := &fakeConn{}
 	pm := newFakeManager(conn)

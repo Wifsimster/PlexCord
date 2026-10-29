@@ -12,8 +12,6 @@ import (
 	"plexcord/internal/plex"
 )
 
-// blockingResolver returns a cover only after release is closed, so a test can
-// control exactly when a background artwork lookup lands.
 type blockingResolver struct {
 	url     string
 	release chan struct{}
@@ -31,8 +29,6 @@ func (r *blockingResolver) Resolve(ctx context.Context, _ artwork.Query) (string
 }
 
 func playingSession(track string) *plex.MediaSession {
-	// A distinct album per track, so an artwork lookup can be keyed on which
-	// track asked for it.
 	return &plex.MediaSession{
 		MediaType: plex.MediaTypeMusic,
 		Title:     track,
@@ -43,9 +39,6 @@ func playingSession(track string) *plex.MediaSession {
 	}
 }
 
-// TestDiscordServiceReconnectsBeforePublishing covers Discord restarting
-// mid-playback: the link is down when a session arrives, and the presence must
-// still go out once the silent reconnect succeeds.
 func TestDiscordServiceReconnectsBeforePublishing(t *testing.T) {
 	presence := &recordingPresence{connected: false}
 	app := newTestApp(config.DefaultConfig())
@@ -64,9 +57,6 @@ func TestDiscordServiceReconnectsBeforePublishing(t *testing.T) {
 	}
 }
 
-// TestDiscordServiceSkipsPublishWhenDiscordIsDown verifies a failed reconnect
-// is silent rather than an error storm: Discord simply not running is the
-// expected case on every poll.
 func TestDiscordServiceSkipsPublishWhenDiscordIsDown(t *testing.T) {
 	presence := &recordingPresence{connected: false, connectErr: errors.New("discord not running")}
 	app := newTestApp(config.DefaultConfig())
@@ -79,8 +69,6 @@ func TestDiscordServiceSkipsPublishWhenDiscordIsDown(t *testing.T) {
 	}
 }
 
-// TestDiscordServicePublishesUserDisplayOptions verifies the persisted
-// preferences reach Discord on the presence path.
 func TestDiscordServicePublishesUserDisplayOptions(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.PresenceDetailsFormat = "{track}"
@@ -105,9 +93,6 @@ func TestDiscordServicePublishesUserDisplayOptions(t *testing.T) {
 	}
 }
 
-// TestDiscordServiceLateArtworkReissuesPresence covers the happy path of the
-// background cover lookup: the presence goes out with the Plex logo, and is
-// re-issued once the real cover arrives.
 func TestDiscordServiceLateArtworkReissuesPresence(t *testing.T) {
 	resolver := &blockingResolver{url: "https://cdn/cover.jpg", release: make(chan struct{})}
 	presence := &recordingPresence{connected: true}
@@ -130,14 +115,7 @@ func TestDiscordServiceLateArtworkReissuesPresence(t *testing.T) {
 	}
 }
 
-// TestDiscordServiceDropsStaleArtwork is the generation guard: the track
-// changed while its cover was being looked up, so that cover belongs to a track
-// that is no longer playing and must not be published over the current one.
 func TestDiscordServiceDropsStaleArtwork(t *testing.T) {
-	// Only the superseded track's lookup blocks; the current track misses
-	// immediately, so any third presence update can only have come from the
-	// stale lookup. Keying on the album rather than on call order keeps the
-	// test deterministic when the two lookups race.
 	resolver := &albumBlockingResolver{
 		album:   "First Album",
 		url:     "https://cdn/old-cover.jpg",
@@ -165,9 +143,6 @@ func TestDiscordServiceDropsStaleArtwork(t *testing.T) {
 	}
 }
 
-// TestDiscordServiceDropsArtworkAfterClear covers playback stopping (or the
-// hide-when-paused timer firing) while a cover is being looked up: the cover
-// must not republish the presence that was just cleared.
 func TestDiscordServiceDropsArtworkAfterClear(t *testing.T) {
 	resolver := &blockingResolver{url: "https://cdn/cover.jpg", release: make(chan struct{})}
 	presence := &recordingPresence{connected: true}
@@ -187,8 +162,6 @@ func TestDiscordServiceDropsArtworkAfterClear(t *testing.T) {
 	}
 }
 
-// albumBlockingResolver blocks the lookup for one specific album until
-// released, and reports an immediate miss for every other album.
 type albumBlockingResolver struct {
 	album   string
 	url     string
@@ -209,8 +182,6 @@ func (r *albumBlockingResolver) Resolve(ctx context.Context, q artwork.Query) (s
 	}
 }
 
-// TestDiscordServiceSkipsArtworkWhileManuallyPaused verifies a cover arriving
-// after the user paused presence does not un-hide it.
 func TestDiscordServiceSkipsArtworkWhileManuallyPaused(t *testing.T) {
 	resolver := &blockingResolver{url: "https://cdn/cover.jpg", release: make(chan struct{})}
 	presence := &recordingPresence{connected: true}
@@ -218,7 +189,7 @@ func TestDiscordServiceSkipsArtworkWhileManuallyPaused(t *testing.T) {
 	app.discord = app.newDiscordService(presence, resolver)
 
 	app.discord.Publish(playingSession("Song"))
-	app.presence.Toggle() // user pauses presence
+	app.presence.Toggle()
 
 	close(resolver.release)
 	time.Sleep(80 * time.Millisecond)
@@ -228,11 +199,9 @@ func TestDiscordServiceSkipsArtworkWhileManuallyPaused(t *testing.T) {
 	}
 }
 
-// TestDiscordServiceNeverLooksUpArtworkWhenDisabled verifies the privacy
-// promise: with lookup off, the artist and album never leave the machine.
 func TestDiscordServiceNeverLooksUpArtworkWhenDisabled(t *testing.T) {
 	resolver := &blockingResolver{url: "https://cdn/cover.jpg", release: make(chan struct{})}
-	close(resolver.release) // would answer instantly if it were ever asked
+	close(resolver.release)
 
 	cfg := config.DefaultConfig()
 	disabled := false
@@ -250,8 +219,6 @@ func TestDiscordServiceNeverLooksUpArtworkWhenDisabled(t *testing.T) {
 	}
 }
 
-// TestDiscordServiceClearIsIdempotentWhenDisconnected verifies clearing a
-// presence on a closed link is a no-op rather than an error.
 func TestDiscordServiceClearIsIdempotentWhenDisconnected(t *testing.T) {
 	presence := &recordingPresence{connected: false}
 	app := newTestApp(config.DefaultConfig())
@@ -264,8 +231,6 @@ func TestDiscordServiceClearIsIdempotentWhenDisconnected(t *testing.T) {
 	}
 }
 
-// recordingResolver answers every lookup instantly and remembers what it was
-// asked for, so a test can assert which picture a session goes looking for.
 type recordingResolver struct {
 	url     string
 	queries []artwork.Query
@@ -281,8 +246,6 @@ func (r *recordingResolver) Resolve(_ context.Context, q artwork.Query) (string,
 	return r.url, nil
 }
 
-// TestDiscordServicePublishesAMovie verifies a film reaches Discord as a film:
-// the movie builder's fields, not a track's.
 func TestDiscordServicePublishesAMovie(t *testing.T) {
 	presence := &recordingPresence{connected: true}
 	app := newTestApp(config.DefaultConfig())
@@ -318,9 +281,6 @@ func TestDiscordServicePublishesAMovie(t *testing.T) {
 	}
 }
 
-// TestDiscordServicePublishesAnEpisode verifies an episode carries its show and
-// its season/episode numbers, and that the poster is looked up by show — the
-// episode's own title is in no poster database.
 func TestDiscordServicePublishesAnEpisode(t *testing.T) {
 	presence := &recordingPresence{connected: true}
 	app := newTestApp(config.DefaultConfig())
@@ -353,8 +313,6 @@ func TestDiscordServicePublishesAnEpisode(t *testing.T) {
 	}
 }
 
-// TestDiscordServiceOmitsAnUnknownYear verifies Plex's missing-year zero never
-// reaches Discord as the year zero.
 func TestDiscordServiceOmitsAnUnknownYear(t *testing.T) {
 	presence := &recordingPresence{connected: true}
 	app := newTestApp(config.DefaultConfig())

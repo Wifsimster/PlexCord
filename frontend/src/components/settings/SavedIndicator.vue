@@ -1,10 +1,4 @@
 <script setup>
-/**
- * Inline "✓ Saved" autosave indicator (spec §5.3 save model, motion M15).
- * Check scales 0→1 with the snap easing, the parent holds it visible for
- * ~1600ms, then it fades out over 240ms. Replaces toasts for routine saves
- * (F10/F36). Reduced motion: appears/disappears instantly (global policy).
- */
 defineProps({
     visible: { type: Boolean, default: false },
     label: { type: String, default: '' }
@@ -34,7 +28,6 @@ defineProps({
     font-size: 11px;
 }
 
-/* M15 — check scales 0→1 (snap, 180ms); fade-out 240ms */
 .pc-saved-enter-active {
     transition:
         transform 180ms var(--pc-ease-snap),

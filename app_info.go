@@ -15,37 +15,23 @@ import (
 	"plexcord/internal/version"
 )
 
-// ============================================================================
-// Error Information (Story 6.2)
-// ============================================================================
-
-// GetErrorInfo returns user-friendly error information for an error code.
-// This is used by the frontend to display actionable error messages.
 func (a *App) GetErrorInfo(code string) errors.ErrorInfo {
 	return errors.GetErrorInfo(code)
 }
 
-// IsRetryableError returns whether an error with the given code can be retried.
 func (a *App) IsRetryableError(code string) bool {
 	return errors.IsRetryable(code)
 }
 
-// IsAuthError returns whether the error indicates authentication is needed.
 func (a *App) IsAuthError(code string) bool {
 	return errors.IsAuthError(code)
 }
 
-// ============================================================================
-// Connection History (Story 6.8)
-// ============================================================================
-
-// ConnectionHistory contains timestamps for last successful connections.
 type ConnectionHistory struct {
 	PlexLastConnected    *time.Time `json:"plexLastConnected"`
 	DiscordLastConnected *time.Time `json:"discordLastConnected"`
 }
 
-// GetConnectionHistory returns the last successful connection timestamps.
 func (a *App) GetConnectionHistory() ConnectionHistory {
 	return ConnectionHistory{
 		PlexLastConnected:    a.config.PlexLastConnected,
@@ -53,25 +39,10 @@ func (a *App) GetConnectionHistory() ConnectionHistory {
 	}
 }
 
-// ============================================================================
-// Version & Updates (Epic 7)
-// ============================================================================
-
-// GetVersion returns the current application version information.
-// Version is set at build time via -ldflags.
-// Example: go build -ldflags "-X plexcord/internal/version.Version=v1.0.0"
 func (a *App) GetVersion() version.Info {
 	return version.GetInfo()
 }
 
-// CheckForUpdate checks GitHub releases for a newer version.
-// Returns update info including availability, latest version, and download URL.
-// A loading indicator should be shown during the check (typically 1-5 seconds).
-//
-// The check runs through the updater rather than straight at the version
-// package, so a manually-found update lands in the same state the automatic
-// checker feeds: it survives a page reload via GetUpdateStatus, it reaches the
-// system tray, and the background checker will not announce it a second time.
 func (a *App) CheckForUpdate() (*version.UpdateInfo, error) {
 	log.Printf("Checking for updates...")
 
@@ -95,8 +66,6 @@ func (a *App) CheckForUpdate() (*version.UpdateInfo, error) {
 	return info, nil
 }
 
-// OpenReleasesPage opens the GitHub releases page in the default browser.
-// Used for viewing changelog and downloading updates.
 func (a *App) OpenReleasesPage() error {
 	releaseURL := version.GetReleasesURL()
 	log.Printf("Opening releases page: %s", releaseURL)
@@ -104,19 +73,14 @@ func (a *App) OpenReleasesPage() error {
 	return nil
 }
 
-// OpenReleaseURL opens a specific release URL in the default browser.
-// Used when an update notification provides a direct link to the new release.
 func (a *App) OpenReleaseURL(releaseURL string) error {
 	if releaseURL == "" {
 		return a.OpenReleasesPage()
 	}
-	// Validate URL scheme and host to prevent opening arbitrary/malicious URLs
 	parsed, err := url.Parse(releaseURL)
 	if err != nil || parsed.Scheme != "https" {
 		return errors.New(errors.CONFIG_READ_FAILED, "invalid release URL")
 	}
-	// Exact host or a true subdomain: a bare suffix check would also accept
-	// look-alikes such as evilgithub.com.
 	if host := parsed.Hostname(); host != "github.com" && !strings.HasSuffix(host, ".github.com") {
 		return errors.New(errors.CONFIG_READ_FAILED, "release URL must be from github.com")
 	}
@@ -125,23 +89,10 @@ func (a *App) OpenReleaseURL(releaseURL string) error {
 	return nil
 }
 
-// CanSelfUpdate reports whether the running platform supports applying updates
-// in place (Windows and Linux). macOS ships as a .dmg app bundle and must be
-// updated manually, so the frontend should fall back to the download link.
 func (a *App) CanSelfUpdate() bool {
 	return version.CanSelfUpdate()
 }
 
-// DownloadAndInstallUpdate downloads the latest release for the current
-// platform, verifies its checksum, and replaces the running executable.
-// It shares the updater's single download path with the automatic background
-// checker, so concurrent downloads are impossible. Download progress is
-// streamed to the frontend via the UpdateDownloadProgress event; on
-// completion an UpdateReady event carries the new version and on failure an
-// UpdateError event carries a message.
-//
-// The application must be restarted for the update to take effect — the
-// frontend is responsible for prompting the user to do so.
 func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 	if !version.CanSelfUpdate() {
 		a.bus.Emit(events.UpdateError, version.ErrUpdateNotSupported.Error())
@@ -155,9 +106,6 @@ func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 
 	info, err := a.updater.StartDownload(a.ctx, false)
 	if err != nil {
-		// A background (or concurrent) download already owns the lock. That is
-		// not a failure — the in-flight download's progress/ready events drive
-		// the UI — so report the current state instead of an error toast.
 		if stderrors.Is(err, updater.ErrDownloadInProgress) {
 			log.Printf("Update download already in progress; joining it")
 			return a.updater.GetStatus().Info, nil
@@ -168,30 +116,17 @@ func (a *App) DownloadAndInstallUpdate() (*version.UpdateInfo, error) {
 	return info, nil
 }
 
-// RestartApplication relaunches the application so a freshly installed update
-// takes effect. It spawns the (now-updated) executable and quits the current
-// process.
 func (a *App) RestartApplication() error {
 	if err := a.relauncher.Relaunch(); err != nil {
 		return err
 	}
 
 	log.Printf("Relaunching application to apply update")
-	// Mark this as an explicit quit so beforeClose does not intercept the quit
-	// and merely hide the window when "Minimize to tray" is enabled. Without
-	// this flag the old process would linger in the tray running the previous
-	// version, the single-instance lock would never be released, and the update
-	// would never take effect. Mirrors QuitApp.
 	a.windows.MarkQuitting()
 	a.desktop.Quit(a.ctx)
 	return nil
 }
 
-// ============================================================================
-// Resource Monitoring (Story 6.9)
-// ============================================================================
-
-// ResourceStats contains runtime statistics for monitoring long-running stability.
 type ResourceStats struct {
 	Timestamp      string  `json:"timestamp"`
 	MemoryAllocMB  float64 `json:"memoryAllocMB"`
@@ -199,9 +134,6 @@ type ResourceStats struct {
 	GoroutineCount int     `json:"goroutineCount"`
 }
 
-// GetResourceStats returns current resource usage statistics.
-// This is useful for debugging memory leaks and verifying long-running stability.
-// Primarily used for development and troubleshooting - not displayed to users normally.
 func (a *App) GetResourceStats() ResourceStats {
 	var m goruntime.MemStats
 	goruntime.ReadMemStats(&m)
@@ -214,12 +146,6 @@ func (a *App) GetResourceStats() ResourceStats {
 	}
 }
 
-// ============================================================================
-// Listening History
-// ============================================================================
-
-// GetListeningHistory returns the most recent listening history entries.
-// Pass limit=0 or negative to get all entries (up to max stored).
 func (a *App) GetListeningHistory(limit int) []history.Entry {
 	if a.history == nil {
 		return nil
@@ -227,7 +153,6 @@ func (a *App) GetListeningHistory(limit int) []history.Entry {
 	return a.history.GetRecent(limit)
 }
 
-// GetListeningStats returns aggregate listening statistics.
 func (a *App) GetListeningStats() history.Stats {
 	if a.history == nil {
 		return history.Stats{}
@@ -235,7 +160,6 @@ func (a *App) GetListeningStats() history.Stats {
 	return a.history.GetStats()
 }
 
-// ClearListeningHistory removes all listening history entries.
 func (a *App) ClearListeningHistory() {
 	if a.history == nil {
 		return

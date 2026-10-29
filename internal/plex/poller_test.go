@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// TestNewPollerDefaults tests default poller creation
 func TestNewPollerDefaults(t *testing.T) {
 	client := NewClient("token", "http://localhost:32400")
 	poller := NewPoller(client, "user1", 5*time.Second)
@@ -35,30 +34,25 @@ func TestNewPollerDefaults(t *testing.T) {
 	}
 }
 
-// TestNewPollerIntervalBounds tests interval clamping (AC3)
 func TestNewPollerIntervalBounds(t *testing.T) {
 	client := NewClient("token", "http://localhost:32400")
 
-	// Test minimum bound (< 1s should become 1s)
 	pollerMin := NewPoller(client, "user1", 100*time.Millisecond)
 	if pollerMin.interval != time.Second {
 		t.Errorf("Expected minimum interval 1s, got %v", pollerMin.interval)
 	}
 
-	// Test maximum bound (> 60s should become 60s)
 	pollerMax := NewPoller(client, "user1", 120*time.Second)
 	if pollerMax.interval != 60*time.Second {
 		t.Errorf("Expected maximum interval 60s, got %v", pollerMax.interval)
 	}
 
-	// Test valid interval passes through
 	pollerValid := NewPoller(client, "user1", 10*time.Second)
 	if pollerValid.interval != 10*time.Second {
 		t.Errorf("Expected interval 10s, got %v", pollerValid.interval)
 	}
 }
 
-// TestPollerStartStop tests basic start/stop lifecycle (AC8)
 func TestPollerStartStop(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -71,12 +65,10 @@ func TestPollerStartStop(t *testing.T) {
 	client := NewClient("token", server.URL)
 	poller := NewPoller(client, "user1", time.Second)
 
-	// Initially not running
 	if poller.IsRunning() {
 		t.Error("Poller should not be running before Start")
 	}
 
-	// Start poller
 	ctx := context.Background()
 	sessionCh := poller.Start(ctx)
 
@@ -84,23 +76,19 @@ func TestPollerStartStop(t *testing.T) {
 		t.Error("Start should return a channel")
 	}
 
-	// Should be running now
-	time.Sleep(50 * time.Millisecond) // Give goroutine time to start
+	time.Sleep(50 * time.Millisecond)
 	if !poller.IsRunning() {
 		t.Error("Poller should be running after Start")
 	}
 
-	// Stop poller
 	poller.Stop()
 
-	// Give goroutine time to stop
 	time.Sleep(50 * time.Millisecond)
 	if poller.IsRunning() {
 		t.Error("Poller should not be running after Stop")
 	}
 }
 
-// TestPollerStopMultipleTimes tests that Stop can be called multiple times safely
 func TestPollerStopMultipleTimes(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -116,13 +104,11 @@ func TestPollerStopMultipleTimes(t *testing.T) {
 	ctx := context.Background()
 	poller.Start(ctx)
 
-	// Stop multiple times - should not panic
 	poller.Stop()
 	poller.Stop()
 	poller.Stop()
 }
 
-// TestPollerEmitsSessionOnStart tests immediate first poll (AC8)
 func TestPollerEmitsSessionOnStart(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -147,7 +133,6 @@ func TestPollerEmitsSessionOnStart(t *testing.T) {
 	sessionCh := poller.Start(ctx)
 	defer poller.Stop()
 
-	// Should receive session from immediate first poll
 	select {
 	case session := <-sessionCh:
 		if session == nil {
@@ -165,7 +150,6 @@ func TestPollerEmitsSessionOnStart(t *testing.T) {
 	}
 }
 
-// TestPollerPollsAtInterval tests that polling occurs at configured interval
 func TestPollerPollsAtInterval(t *testing.T) {
 	var pollCount int32
 
@@ -179,35 +163,29 @@ func TestPollerPollsAtInterval(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient("token", server.URL)
-	// Use short interval for testing
 	poller := NewPoller(client, "user1", time.Second)
 
 	ctx := context.Background()
 	poller.Start(ctx)
 
-	// Wait for multiple poll cycles
 	time.Sleep(2500 * time.Millisecond)
 	poller.Stop()
 
-	// Should have polled at least 2-3 times (initial + interval polls)
 	count := atomic.LoadInt32(&pollCount)
 	if count < 2 {
 		t.Errorf("Expected at least 2 polls, got %d", count)
 	}
 }
 
-// TestPollerSetInterval tests dynamic interval changes (AC3)
 func TestPollerSetInterval(t *testing.T) {
 	client := NewClient("token", "http://localhost:32400")
 	poller := NewPoller(client, "user1", 5*time.Second)
 
-	// Set new interval
 	poller.SetInterval(10 * time.Second)
 	if poller.GetInterval() != 10*time.Second {
 		t.Errorf("Expected interval 10s, got %v", poller.GetInterval())
 	}
 
-	// Test clamping on SetInterval
 	poller.SetInterval(500 * time.Millisecond)
 	if poller.GetInterval() != time.Second {
 		t.Errorf("Expected minimum interval 1s, got %v", poller.GetInterval())
@@ -219,7 +197,6 @@ func TestPollerSetInterval(t *testing.T) {
 	}
 }
 
-// TestPollerContinuesOnError tests error handling (AC4)
 func TestPollerContinuesOnError(t *testing.T) {
 	var pollCount int32
 	var errorCount int32
@@ -227,7 +204,6 @@ func TestPollerContinuesOnError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := atomic.AddInt32(&pollCount, 1)
 		if count%2 == 0 {
-			// Every other request fails
 			atomic.AddInt32(&errorCount, 1)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -245,11 +221,9 @@ func TestPollerContinuesOnError(t *testing.T) {
 	ctx := context.Background()
 	poller.Start(ctx)
 
-	// Wait for multiple polls including errors
 	time.Sleep(3500 * time.Millisecond)
 	poller.Stop()
 
-	// Should have continued polling despite errors
 	totalPolls := atomic.LoadInt32(&pollCount)
 	errors := atomic.LoadInt32(&errorCount)
 
@@ -262,7 +236,6 @@ func TestPollerContinuesOnError(t *testing.T) {
 	}
 }
 
-// TestPollerContextCancellation tests that poller stops on context cancel
 func TestPollerContextCancellation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -278,25 +251,20 @@ func TestPollerContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	poller.Start(ctx)
 
-	// Verify running
 	time.Sleep(50 * time.Millisecond)
 	if !poller.IsRunning() {
 		t.Error("Poller should be running")
 	}
 
-	// Cancel context
 	cancel()
 
-	// Give time for goroutine to stop
 	time.Sleep(100 * time.Millisecond)
 
-	// Poller should now report not running (fixed: running state sync)
 	if poller.IsRunning() {
 		t.Error("Poller should not be running after context cancellation")
 	}
 }
 
-// TestPollerChannelClosedOnStop tests that session channel is closed when poller stops
 func TestPollerChannelClosedOnStop(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -312,26 +280,19 @@ func TestPollerChannelClosedOnStop(t *testing.T) {
 	ctx := context.Background()
 	sessionCh := poller.Start(ctx)
 
-	// Verify running
 	time.Sleep(50 * time.Millisecond)
 
-	// Stop poller
 	poller.Stop()
 
-	// Give time for cleanup
 	time.Sleep(100 * time.Millisecond)
 
-	// Channel should be closed - reading should return immediately with zero value
 	select {
 	case <-sessionCh:
-		// Channel closed or got a value - both are acceptable
-		// Channel closed is expected
 	case <-time.After(500 * time.Millisecond):
 		t.Error("Channel should be closed after stop, but read blocked")
 	}
 }
 
-// TestPollerRestart tests that poller can be restarted after stopping (AC8)
 func TestPollerRestart(t *testing.T) {
 	var pollCount int32
 
@@ -347,7 +308,6 @@ func TestPollerRestart(t *testing.T) {
 	client := NewClient("token", server.URL)
 	poller := NewPoller(client, "user1", time.Second)
 
-	// First start/stop cycle
 	ctx1 := context.Background()
 	poller.Start(ctx1)
 	time.Sleep(100 * time.Millisecond)
@@ -358,8 +318,7 @@ func TestPollerRestart(t *testing.T) {
 		t.Error("Expected at least 1 poll in first cycle")
 	}
 
-	// Second start/stop cycle
-	time.Sleep(50 * time.Millisecond) // Brief pause between cycles
+	time.Sleep(50 * time.Millisecond)
 
 	ctx2 := context.Background()
 	poller.Start(ctx2)
@@ -372,7 +331,6 @@ func TestPollerRestart(t *testing.T) {
 	}
 }
 
-// TestPollerFiltersUser tests that only the specified user's sessions are returned
 func TestPollerFiltersUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -392,7 +350,6 @@ func TestPollerFiltersUser(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient("token", server.URL)
-	// Poll for user2 only
 	poller := NewPoller(client, "user2", 5*time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -418,7 +375,6 @@ func TestPollerFiltersUser(t *testing.T) {
 	}
 }
 
-// TestSessionChangedLogic tests the sessionChanged helper function
 func TestSessionChangedLogic(t *testing.T) {
 	session1 := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
@@ -441,14 +397,14 @@ func TestSessionChangedLogic(t *testing.T) {
 	session1DiffArtist := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
 		Track:   "Song1",
-		Artist:  "Artist2", // Different artist (metadata refresh)
+		Artist:  "Artist2",
 		Album:   "Album1",
 	}
 	session1DiffAlbum := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
 		Track:   "Song1",
 		Artist:  "Artist1",
-		Album:   "Album2", // Different album (metadata refresh)
+		Album:   "Album2",
 	}
 	session2 := &MusicSession{
 		Session: Session{SessionKey: "key2", State: "playing"},
@@ -483,7 +439,6 @@ func TestSessionChangedLogic(t *testing.T) {
 	}
 }
 
-// TestSessionChangedPlayToPause tests play→pause state transition detection (AC2)
 func TestSessionChangedPlayToPause(t *testing.T) {
 	playing := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
@@ -498,12 +453,10 @@ func TestSessionChangedPlayToPause(t *testing.T) {
 		Album:   "Album1",
 	}
 
-	// Play → Pause should be detected
 	if !sessionChanged(playing, paused) {
 		t.Error("Expected play→pause transition to be detected")
 	}
 
-	// Verify the state values are correct
 	if playing.State != "playing" {
 		t.Errorf("Expected playing state 'playing', got '%s'", playing.State)
 	}
@@ -512,7 +465,6 @@ func TestSessionChangedPlayToPause(t *testing.T) {
 	}
 }
 
-// TestSessionChangedPauseToPlay tests pause→play (resume) transition detection (AC7)
 func TestSessionChangedPauseToPlay(t *testing.T) {
 	paused := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "paused"},
@@ -527,13 +479,11 @@ func TestSessionChangedPauseToPlay(t *testing.T) {
 		Album:   "Album1",
 	}
 
-	// Pause → Play (resume) should be detected
 	if !sessionChanged(paused, playing) {
 		t.Error("Expected pause→play (resume) transition to be detected")
 	}
 }
 
-// TestSessionChangedPlayToStopped tests play→stopped (nil session) detection (AC3)
 func TestSessionChangedPlayToStopped(t *testing.T) {
 	playing := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
@@ -542,18 +492,15 @@ func TestSessionChangedPlayToStopped(t *testing.T) {
 		Album:   "Album1",
 	}
 
-	// Playing → nil (stopped) should be detected
 	if !sessionChanged(playing, nil) {
 		t.Error("Expected play→stopped (nil) transition to be detected")
 	}
 
-	// nil → nil should NOT be detected as a change
 	if sessionChanged(nil, nil) {
 		t.Error("Expected nil→nil to NOT be detected as a change")
 	}
 }
 
-// TestSessionChangedSameSessionDifferentState tests state changes within same session key
 func TestSessionChangedSameSessionDifferentState(t *testing.T) {
 	sessionKey := "same-session-123"
 
@@ -569,7 +516,6 @@ func TestSessionChangedSameSessionDifferentState(t *testing.T) {
 		}
 
 		if i > 0 && states[i] != states[i-1] {
-			// State changed, should be detected
 			if !sessionChanged(prev, curr) {
 				t.Errorf("State change from '%s' to '%s' should be detected", prev.State, curr.State)
 			}
@@ -579,7 +525,6 @@ func TestSessionChangedSameSessionDifferentState(t *testing.T) {
 	}
 }
 
-// TestSessionChangedTrackTitleChange tests track title change detection (AC4)
 func TestSessionChangedTrackTitleChange(t *testing.T) {
 	song1 := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
@@ -589,18 +534,16 @@ func TestSessionChangedTrackTitleChange(t *testing.T) {
 	}
 	song2 := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
-		Track:   "Second Song", // Different track title
+		Track:   "Second Song",
 		Artist:  "Artist1",
 		Album:   "Album1",
 	}
 
-	// Track title change should be detected
 	if !sessionChanged(song1, song2) {
 		t.Error("Expected track title change to be detected")
 	}
 }
 
-// TestSessionChangedArtistChange tests artist change detection (AC4)
 func TestSessionChangedArtistChange(t *testing.T) {
 	song1 := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
@@ -611,17 +554,15 @@ func TestSessionChangedArtistChange(t *testing.T) {
 	song2 := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
 		Track:   "Same Song",
-		Artist:  "Second Artist", // Different artist
+		Artist:  "Second Artist",
 		Album:   "Album1",
 	}
 
-	// Artist change should be detected
 	if !sessionChanged(song1, song2) {
 		t.Error("Expected artist change to be detected")
 	}
 }
 
-// TestSessionChangedAlbumChange tests album change detection (AC4)
 func TestSessionChangedAlbumChange(t *testing.T) {
 	song1 := &MusicSession{
 		Session: Session{SessionKey: "key1", State: "playing"},
@@ -633,63 +574,56 @@ func TestSessionChangedAlbumChange(t *testing.T) {
 		Session: Session{SessionKey: "key1", State: "playing"},
 		Track:   "Same Song",
 		Artist:  "Artist1",
-		Album:   "Second Album", // Different album
+		Album:   "Second Album",
 	}
 
-	// Album change should be detected
 	if !sessionChanged(song1, song2) {
 		t.Error("Expected album change to be detected")
 	}
 }
 
-// TestSessionChangedViewOffsetOnly tests that viewOffset change alone does NOT trigger change
-// This is expected behavior - we don't want to emit events for every second of playback
 func TestSessionChangedViewOffsetOnly(t *testing.T) {
 	session1 := &MusicSession{
 		Session:    Session{SessionKey: "key1", State: "playing"},
 		Track:      "Song1",
 		Artist:     "Artist1",
 		Album:      "Album1",
-		ViewOffset: 10000, // 10 seconds
+		ViewOffset: 10000,
 	}
 	session2 := &MusicSession{
 		Session:    Session{SessionKey: "key1", State: "playing"},
 		Track:      "Song1",
 		Artist:     "Artist1",
 		Album:      "Album1",
-		ViewOffset: 15000, // 15 seconds - only viewOffset changed
+		ViewOffset: 15000,
 	}
 
-	// ViewOffset-only change should NOT be detected (to avoid excessive events)
 	if sessionChanged(session1, session2) {
 		t.Error("Expected viewOffset-only change to NOT be detected (would cause excessive events)")
 	}
 }
 
-// TestSessionChangedDurationOnly tests that duration change alone does NOT trigger change
 func TestSessionChangedDurationOnly(t *testing.T) {
 	session1 := &MusicSession{
 		Session:  Session{SessionKey: "key1", State: "playing"},
 		Track:    "Song1",
 		Artist:   "Artist1",
 		Album:    "Album1",
-		Duration: 180000, // 3 minutes
+		Duration: 180000,
 	}
 	session2 := &MusicSession{
 		Session:  Session{SessionKey: "key1", State: "playing"},
 		Track:    "Song1",
 		Artist:   "Artist1",
 		Album:    "Album1",
-		Duration: 185000, // 3:05 - only duration changed (rare edge case)
+		Duration: 185000,
 	}
 
-	// Duration-only change should NOT be detected
 	if sessionChanged(session1, session2) {
 		t.Error("Expected duration-only change to NOT be detected")
 	}
 }
 
-// TestStateFieldParsedFromPlexAPI tests that state field is correctly parsed from Plex response
 func TestStateFieldParsedFromPlexAPI(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -746,8 +680,6 @@ func TestStateFieldParsedFromPlexAPI(t *testing.T) {
 	}
 }
 
-// TestPollerEmitsOnStateChange tests that poller emits session when state changes (AC1, AC2)
-// This verifies the channel behavior that triggers PlaybackUpdated events
 func TestPollerEmitsOnStateChange(t *testing.T) {
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -755,8 +687,6 @@ func TestPollerEmitsOnStateChange(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 
-		// First request: playing state
-		// Second request: paused state (state change should trigger emission)
 		state := "playing"
 		if requestCount >= 2 {
 			state = "paused"
@@ -781,7 +711,6 @@ func TestPollerEmitsOnStateChange(t *testing.T) {
 	sessionCh := poller.Start(ctx)
 	defer poller.Stop()
 
-	// First emission: playing state
 	select {
 	case session := <-sessionCh:
 		if session == nil {
@@ -793,7 +722,6 @@ func TestPollerEmitsOnStateChange(t *testing.T) {
 		t.Error("Timeout waiting for playing session")
 	}
 
-	// Second emission: paused state (after interval)
 	select {
 	case session := <-sessionCh:
 		if session == nil {
@@ -806,8 +734,6 @@ func TestPollerEmitsOnStateChange(t *testing.T) {
 	}
 }
 
-// TestPollerEmitsOnTrackChange tests that poller emits session when track changes (AC4)
-// This verifies the channel behavior that triggers PlaybackUpdated events on track change
 func TestPollerEmitsOnTrackChange(t *testing.T) {
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -815,8 +741,6 @@ func TestPollerEmitsOnTrackChange(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 
-		// First request: Song1
-		// Second request: Song2 (track change should trigger emission)
 		track := "Song1"
 		if requestCount >= 2 {
 			track = "Song2"
@@ -841,7 +765,6 @@ func TestPollerEmitsOnTrackChange(t *testing.T) {
 	sessionCh := poller.Start(ctx)
 	defer poller.Stop()
 
-	// First emission: Song1
 	select {
 	case session := <-sessionCh:
 		if session == nil || session.Track != "Song1" {
@@ -851,7 +774,6 @@ func TestPollerEmitsOnTrackChange(t *testing.T) {
 		t.Error("Timeout waiting for first track")
 	}
 
-	// Second emission: Song2 (track change)
 	select {
 	case session := <-sessionCh:
 		if session == nil {
@@ -864,8 +786,6 @@ func TestPollerEmitsOnTrackChange(t *testing.T) {
 	}
 }
 
-// TestPollerEmitsNilOnSessionEnd tests that poller emits nil when session ends (AC3)
-// This verifies the channel behavior that triggers PlaybackStopped events
 func TestPollerEmitsNilOnSessionEnd(t *testing.T) {
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -873,8 +793,6 @@ func TestPollerEmitsNilOnSessionEnd(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 
-		// First request: active session
-		// Second request: no session (ended)
 		if requestCount == 1 {
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <MediaContainer size="1">
@@ -899,7 +817,6 @@ func TestPollerEmitsNilOnSessionEnd(t *testing.T) {
 	sessionCh := poller.Start(ctx)
 	defer poller.Stop()
 
-	// First emission: active session
 	select {
 	case session := <-sessionCh:
 		if session == nil {
@@ -909,7 +826,6 @@ func TestPollerEmitsNilOnSessionEnd(t *testing.T) {
 		t.Error("Timeout waiting for active session")
 	}
 
-	// Second emission: nil (session ended - triggers PlaybackStopped)
 	select {
 	case session := <-sessionCh:
 		if session != nil {
@@ -920,7 +836,6 @@ func TestPollerEmitsNilOnSessionEnd(t *testing.T) {
 	}
 }
 
-// TestPollerNilOnNoSession tests that nil is emitted when no session exists
 func TestPollerNilOnNoSession(t *testing.T) {
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -928,7 +843,6 @@ func TestPollerNilOnNoSession(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 
-		// First request returns a session, second returns empty
 		if requestCount == 1 {
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <MediaContainer size="1">
@@ -953,7 +867,6 @@ func TestPollerNilOnNoSession(t *testing.T) {
 	sessionCh := poller.Start(ctx)
 	defer poller.Stop()
 
-	// First should be a session
 	select {
 	case session := <-sessionCh:
 		if session == nil {
@@ -963,7 +876,6 @@ func TestPollerNilOnNoSession(t *testing.T) {
 		t.Error("Timeout waiting for first session")
 	}
 
-	// Wait for second poll cycle which should return nil (no session)
 	select {
 	case session := <-sessionCh:
 		if session != nil {

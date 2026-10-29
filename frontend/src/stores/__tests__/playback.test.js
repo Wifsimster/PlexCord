@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
-// Mock Wails runtime
 vi.mock('../../../wailsjs/runtime/runtime', () => ({
   EventsOn: vi.fn(),
   EventsOff: vi.fn()
 }))
 
-// Mock backend calls
 vi.mock('../../../wailsjs/go/main/App', () => ({
   GetCurrentSession: vi.fn().mockResolvedValue(null)
 }))
@@ -179,7 +177,7 @@ describe('playback store', () => {
         await store.initializeEventListeners()
         await store.initializeEventListeners()
 
-        expect(EventsOn).toHaveBeenCalledTimes(2) // not 4
+        expect(EventsOn).toHaveBeenCalledTimes(2)
       })
 
       it('restores current session from backend', async () => {
@@ -270,7 +268,6 @@ describe('playback store', () => {
           episode: 2,
           year: 2022
         })
-        // `track` mirrors the title so every existing consumer keeps working.
         expect(store.currentTrack.track).toBe('Good News')
       })
 

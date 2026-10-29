@@ -6,8 +6,6 @@ import (
 	"plexcord/internal/config"
 )
 
-// TestOpenReleaseURLAcceptsOnlyGitHub verifies the host check is exact: a
-// look-alike domain that merely ends in "github.com" must not be opened.
 func TestOpenReleaseURLAcceptsOnlyGitHub(t *testing.T) {
 	cases := []struct {
 		url  string

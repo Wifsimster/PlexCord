@@ -7,12 +7,8 @@ import (
 	"net/http"
 )
 
-// maxBodyBytes caps how much of an API response we read into memory.
-const maxBodyBytes = 1 << 20 // 1 MiB
+const maxBodyBytes = 1 << 20
 
-// getJSON performs a GET and decodes a JSON body into out. It returns false on
-// any transport, status, or decode failure — artwork lookup is best-effort and
-// must never surface an error into the presence path.
 func (r *Resolver) getJSON(ctx context.Context, endpoint string, out any) bool {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -37,8 +33,6 @@ func (r *Resolver) getJSON(ctx context.Context, endpoint string, out any) bool {
 	return json.Unmarshal(body, out) == nil
 }
 
-// exists reports whether u resolves to a fetchable resource (following
-// redirects), used to confirm a Cover Art Archive image is present.
 func (r *Resolver) exists(ctx context.Context, u string) bool {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u, nil)
 	if err != nil {
@@ -54,8 +48,6 @@ func (r *Resolver) exists(ctx context.Context, u string) bool {
 	return resp.StatusCode >= 200 && resp.StatusCode < 400
 }
 
-// closeBody closes a response body best-effort. A close error on a read-only
-// GET/HEAD is not actionable; it is handled here so the linters see it checked.
 func closeBody(rc io.Closer) {
 	if err := rc.Close(); err != nil {
 		_ = err

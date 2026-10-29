@@ -1,28 +1,7 @@
 #!/usr/bin/env bash
-#
-# File: .claude/hooks/configure-rdp-mode.sh
-#
-# AgentVibes - RDP Mode Configuration
-# Website: https://agentvibes.org
-# Repository: https://github.com/paulpreibisch/AgentVibes
-#
-# Co-created by Paul Preibisch with Claude AI
-# Copyright (c) 2025 Paul Preibisch
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-#
-# ---
-#
-# @fileoverview Configure RDP mode for optimized audio over remote desktop
-# @context Reduces audio bandwidth for choppy RDP audio connections
-# @architecture Sets environment variable in shell profile for RDP audio optimization
-# @entrypoints Called by /agent-vibes:rdp slash command
-#
 
 set -euo pipefail
 
-# Fix locale warnings
 export LC_ALL=C
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,7 +10,6 @@ mkdir -p "$CONFIG_DIR"
 
 RDP_CONFIG="$CONFIG_DIR/rdp-mode.txt"
 
-# Detect shell profile
 SHELL_PROFILE=""
 if [[ -f "$HOME/.bashrc" ]]; then
     SHELL_PROFILE="$HOME/.bashrc"
@@ -64,7 +42,6 @@ show_status() {
 enable_rdp_mode() {
     echo "true" > "$RDP_CONFIG"
 
-    # Add to shell profile if not already present
     if [[ -n "$SHELL_PROFILE" ]]; then
         if ! grep -q "AGENTVIBES_RDP_MODE" "$SHELL_PROFILE" 2>/dev/null; then
             echo "" >> "$SHELL_PROFILE"
@@ -93,10 +70,8 @@ enable_rdp_mode() {
 disable_rdp_mode() {
     echo "false" > "$RDP_CONFIG"
 
-    # Remove from shell profile if present
     if [[ -n "$SHELL_PROFILE" ]] && [[ -f "$SHELL_PROFILE" ]]; then
         if grep -q "AGENTVIBES_RDP_MODE" "$SHELL_PROFILE" 2>/dev/null; then
-            # Remove the export line and surrounding AgentVibes RDP comments
             sed -i '/# AgentVibes RDP Mode/d' "$SHELL_PROFILE"
             sed -i '/AGENTVIBES_RDP_MODE/d' "$SHELL_PROFILE"
 
@@ -113,7 +88,6 @@ disable_rdp_mode() {
     fi
 }
 
-# Main command handling
 COMMAND="${1:-status}"
 
 case "$COMMAND" in

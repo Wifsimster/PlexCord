@@ -2,9 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ref, nextTick } from 'vue';
 import { mount, flushPromises } from '@vue/test-utils';
 
-// The theme moved out of the topbar into Settings → App. Settings pulls in the
-// whole Wails bridge, PrimeVue and the stores, so everything outside the theme
-// select is mocked away — these tests only exercise that control's wiring.
 const setDarkMode = vi.fn();
 const isDarkTheme = ref(true);
 
@@ -13,8 +10,6 @@ vi.mock('@/layout/composables/layout', () => ({
 }));
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
-// Partial: the real createI18n still has to build the app-wide instance that
-// @/i18n (pulled in through the utils) creates at import time.
 vi.mock('vue-i18n', async (importOriginal) => ({
     ...(await importOriginal()),
     useI18n: () => ({ t: (key) => key, locale: ref('en') })
@@ -38,7 +33,6 @@ vi.mock('@/stores/presence', () => ({ usePresenceStore: () => ({ paused: false }
 vi.mock('@/stores/updates', () => ({
     useUpdatesStore: () => ({ initialize: vi.fn(), updateReady: false, installing: false, showUpdatePanel: false, progress: 0, info: null, canSelfUpdate: true })
 }));
-// storeToRefs expects a real Pinia store; the mocks above are plain objects.
 vi.mock('pinia', async (importOriginal) => ({
     ...(await importOriginal()),
     storeToRefs: (store) => Object.fromEntries(Object.entries(store).map(([key, value]) => [key, ref(value)]))
@@ -84,7 +78,6 @@ vi.mock('../../../../wailsjs/go/main/App', () => ({
 
 const Settings = (await import('@/views/pages/Settings.vue')).default;
 
-// The scroll-spy observer is set up on mount; jsdom has no IntersectionObserver.
 class NoopObserver {
     observe() {}
     disconnect() {}

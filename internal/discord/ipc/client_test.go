@@ -8,9 +8,6 @@ import (
 	"time"
 )
 
-// fakeDiscord runs an in-process Discord IPC server on one end of a net.Pipe.
-// handle receives each decoded command frame and returns the (opcode, payload)
-// to reply with. Returning a nil payload replies with an empty SET_ACTIVITY ack.
 type fakeDiscord struct {
 	server net.Conn
 	client net.Conn
@@ -44,7 +41,6 @@ func newFakeDiscord(t *testing.T, handle func(op opcode, payload []byte) (opcode
 	return f
 }
 
-// newClient wires a Client to the fake server's pipe end.
 func (f *fakeDiscord) newClient() *Client {
 	return &Client{dial: func() (net.Conn, error) { return f.client, nil }}
 }
@@ -64,7 +60,7 @@ func TestClient_LoginHandshakeAndSetActivity(t *testing.T) {
 			return opFrame, readyFrame()
 		default:
 			_ = json.Unmarshal(payload, &gotFrame)
-			return opFrame, nil // default ack
+			return opFrame, nil
 		}
 	})
 
@@ -131,7 +127,6 @@ func TestClient_SetActivity_SurfacesErrorEvt(t *testing.T) {
 
 func TestClient_Login_SurfacesCloseFrame(t *testing.T) {
 	f := newFakeDiscord(t, func(op opcode, payload []byte) (opcode, []byte) {
-		// Reject the handshake with a CLOSE frame (e.g. invalid client id).
 		return opClose, []byte(`{"code":4000,"message":"Invalid Client ID"}`)
 	})
 
@@ -164,8 +159,6 @@ func TestClient_Close_Idempotent(t *testing.T) {
 }
 
 func TestClient_ReadResponse_HonorsDeadline(t *testing.T) {
-	// A server that never replies must not hang readResponse forever: the
-	// read deadline turns a silent socket into an error the caller can handle.
 	server, client := net.Pipe()
 	t.Cleanup(func() { _ = server.Close(); _ = client.Close() })
 
@@ -176,8 +169,6 @@ func TestClient_ReadResponse_HonorsDeadline(t *testing.T) {
 }
 
 func TestClient_SetActivity_ZeroActivitySendsNull(t *testing.T) {
-	// Discord only clears the presence for a null activity; an empty object
-	// renders as a bare "Playing <app>".
 	var raw map[string]json.RawMessage
 	f := newFakeDiscord(t, func(op opcode, payload []byte) (opcode, []byte) {
 		if op == opHandshake {

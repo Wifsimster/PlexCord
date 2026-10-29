@@ -1,5 +1,3 @@
-// Package version provides build-time version information for PlexCord.
-// Version is injected at build time using -ldflags.
 package version
 
 import (
@@ -12,27 +10,20 @@ import (
 	"time"
 )
 
-// Build-time variables - set via -ldflags
-// Example: go build -ldflags "-X plexcord/internal/version.Version=v1.0.0 -X plexcord/internal/version.Commit=abc123 -X plexcord/internal/version.BuildDate=2024-01-15"
 var (
-	// Version is the semantic version (e.g., "v1.0.0")
 	Version = "v0.0.0-dev"
 
-	// Commit is the git commit hash
 	Commit = "unknown"
 
-	// BuildDate is the build timestamp
 	BuildDate = "unknown"
 )
 
-// Info contains version information for the application.
 type Info struct {
 	Version   string `json:"version"`
 	Commit    string `json:"commit"`
 	BuildDate string `json:"buildDate"`
 }
 
-// GetInfo returns the current version information.
 func GetInfo() Info {
 	return Info{
 		Version:   Version,
@@ -41,7 +32,6 @@ func GetInfo() Info {
 	}
 }
 
-// GitHubRelease represents a release from GitHub's API.
 type GitHubRelease struct {
 	PublishedAt time.Time      `json:"published_at"`
 	TagName     string         `json:"tag_name"`
@@ -53,14 +43,12 @@ type GitHubRelease struct {
 	Prerelease  bool           `json:"prerelease"`
 }
 
-// ReleaseAsset represents a single downloadable file attached to a release.
 type ReleaseAsset struct {
 	Name               string `json:"name"`
 	BrowserDownloadURL string `json:"browser_download_url"`
 	Size               int64  `json:"size"`
 }
 
-// UpdateInfo contains information about an available update.
 type UpdateInfo struct {
 	CurrentVersion string `json:"currentVersion"`
 	LatestVersion  string `json:"latestVersion"`
@@ -70,11 +58,8 @@ type UpdateInfo struct {
 	Available      bool   `json:"available"`
 }
 
-// GitHubRepo is the repository to check for updates.
 const GitHubRepo = "Wifsimster/PlexCord"
 
-// newGitHubRequest builds a GET request pre-populated with the headers the
-// GitHub REST API expects (Accept + a descriptive User-Agent).
 func newGitHubRequest(ctx context.Context, url string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -85,9 +70,6 @@ func newGitHubRequest(ctx context.Context, url string) (*http.Request, error) {
 	return req, nil
 }
 
-// fetchLatestRelease retrieves the latest published release from GitHub.
-// The returned notFound flag is true when the repository has no releases yet
-// (HTTP 404), which callers treat as "up to date" rather than an error.
 func fetchLatestRelease(ctx context.Context) (release *GitHubRelease, notFound bool, err error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", GitHubRepo)
 
@@ -121,7 +103,6 @@ func fetchLatestRelease(ctx context.Context) (release *GitHubRelease, notFound b
 	return &r, false, nil
 }
 
-// upToDate builds an UpdateInfo that reports no update is available.
 func upToDate() *UpdateInfo {
 	return &UpdateInfo{
 		Available:      false,
@@ -130,7 +111,6 @@ func upToDate() *UpdateInfo {
 	}
 }
 
-// CheckForUpdate checks GitHub releases for a newer version.
 func CheckForUpdate() (*UpdateInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -140,19 +120,12 @@ func CheckForUpdate() (*UpdateInfo, error) {
 		return nil, err
 	}
 
-	// No releases yet, or the latest is a draft/prerelease we don't offer.
 	if notFound || release.Draft || release.Prerelease {
 		return upToDate(), nil
 	}
 
-	// Compare versions
 	available := isNewerVersion(release.TagName, Version)
 
-	// A newer tag is not yet an update while its binaries are still being
-	// built and uploaded: offering one in that window produces a download
-	// that fails, and on the platforms that download in the background it
-	// fails without anyone having asked. Report "up to date" and pick the
-	// release up on the next check instead.
 	if available && !releaseIsInstallable(release) {
 		log.Printf("Release %s is published but has no downloads yet; not offering it", release.TagName)
 		return upToDate(), nil
@@ -168,23 +141,16 @@ func CheckForUpdate() (*UpdateInfo, error) {
 	}, nil
 }
 
-// IsDevBuild reports whether this binary is a development build (no release
-// tag injected via -ldflags). Automatic update flows must be disabled for dev
-// builds because isNewerVersion always reports an update for them.
 func IsDevBuild() bool {
 	return Version == "dev" || strings.Contains(Version, "-dev")
 }
 
-// isNewerVersion compares two semantic version strings.
-// Returns true if latest is newer than current.
 func isNewerVersion(latest, current string) bool {
-	// Strip 'v' prefix if present
 	latest = strings.TrimPrefix(latest, "v")
 	current = strings.TrimPrefix(current, "v")
 
-	// Handle dev versions
 	if strings.Contains(current, "-dev") {
-		return true // Always offer updates for dev builds
+		return true
 	}
 
 	latestParts := parseVersion(latest)
@@ -202,11 +168,9 @@ func isNewerVersion(latest, current string) bool {
 	return false
 }
 
-// parseVersion extracts major, minor, patch from a version string.
 func parseVersion(v string) [3]int {
 	var parts [3]int
 
-	// Remove any suffix (e.g., -beta, -rc1)
 	if idx := strings.IndexAny(v, "-+"); idx != -1 {
 		v = v[:idx]
 	}
@@ -221,7 +185,6 @@ func parseVersion(v string) [3]int {
 	return parts
 }
 
-// truncateReleaseNotes limits release notes to a maximum length.
 func truncateReleaseNotes(notes string, maxLen int) string {
 	if len(notes) <= maxLen {
 		return notes
@@ -229,7 +192,6 @@ func truncateReleaseNotes(notes string, maxLen int) string {
 	return notes[:maxLen] + "..."
 }
 
-// GetReleasesURL returns the URL to the GitHub releases page.
 func GetReleasesURL() string {
 	return fmt.Sprintf("https://github.com/%s/releases", GitHubRepo)
 }

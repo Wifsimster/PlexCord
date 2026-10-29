@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
-// Mock Wails runtime. EventsOn returns a cancel function (the real runtime
-// does too) — the store must use those instead of EventsOff(name).
 vi.mock('../../../wailsjs/runtime/runtime', () => ({
   EventsOn: vi.fn(() => vi.fn()),
   EventsOff: vi.fn()
 }))
 
-// Mock backend calls
 vi.mock('../../../wailsjs/go/main/App', () => ({
   CanSelfUpdate: vi.fn().mockResolvedValue(true),
   CheckForUpdate: vi.fn().mockResolvedValue({ available: false }),
@@ -22,7 +19,7 @@ import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import { CanSelfUpdate, CheckForUpdate, DownloadAndInstallUpdate, GetUpdateStatus } from '../../../wailsjs/go/main/App'
 
 const READY_INFO = {
-  available: false, // matches DownloadAndApplyUpdate's return once applied
+  available: false,
   currentVersion: 'v4.3.0',
   latestVersion: 'v9.9.9',
   releaseUrl: 'https://github.com/Wifsimster/PlexCord/releases'
@@ -142,7 +139,6 @@ describe('updates store', () => {
       expect(store.updateReady).toBe(true)
       expect(store.progress).toBe(100)
       expect(store.info).toEqual(READY_INFO)
-      // The panel must stay visible even though info.available is false
       expect(store.showUpdatePanel).toBe(true)
     })
 

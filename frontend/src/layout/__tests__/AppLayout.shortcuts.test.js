@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
-// AppLayout pulls in the whole shell (Wails bindings, PrimeVue toast, child
-// views). Everything outside the keyboard handler is mocked away so these
-// tests only exercise the shortcut wiring (spec §5.1 / §6.7).
 const toggleDarkMode = vi.fn();
 const presenceToggle = vi.fn();
 const push = vi.fn();

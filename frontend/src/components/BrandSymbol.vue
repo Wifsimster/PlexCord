@@ -1,17 +1,9 @@
 <script setup>
 import { computed, useId } from 'vue';
 
-// The PlexCord symbol — "the live badge" (docs/brand.md). A ring (a record,
-// or a profile picture) in ink, with a presence badge on its corner in the
-// tally. Drawn at two optical sizes, picked by size, not taste:
-//   regular (≥ 32px): thinner ring, play triangle knocked out of the badge
-//   small   (< 32px): thicker ring, bigger solid badge — survives at 16px
-// Geometry is canonical (64-unit box) and mirrored in build/brand/.
 const props = defineProps({
     size: { type: Number, default: 20 },
-    /** Force an optical size; default picks by `size`. */
     variant: { type: String, default: '' },
-    /** Unlit: ring only, no badge — the mark "off air". */
     unlit: { type: Boolean, default: false }
 });
 

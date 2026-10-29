@@ -1,17 +1,5 @@
 package plex
 
-// This file contains pure session filtering and mapping functions — the
-// domain logic that converts raw SessionEntry values from the Plex API
-// into filtered, enriched MusicSession/MediaSession values ready for
-// consumption by the poller and Discord presence layer.
-//
-// These functions are pure (no I/O, no HTTP) and take their dependencies
-// as parameters so they can be unit-tested with table-driven tests.
-
-// filterMusicSessions returns only the music sessions from the parsed
-// response that belong to the given user. An empty userID matches all
-// users. Fallback metadata is applied and artwork URLs are built via
-// the provided thumb URL builder.
 func filterMusicSessions(
 	sessionsResp *SessionsResponse,
 	userID string,
@@ -19,11 +7,9 @@ func filterMusicSessions(
 ) []MusicSession {
 	result := make([]MusicSession, 0, len(sessionsResp.Tracks))
 	for _, entry := range sessionsResp.Tracks {
-		// Filter by user ID if specified
 		if userID != "" && entry.User.ID != userID {
 			continue
 		}
-		// Guard against non-track entries appearing under <Track>
 		if entry.Type != "track" {
 			continue
 		}
@@ -57,9 +43,6 @@ func filterMusicSessions(
 	return result
 }
 
-// filterMediaSessions returns MediaSessions matching the requested media
-// types (empty = all) for the given user. Applies fallbacks and builds
-// artwork URLs.
 func filterMediaSessions(
 	sessionsResp *SessionsResponse,
 	userID string,
@@ -76,7 +59,6 @@ func filterMediaSessions(
 	result := make([]MediaSession, 0, len(entries))
 
 	for _, entry := range entries {
-		// Filter by user ID if specified
 		if userID != "" && entry.User.ID != userID {
 			continue
 		}
@@ -87,7 +69,6 @@ func filterMediaSessions(
 		}
 		session := NewMediaSessionFromEntry(entry, thumbURL)
 
-		// Filter by requested media types
 		if !anyType && !wantType[session.MediaType] {
 			continue
 		}

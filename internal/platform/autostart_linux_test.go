@@ -9,18 +9,12 @@ import (
 	"testing"
 )
 
-// newTestManager points an AutoStartManager at a throwaway XDG config dir so
-// the tests never touch the developer's own autostart entries.
 func newTestManager(t *testing.T) *AutoStartManager {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	return &AutoStartManager{appName: "PlexCord", executable: "/opt/plexcord/plexcord"}
 }
 
-// TestEnableRegistersTheAutoStartFlag verifies the registration launches
-// PlexCord with the flag that marks a login launch: without it the app cannot
-// tell the OS starting it from the user opening it, and would show its window
-// on every boot.
 func TestEnableRegistersTheAutoStartFlag(t *testing.T) {
 	m := newTestManager(t)
 
@@ -41,9 +35,6 @@ func TestEnableRegistersTheAutoStartFlag(t *testing.T) {
 	}
 }
 
-// TestEnsureRegisteredRefreshesAStaleEntry covers the upgrade path: an entry
-// written by an older version launches the bare executable, and is rewritten
-// in place rather than left as it was.
 func TestEnsureRegisteredRefreshesAStaleEntry(t *testing.T) {
 	m := newTestManager(t)
 
@@ -69,8 +60,6 @@ func TestEnsureRegisteredRefreshesAStaleEntry(t *testing.T) {
 	}
 }
 
-// TestEnsureRegisteredLeavesAutoStartOff verifies refreshing never turns the
-// setting on behind the user's back.
 func TestEnsureRegisteredLeavesAutoStartOff(t *testing.T) {
 	m := newTestManager(t)
 
@@ -82,7 +71,6 @@ func TestEnsureRegisteredLeavesAutoStartOff(t *testing.T) {
 	}
 }
 
-// TestDisableRemovesTheEntry rounds out the lifecycle.
 func TestDisableRemovesTheEntry(t *testing.T) {
 	m := newTestManager(t)
 

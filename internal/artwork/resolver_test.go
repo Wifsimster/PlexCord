@@ -8,8 +8,6 @@ import (
 	"testing"
 )
 
-// newTestResolver wires a Resolver to the given httptest server for all three
-// external APIs and disables MusicBrainz throttling.
 func newTestResolver(base string) *Resolver {
 	return NewResolver(
 		WithBaseURLs(base, base, base),
@@ -65,7 +63,6 @@ func TestResolve_CachesAndServesFromCache(t *testing.T) {
 		t.Errorf("expected exactly 1 upstream search (cache hit after), got %d", searchHits)
 	}
 
-	// Cached() must return without any network call.
 	if url, ok := r.Cached(MusicQuery("A", "B")); !ok || url != "https://cdn/512x512bb.jpg" {
 		t.Errorf("Cached() = %q, %v; want the resolved URL", url, ok)
 	}
@@ -75,7 +72,6 @@ func TestResolve_CoverArtFallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		switch {
 		case strings.HasPrefix(req.URL.Path, "/search"):
-			// iTunes miss.
 			_, _ = w.Write([]byte(`{"results":[]}`))
 		case strings.HasPrefix(req.URL.Path, "/ws/2/release/"):
 			_, _ = w.Write([]byte(`{"releases":[{"id":"mbid-123"}]}`))
@@ -106,7 +102,6 @@ func TestResolve_CoverArtMissingImageIsMiss(t *testing.T) {
 		case strings.HasPrefix(req.URL.Path, "/ws/2/release/"):
 			_, _ = w.Write([]byte(`{"releases":[{"id":"mbid-404"}]}`))
 		default:
-			// CAA HEAD returns 404 → no cover art for this release.
 			http.NotFound(w, req)
 		}
 	}))
@@ -143,15 +138,12 @@ func TestResolve_TotalMiss(t *testing.T) {
 	if url != "" {
 		t.Errorf("expected empty URL on total miss, got %q", url)
 	}
-	// A miss is cached as "" so we don't re-query every poll.
 	if url, ok := r.Cached(MusicQuery("Nobody", "Nothing")); !ok || url != "" {
 		t.Errorf("expected negative result cached, got %q, %v", url, ok)
 	}
 }
 
 func TestResolve_NeverReturnsPlexToken(t *testing.T) {
-	// Even if an upstream misbehaves and echoes a tokened URL, Resolve only
-	// returns iTunes/CAA-shaped URLs; assert the token never leaks through.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		_, _ = w.Write([]byte(`{"results":[{"artworkUrl100":"https://cdn/100x100bb.jpg"}]}`))
 	}))
@@ -175,7 +167,7 @@ func TestLRUCache_Eviction(t *testing.T) {
 	c := newLRUCache(2)
 	c.put("a", "1")
 	c.put("b", "2")
-	c.put("c", "3") // evicts "a" (least recently used)
+	c.put("c", "3")
 
 	if _, ok := c.get("a"); ok {
 		t.Error("expected 'a' to be evicted")
@@ -239,8 +231,6 @@ func TestResolve_ShowPosterSearchesTheShowNotTheEpisode(t *testing.T) {
 }
 
 func TestResolve_VideoSkipsCoverArtArchive(t *testing.T) {
-	// Cover Art Archive indexes music releases only. A film that iTunes misses
-	// must not cost a MusicBrainz round trip that can never answer.
 	var mbHits int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if strings.HasPrefix(req.URL.Path, "/ws/2/release/") {
@@ -260,7 +250,6 @@ func TestResolve_VideoSkipsCoverArtArchive(t *testing.T) {
 }
 
 func TestResolve_MediaTypeSeparatesCacheEntries(t *testing.T) {
-	// A film and an album that share a name are different pictures.
 	var searches int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		searches++
@@ -293,8 +282,6 @@ func TestResolve_EmptyVideoTitleIsAMiss(t *testing.T) {
 }
 
 func TestResolve_DeadlineDuringLastSourceIsNotCachedAsMiss(t *testing.T) {
-	// The deadline expires while the last source runs, so it reports a miss;
-	// that miss was never established and must not be cached.
 	ctx, cancel := context.WithCancel(context.Background())
 	r := NewResolver(WithSources(SourceFunc{SourceName: "slow", Fn: func(context.Context, Query) string {
 		cancel()

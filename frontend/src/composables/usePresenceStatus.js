@@ -5,21 +5,6 @@ import { usePlexConnectionStore } from '@/stores/plexConnection';
 import { useDiscordConnectionStore } from '@/stores/discordConnection';
 import { usePresenceStore } from '@/stores/presence';
 
-/**
- * The headline state machine (spec §5.0.6 / §5.1).
- *
- * Pure computed layer over the playback store, both connection stores and
- * the presence-pause store. Owns NO lifecycle: consumers must ensure the
- * stores are initialized (AppLayout does this app-wide).
- *
- * Status values:
- *   'plex-error'     — Plex failure blocks the relay   → '▲ Plex unreachable'
- *   'discord-error'  — Discord failure blocks the relay → '▲ Discord disconnected'
- *   'paused'         — presence paused by the user      → '⏸ Paused'
- *   'track-paused'   — playback paused in the player    → '⏸ Paused'
- *   'live'           — playing & relaying               → '▶ Live — {title}'
- *   'idle'           — nothing playing                  → '– Idle'
- */
 export function usePresenceStatus() {
     const { t } = useI18n();
     const playback = usePlaybackStore();
@@ -38,7 +23,6 @@ export function usePresenceStatus() {
 
     const trackTitle = computed(() => playback.currentTrack?.track ?? playback.currentTrack?.title ?? '');
 
-    /** Headline text WITHOUT the leading glyph (renderers add ▶/⏸/–/▲). */
     const headline = computed(() => {
         switch (status.value) {
             case 'plex-error':
@@ -55,7 +39,6 @@ export function usePresenceStatus() {
         }
     });
 
-    /** Semantic color bucket for the headline: success | warn | danger | muted. */
     const severity = computed(() => {
         switch (status.value) {
             case 'live':
@@ -71,10 +54,6 @@ export function usePresenceStatus() {
         }
     });
 
-    /**
-     * The tally lamp (spec §5.0.3): the on-air projection of `status`.
-     * kind: on | off | hold | fault | idle — maps 1:1 to .pc-tally--{kind}.
-     */
     const tally = computed(() => {
         switch (status.value) {
             case 'live':
@@ -94,7 +73,6 @@ export function usePresenceStatus() {
 
     const isErrored = computed(() => status.value === 'plex-error' || status.value === 'discord-error');
 
-    /** Both endpoints healthy — the relay can publish. */
     const relayHealthy = computed(() => plex.connected && discord.connected && !plex.hasError && !discord.hasError);
 
     const presencePaused = computed(() => presence.paused);
@@ -108,7 +86,6 @@ export function usePresenceStatus() {
         isErrored,
         relayHealthy,
         presencePaused,
-        /** Toggle the app-wide presence pause. @returns {Promise<boolean>} new state */
         togglePause: () => presence.toggle()
     };
 }

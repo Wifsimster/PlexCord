@@ -6,26 +6,15 @@ import (
 	"plexcord/internal/config"
 )
 
-// CheckSetupComplete checks if the setup wizard has been completed
-// This method is called from the frontend router to determine if
-// the user should be redirected to the setup wizard on first launch
 func (a *App) CheckSetupComplete() bool {
 	return a.configs.IsSetupComplete()
 }
 
-// CompleteSetup marks the setup wizard as complete and saves the configuration.
-// This method is called from the frontend when the user finishes the setup wizard.
-// It marks SetupCompleted as true in config.json so that subsequent app launches
-// go directly to the dashboard instead of the setup wizard.
-// Also starts session polling if server and user are configured.
-// Also ensures Discord connection is active.
 func (a *App) CompleteSetup() error {
 	log.Printf("Completing setup wizard...")
 
-	// Mark setup as complete
 	a.config.SetupCompleted = true
 
-	// Save config to disk
 	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save setup completion: %v", err)
 		return err
@@ -33,8 +22,6 @@ func (a *App) CompleteSetup() error {
 
 	log.Printf("Setup wizard completed successfully")
 
-	// Ensure Discord is connected for Rich Presence. A failure here does not
-	// fail setup — the user may simply not have Discord running.
 	if !a.discord.IsConnected() {
 		log.Printf("Discord not connected during setup completion, attempting to connect...")
 		if a.discord.ConnectIfDown() {
@@ -44,30 +31,21 @@ func (a *App) CompleteSetup() error {
 		}
 	}
 
-	// Try to start session polling if configured
-	// This is non-blocking - errors are logged but don't fail setup completion
 	if a.config.ServerURL != "" && a.config.SelectedPlexUserID != "" {
 		if err := a.StartSessionPolling(); err != nil {
 			log.Printf("Warning: Failed to start session polling after setup: %v", err)
-			// Don't return error - setup is still complete
 		}
 	}
 
 	return nil
 }
 
-// SkipSetup marks the setup wizard as skipped and saves partial configuration.
-// This method is called from the frontend when the user chooses to skip setup.
-// The user can complete setup later from the Settings page.
-// Partial progress (token, server URL) is preserved for later completion.
 func (a *App) SkipSetup() error {
 	log.Printf("Skipping setup wizard...")
 
-	// Mark setup as skipped (not completed)
 	a.config.SetupSkipped = true
 	a.config.SetupCompleted = false
 
-	// Save config to disk
 	if err := a.saveConfig(); err != nil {
 		log.Printf("ERROR: Failed to save setup skip: %v", err)
 		return err
@@ -77,54 +55,33 @@ func (a *App) SkipSetup() error {
 	return nil
 }
 
-// ResetApplication resets PlexCord to its initial state.
-// This method:
-// - Stops session polling
-// - Disconnects from Discord
-// - Removes Plex token from secure storage
-// - Removes auto-start registration
-// - Deletes the configuration file
-// - Resets in-memory config to defaults
-// After calling this method, the setup wizard will be shown on next app launch.
-// The application does NOT exit - the user can continue or restart.
 func (a *App) ResetApplication() {
 	log.Printf("Resetting application to initial state...")
 
-	// 1. Stop session polling
 	a.StopSessionPolling()
 
-	// 2. Disconnect from Discord (clears presence)
 	if a.discord.IsConnected() {
 		if err := a.discord.Disconnect(); err != nil {
 			log.Printf("Warning: Failed to disconnect Discord: %v", err)
 		}
 	}
 
-	// 3. Remove Plex token from secure storage
 	if err := a.tokens.Delete(); err != nil {
 		log.Printf("Warning: Failed to delete Plex token: %v", err)
-		// Continue with reset - token deletion failure is not critical
 	} else {
 		log.Printf("Plex token removed from secure storage")
 	}
 
-	// 4. Remove auto-start registration
 	if err := a.autostart.Disable(); err != nil {
 		log.Printf("Warning: Failed to disable auto-start: %v", err)
-		// Continue with reset - auto-start failure is not critical
 	}
 
-	// 5. Delete configuration file
 	if err := a.configs.Delete(); err != nil {
 		log.Printf("Warning: Failed to delete config file: %v", err)
-		// Continue with reset - we'll create fresh defaults
 	} else {
 		log.Printf("Configuration file deleted")
 	}
 
-	// 6. Reset in-memory config to defaults. Reset in place rather than
-	// swapping the pointer: a.config and the store must stay the same Config,
-	// or every later save would write back the pre-reset settings.
 	a.cfgStore.UpdateNoSave(func(c *config.Config) { *c = *config.DefaultConfig() })
 	log.Printf("In-memory configuration reset to defaults")
 

@@ -4,11 +4,6 @@ import { IsDiscordConnected, GetConnectionHistory, GetDiscordRetryState, RetryDi
 import { formatRelativeTime } from '../utils/timeUtils';
 import { t } from '@/i18n';
 
-/**
- * Discord Connection Store
- * Manages Discord Rich Presence connection status with real-time updates.
- * Separated from Plex to follow single responsibility principle.
- */
 export const useDiscordConnectionStore = defineStore('discordConnection', {
     state: () => ({
         connected: false,
@@ -20,27 +15,14 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
     }),
 
     getters: {
-        /**
-         * Format last connected time as relative string
-         */
         lastConnectedRelative: (state) => {
             return formatRelativeTime(state.lastConnected);
         },
 
-        /**
-         * Check if Discord is retrying connection
-         */
         isRetrying: (state) => state.retryState?.isRetrying || false,
 
-        /**
-         * Check if there's an active error
-         */
         hasError: (state) => !!state.error,
 
-        /**
-         * Get connection status label
-         * Note: Uses function form to access other getters via `this`
-         */
         statusLabel() {
             if (this.connected) return t('connectionStore.statusConnected');
             if (this.loading) return t('connectionStore.statusConnecting');
@@ -51,9 +33,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
     },
 
     actions: {
-        /**
-         * Initialize event listeners and fetch initial status
-         */
         async initialize() {
             if (this.initialized) return;
 
@@ -64,9 +43,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             this.initialized = true;
         },
 
-        /**
-         * Auto-reconnect if disconnected after page refresh
-         */
         async autoReconnect() {
             setTimeout(async () => {
                 if (!this.connected && !this.loading && !this.isRetrying) {
@@ -80,9 +56,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             }, 500);
         },
 
-        /**
-         * Setup Wails event listeners for Discord
-         */
         setupEventListeners() {
             EventsOn('DiscordConnected', () => {
                 this.connected = true;
@@ -93,19 +66,12 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             EventsOn('DiscordDisconnected', async (data) => {
                 this.connected = false;
 
-                // The backend emits `discord.ConnectionEvent` which marshals as
-                // `{connected, error: {code, message}, clientId}`. The code is
-                // nested under `error`, not on the top-level payload.
-                // A deliberate DisconnectDiscord carries no error: that is not
-                // a failure to report.
                 const errorCode = data?.error?.code || data?.code;
                 if (!errorCode) {
                     this.error = null;
                     return;
                 }
                 await this.setError(errorCode);
-                // A connect that landed while the error info was being fetched
-                // supersedes this disconnect.
                 if (this.connected) {
                     this.error = null;
                 }
@@ -116,9 +82,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             });
         },
 
-        /**
-         * Cleanup event listeners
-         */
         cleanup() {
             EventsOff('DiscordConnected');
             EventsOff('DiscordDisconnected');
@@ -126,9 +89,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             this.initialized = false;
         },
 
-        /**
-         * Refresh connection status from backend
-         */
         async refreshStatus() {
             try {
                 this.connected = await IsDiscordConnected();
@@ -142,9 +102,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             }
         },
 
-        /**
-         * Manually retry connection
-         */
         async retry() {
             this.loading = true;
             try {
@@ -154,9 +111,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             }
         },
 
-        /**
-         * Connect to Discord with optional client ID
-         */
         async connect(clientId = '') {
             this.loading = true;
             try {
@@ -169,9 +123,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             }
         },
 
-        /**
-         * Set error with detailed info from backend
-         */
         async setError(errorCode) {
             try {
                 this.error = await GetErrorInfo(errorCode);
@@ -186,9 +137,6 @@ export const useDiscordConnectionStore = defineStore('discordConnection', {
             }
         },
 
-        /**
-         * Clear error state
-         */
         clearError() {
             this.error = null;
         }

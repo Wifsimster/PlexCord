@@ -17,16 +17,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// Shared test doubles for the interfaces App depends on. Having a fake for
-// every collaborator is the practical proof that the dependency inversion is
-// real: the whole binding surface can be driven with no Plex server, no
-// Discord socket, no keychain, no system tray and no Wails window.
-
-// ----------------------------------------------------------------------------
-// Desktop (Wails runtime)
-// ----------------------------------------------------------------------------
-
-// fakeDesktop records every window/process/browser call.
 type fakeDesktop struct {
 	mu          sync.Mutex
 	shown       int
@@ -39,11 +29,9 @@ type fakeDesktop struct {
 	centered    int
 	openedURLs  []string
 
-	// isMinimised is what IsMinimised reports.
 	isMinimised bool
-	// screens and screensErr drive Screens.
-	screens    []runtime.Screen
-	screensErr error
+	screens     []runtime.Screen
+	screensErr  error
 }
 
 func (d *fakeDesktop) Show(context.Context) {
@@ -120,11 +108,6 @@ func (d *fakeDesktop) counts() (shown, hidden, quits int) {
 
 var _ Desktop = (*fakeDesktop)(nil)
 
-// ----------------------------------------------------------------------------
-// Platform integration
-// ----------------------------------------------------------------------------
-
-// fakeTray records tray lifecycle and the notices pushed to it.
 type fakeTray struct {
 	mu      sync.Mutex
 	started int
@@ -161,8 +144,6 @@ func (t *fakeTray) lastNotice() (platform.UpdateNotice, bool) {
 
 var _ TrayController = (*fakeTray)(nil)
 
-// fakeAutoStart records launch-on-login registration without touching the
-// registry, a LaunchAgent plist, or an XDG desktop file.
 type fakeAutoStart struct {
 	enabled  bool
 	ensured  int
@@ -190,11 +171,6 @@ func (f *fakeAutoStart) EnsureRegistered() error {
 
 var _ AutoStartController = (*fakeAutoStart)(nil)
 
-// ----------------------------------------------------------------------------
-// Storage
-// ----------------------------------------------------------------------------
-
-// fakeTokenStore is an in-memory credential store.
 type fakeTokenStore struct {
 	token   string
 	getErr  error
@@ -220,7 +196,6 @@ func (f *fakeTokenStore) Delete() error {
 
 var _ TokenStore = (*fakeTokenStore)(nil)
 
-// fakeConfigGateway serves a config from memory instead of from disk.
 type fakeConfigGateway struct {
 	cfg           *config.Config
 	loadErr       error
@@ -249,7 +224,6 @@ func (f *fakeConfigGateway) ConfigDir() string     { return f.dir }
 
 var _ ConfigGateway = (*fakeConfigGateway)(nil)
 
-// fakeHistory keeps listening history in memory.
 type fakeHistory struct {
 	mu      sync.Mutex
 	entries []history.Entry
@@ -288,11 +262,6 @@ func (h *fakeHistory) Clear() {
 
 var _ HistoryStore = (*fakeHistory)(nil)
 
-// ----------------------------------------------------------------------------
-// Plex
-// ----------------------------------------------------------------------------
-
-// fakePlexAPI answers the four Plex calls from canned data.
 type fakePlexAPI struct {
 	validation *plex.ValidationResult
 	validErr   error
@@ -328,7 +297,6 @@ func (f *fakePlexAPI) GetMediaSessions(_ string, mediaTypes []string) ([]plex.Me
 
 var _ PlexAPI = (*fakePlexAPI)(nil)
 
-// fakeDiscoverer returns canned servers instead of doing GDM multicast.
 type fakeDiscoverer struct {
 	servers []plex.Server
 	err     error
@@ -340,11 +308,6 @@ func (f *fakeDiscoverer) Discover(time.Duration) ([]plex.Server, error) {
 
 var _ ServerDiscoverer = (*fakeDiscoverer)(nil)
 
-// ----------------------------------------------------------------------------
-// Updates
-// ----------------------------------------------------------------------------
-
-// fakeUpdater stands in for the background update checker.
 type fakeUpdater struct {
 	mu        sync.Mutex
 	status    updater.Status
@@ -383,8 +346,6 @@ func (u *fakeUpdater) OnStatusChange(fn func(updater.Status)) {
 	}
 }
 
-// publish sets a new status and notifies the registered listener, mimicking a
-// real lifecycle transition.
 func (u *fakeUpdater) publish(status updater.Status) {
 	u.mu.Lock()
 	u.status = status
@@ -403,11 +364,6 @@ func (u *fakeUpdater) StartDownload(context.Context, bool) (*version.UpdateInfo,
 
 var _ UpdateService = (*fakeUpdater)(nil)
 
-// ----------------------------------------------------------------------------
-// Discord
-// ----------------------------------------------------------------------------
-
-// recordingPresence captures what PlexCord publishes to Discord.
 type recordingPresence struct {
 	mu           sync.Mutex
 	connected    bool
@@ -498,14 +454,9 @@ func (p *recordingPresence) clearCount() int {
 
 var _ DiscordPresence = (*recordingPresence)(nil)
 
-// ----------------------------------------------------------------------------
-// Reconnection and PIN authentication
-// ----------------------------------------------------------------------------
-
-// fakeRetry records how the reconnection loop is driven, with no timers.
 type fakeRetry struct {
 	mu            sync.Mutex
-	starts        []string // error codes passed to Start
+	starts        []string
 	resets        int
 	stops         int
 	manualRetries int
@@ -557,7 +508,6 @@ func (r *fakeRetry) startCount() int {
 
 var _ RetryManager = (*fakeRetry)(nil)
 
-// fakeAuthenticator answers the plex.tv PIN flow from canned responses.
 type fakeAuthenticator struct {
 	requestResp *plex.PINResponse
 	requestErr  error
@@ -578,7 +528,6 @@ func (f *fakeAuthenticator) GetAuthURL(string) string { return f.authURL }
 
 var _ PlexAuthenticator = (*fakeAuthenticator)(nil)
 
-// fakeRelauncher records a restart request without spawning a process.
 type fakeRelauncher struct {
 	calls int
 	err   error

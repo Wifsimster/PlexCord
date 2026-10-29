@@ -1,19 +1,9 @@
-/* ============================================================
-   PlexCord "ON AIR" component primitives (spec §5.0.1–§5.0.4, §6.2).
-   Bespoke CSS references role aliases (--pc-*) only — never raw
-   ramp steps. Imported after tokens.css in main.js.
-   ============================================================ */
-
-/* ---------------- Focus ring (§6.2) ---------------- */
-/* Every interactive element gets the 2px offset ring on :focus-visible.
-   Never remove an outline without this replacement. */
 :where(a, button, input, select, textarea, [tabindex], [role='button']):focus-visible,
 :where(.p-button, .p-inputtext, .p-select, .p-toggleswitch, .p-checkbox-box):focus-visible {
     outline: none;
     box-shadow: var(--pc-ring-focus);
 }
 
-/* ---------------- Panels (§5.0.1 — the one card system) ---------------- */
 .pc-panel {
     background: var(--pc-panel);
     border: 1px solid var(--pc-border);
@@ -26,7 +16,6 @@
     border-radius: var(--pc-radius-md);
 }
 
-/* Panel header eyebrow (micro type, muted, uppercase) */
 .pc-eyebrow {
     font-size: var(--pc-text-micro);
     font-weight: 600;
@@ -36,11 +25,6 @@
     color: var(--pc-text-muted);
 }
 
-/* ---------------- Buttons (§5.0.2) ----------------
-   PrimeVue Button carries the primary variant via the preset; the
-   classes below map the spec's variants for both PrimeVue buttons
-   (add the class) and plain <button> elements. Height 32px, sm 28,
-   lg 38 (wizard primaries), radius-sm, 14px/500 label. */
 .pc-btn {
     display: inline-flex;
     align-items: center;
@@ -62,7 +46,7 @@
         transform 60ms var(--pc-ease-in);
 }
 .pc-btn:active {
-    transform: scale(0.985); /* M2 */
+    transform: scale(0.985);
 }
 .pc-btn:disabled {
     opacity: 0.45;
@@ -129,8 +113,6 @@
     border-color: color-mix(in srgb, var(--pc-danger) 40%, transparent);
 }
 
-/* ---------------- Status indicators (§5.0.3) ---------------- */
-/* Dot: 8px, non-interactive, ALWAYS paired with a .pc-status-label */
 .pc-dot {
     position: relative;
     display: inline-block;
@@ -153,7 +135,6 @@
     color: var(--pc-surface-500);
 }
 
-/* 11px micro label paired with the dot, in the matching color */
 .pc-status-label {
     font-size: var(--pc-text-micro);
     font-weight: 600;
@@ -162,7 +143,6 @@
     line-height: 1.3;
 }
 
-/* Badge/chip: micro type, dim bg + full-strength text */
 .pc-badge {
     display: inline-flex;
     align-items: center;
@@ -199,7 +179,6 @@
     border-color: color-mix(in srgb, var(--pc-accent) 30%, transparent);
 }
 
-/* Mono chip: URLs, codes, versions, timestamps */
 .pc-chip-mono {
     display: inline-block;
     padding: 1px 6px;
@@ -211,7 +190,6 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* ---------------- Specimen well + ambient backdrop (§5.0.4 / §4.1) ---------------- */
 .pc-specimen-well {
     position: relative;
     overflow: hidden;
@@ -237,15 +215,12 @@
     animation: pc-breathe var(--pc-loop-breathe) ease-in-out infinite;
 }
 :root:not(.dark) .pc-ambient {
-    animation-name: pc-breathe-light; /* 0.05 ↔ 0.10 in light mode */
+    animation-name: pc-breathe-light;
 }
 .pc-ambient--paused {
     animation-play-state: paused;
 }
 
-/* ---------------- Ink links (§1.2) ----------------
-   Interaction is ink, not a hue — so a link is told apart from body text by
-   its underline, never by color alone. */
 .pc-link {
     color: var(--pc-text);
     font-weight: 500;
@@ -260,7 +235,6 @@
     text-decoration-color: currentColor;
 }
 
-/* ---------------- Display type ---------------- */
 .pc-display {
     font-family: var(--pc-font-display);
     font-weight: 700;
@@ -268,15 +242,6 @@
     line-height: 1.1;
 }
 
-/* ---------------- The tally (§5.0.3) ----------------
-   PlexCord's signature component: a broadcast "on air" lamp. It shows ONE
-   thing — whether Discord is showing your media right now — and the tally
-   pigment is spent nowhere else in the app.
-     .pc-tally--on    lit: tally fill, glowing lamp, "ON AIR"
-     .pc-tally--off   unlit: hairline outline, hollow lamp ("OFF AIR", paused by you)
-     .pc-tally--hold  unlit, amber lamp (the player paused the media)
-     .pc-tally--fault unlit, vermilion lamp (a connection blocks the relay)
-     .pc-tally--idle  unlit, grey lamp (nothing playing) */
 .pc-tally {
     display: inline-flex;
     align-items: center;

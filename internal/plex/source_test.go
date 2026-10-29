@@ -8,11 +8,8 @@ import (
 	"time"
 )
 
-// scriptedSource is a SessionSource backed by a script of responses, so the
-// poller can be driven with no HTTP server and no wall-clock dependency on a
-// real Plex instance.
 type scriptedSource struct {
-	mu       chan struct{} // used as a 1-slot mutex so calls serialize
+	mu       chan struct{}
 	steps    [][]MusicSession
 	errs     []error
 	calls    atomic.Int64
@@ -46,8 +43,6 @@ func playing(track string) MusicSession {
 	return m
 }
 
-// TestPollerDrivenByFakeSource is the point of the SessionSource seam: the
-// poller's behaviour is verified without a Plex server or an httptest stand-in.
 func TestPollerDrivenByFakeSource(t *testing.T) {
 	source := newScriptedSource([][]MusicSession{{playing("Song")}}, nil)
 	source.fallback = []MusicSession{playing("Song")}
@@ -69,9 +64,6 @@ func TestPollerDrivenByFakeSource(t *testing.T) {
 	}
 }
 
-// TestPollerErrorAndRecoveryCallbacks verifies the error-state transitions
-// both polling modes now share: onError fires once on the way in, onRecovered
-// once on the way out.
 func TestPollerErrorAndRecoveryCallbacks(t *testing.T) {
 	source := newScriptedSource(nil, []error{errors.New("unreachable"), errors.New("unreachable")})
 	source.fallback = []MusicSession{playing("Song")}
@@ -88,7 +80,6 @@ func TestPollerErrorAndRecoveryCallbacks(t *testing.T) {
 	poller.Start(ctx)
 	defer poller.Stop()
 
-	// Two consecutive failures, then success.
 	deadline := time.Now().Add(6 * time.Second)
 	for time.Now().Before(deadline) && recoveredCalls.Load() == 0 {
 		time.Sleep(10 * time.Millisecond)
@@ -105,8 +96,6 @@ func TestPollerErrorAndRecoveryCallbacks(t *testing.T) {
 	}
 }
 
-// TestPollerReportsErrorState verifies a failing source is visible to the
-// dashboard while it keeps failing.
 func TestPollerReportsErrorState(t *testing.T) {
 	poller := NewPoller(alwaysFailingSource{}, "user1", time.Second)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -133,13 +122,9 @@ func (alwaysFailingSource) GetMediaSessions(string, []string) ([]MediaSession, e
 	return nil, errors.New("unreachable")
 }
 
-// TestClientSatisfiesSessionSource guards the production wiring: the poller is
-// constructed with a *Client at runtime, so a *Client that stopped satisfying
-// SessionSource would break the app while every fake-driven test still passed.
 func TestClientSatisfiesSessionSource(t *testing.T) {
 	var source SessionSource = NewClient("token", "http://localhost:32400")
 
-	// A poller built over the real client type must construct cleanly.
 	if poller := NewPoller(source, "user1", time.Second); poller == nil {
 		t.Fatal("NewPoller() over a *Client returned nil")
 	}

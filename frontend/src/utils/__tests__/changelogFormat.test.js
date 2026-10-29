@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { stripInlineMarkdown, parseReleaseNotes, summarizeReleaseNotes } from '../changelogFormat';
 
-// A representative semantic-release body for a patch release.
 const RELEASE_BODY = [
     '## [1.7.1](https://github.com/Wifsimster/PlexCord/compare/v1.7.0...v1.7.1) (2026-07-10)',
     '',

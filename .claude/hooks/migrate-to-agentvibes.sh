@@ -1,28 +1,17 @@
 #!/usr/bin/env bash
-#
-# File: .claude/hooks/migrate-to-agentvibes.sh
-#
-# AgentVibes - Migration Script for v2.10.0+
-# Migrates configuration from .claude/config/ and .claude/plugins/ to .agentvibes/
-#
-# This script is automatically run by the installer if old config is detected.
-# Can also be run manually: .claude/hooks/migrate-to-agentvibes.sh
-#
 
 set -euo pipefail
 
-# Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${BLUE}🔄 AgentVibes Configuration Migration${NC}"
 echo ""
 echo "Migrating from .claude/config/ and .claude/plugins/ to .agentvibes/"
 echo ""
 
-# Determine project root
 if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
     PROJECT_ROOT="$CLAUDE_PROJECT_DIR"
 else
@@ -31,16 +20,13 @@ fi
 
 cd "$PROJECT_ROOT"
 
-# Track if any migrations happened
 MIGRATED=false
 
-# Create target directories
 echo -e "${BLUE}📁 Creating .agentvibes/ directory structure...${NC}"
 mkdir -p .agentvibes/config
 echo -e "${GREEN}✓ Directories created${NC}"
 echo ""
 
-# Migrate AgentVibes config files
 echo -e "${BLUE}🔍 Checking for AgentVibes config in .claude/config/...${NC}"
 
 if [[ -f ".claude/config/agentvibes.json" ]]; then
@@ -73,16 +59,12 @@ fi
 
 echo ""
 
-# Clean up empty directories
 echo -e "${BLUE}🧹 Cleaning up...${NC}"
 
 if [[ -d ".claude/plugins" ]] && [[ -z "$(ls -A .claude/plugins 2>/dev/null)" ]]; then
     rmdir .claude/plugins
     echo -e "${GREEN}✓ Removed empty .claude/plugins/ directory${NC}"
 fi
-
-# Note: We don't remove .claude/config/ because it may contain runtime state files
-# like tts-speech-rate.txt that should stay there
 
 echo ""
 

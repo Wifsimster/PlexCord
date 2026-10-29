@@ -4,8 +4,6 @@ import App from './App.vue';
 import router from './router';
 import i18n from './i18n';
 
-// Running in a plain browser (no Wails backend): install the dev mock so
-// pages render with realistic data. Excluded from production builds.
 if (import.meta.env.DEV && !window.go) {
     const { installWailsMock } = await import('./dev/wailsMock');
     installWailsMock();
@@ -25,15 +23,11 @@ import '@/assets/styles.scss';
 import '@/assets/transitions.css';
 import '@/assets/components.css';
 
-// Theme is applied pre-mount so there is no flash of the wrong scheme.
-// Persisted in localStorage['plexcord-theme'] ('dark' | 'light'), default dark.
 const savedTheme = localStorage.getItem('plexcord-theme') === 'light' ? 'light' : 'dark';
 document.documentElement.classList.toggle('dark', savedTheme === 'dark');
 
 const PlexCordPreset = definePreset(Aura, {
     primitive: {
-        // "Ink" — interaction is monochrome (spec §1.2). The ramp is the
-        // graphite surface ramp; which end is "primary" flips per scheme.
         ink: {
             50: '#FBFAF8',
             100: '#F2EEE8',
@@ -120,8 +114,6 @@ const PlexCordPreset = definePreset(Aura, {
                 }
             },
             dark: {
-                /* NB: --p-surface-900 is deliberately #171514 (our panel step, --pc-surface-850).
-                   The true near-black rail value #121110 is available only via --pc-overlay. */
                 surface: {
                     0: '#FFFFFF',
                     50: '#F5F3EF',
@@ -208,7 +200,6 @@ app.use(PrimeVue, {
 });
 app.use(ToastService);
 app.use(ConfirmationService);
-// v-tooltip is a directive — the auto-import resolver only covers components.
 app.directive('tooltip', Tooltip);
 
 app.mount('#app');

@@ -1,14 +1,5 @@
-/**
- * Time Utility Functions
- * Shared utilities for time formatting across the application.
- */
 import { t } from '@/i18n';
 
-/**
- * Format a timestamp as relative time (e.g., "5 minutes ago")
- * @param {string|Date|null} timestamp - ISO timestamp or Date object
- * @returns {string} Formatted relative time string
- */
 export function formatRelativeTime(timestamp) {
     if (!timestamp) return t('time.never');
 
@@ -28,11 +19,6 @@ export function formatRelativeTime(timestamp) {
     return date.toLocaleDateString();
 }
 
-/**
- * Format duration in milliseconds to human-readable string
- * @param {number} ms - Duration in milliseconds
- * @returns {string} Formatted duration (e.g., "2h 30m")
- */
 export function formatDuration(ms) {
     if (!ms || ms < 0) return '0s';
 

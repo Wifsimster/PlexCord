@@ -3,10 +3,6 @@ import { nextTick } from 'vue';
 import { mount } from '@vue/test-utils';
 import TruncatedText from '@/components/TruncatedText.vue';
 
-// jsdom computes no layout, so scrollWidth/clientWidth are both 0 and
-// ResizeObserver is absent. We capture the RO callback to re-drive measurement
-// after stubbing element widths, and record the v-tooltip binding via a stub
-// directive so we can assert whether the tooltip was enabled.
 let roCallback = null;
 let lastTooltip = null;
 

@@ -4,11 +4,6 @@ import { GetPlexConnectionStatus, GetConnectionHistory, GetPlexRetryState, Retry
 import { formatRelativeTime } from '../utils/timeUtils';
 import { t } from '@/i18n';
 
-/**
- * Plex Connection Store
- * Manages Plex server connection status with real-time updates.
- * Separated from Discord to follow single responsibility principle.
- */
 export const usePlexConnectionStore = defineStore('plexConnection', {
     state: () => ({
         connected: false,
@@ -25,27 +20,14 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
     }),
 
     getters: {
-        /**
-         * Format last connected time as relative string
-         */
         lastConnectedRelative: (state) => {
             return formatRelativeTime(state.lastConnected);
         },
 
-        /**
-         * Check if Plex is retrying connection
-         */
         isRetrying: (state) => state.retryState?.isRetrying || false,
 
-        /**
-         * Check if there's an active error
-         */
         hasError: (state) => state.inErrorState || !!state.error,
 
-        /**
-         * Get connection status label
-         * Note: Uses function form to access other getters via `this`
-         */
         statusLabel() {
             if (this.connected && this.polling) return t('connectionStore.statusConnected');
             if (this.loading) return t('connectionStore.statusConnecting');
@@ -56,9 +38,6 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
     },
 
     actions: {
-        /**
-         * Initialize event listeners and fetch initial status
-         */
         async initialize() {
             if (this.initialized) return;
 
@@ -69,15 +48,8 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             this.initialized = true;
         },
 
-        /**
-         * Auto-reconnect if disconnected after page refresh
-         */
         async autoReconnect() {
             setTimeout(async () => {
-                // Nothing to connect to yet — an active server and a selected
-                // user are both required. Without this guard the dashboard
-                // fires a retry that can never succeed and gets stuck showing
-                // "Retrying..." indefinitely.
                 if (!this.serverUrl || !this.userId) {
                     return;
                 }
@@ -92,9 +64,6 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             }, 500);
         },
 
-        /**
-         * Setup Wails event listeners for Plex
-         */
         setupEventListeners() {
             EventsOn('PlexConnectionError', async (data) => {
                 this.connected = false;
@@ -107,9 +76,6 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
 
             EventsOn('PlexConnectionRestored', () => {
                 this.connected = true;
-                // The poller has resumed, so polling is live again. Without
-                // this the tile stays "Idle" (healthy = connected && polling)
-                // even after a successful recovery.
                 this.polling = true;
                 this.inErrorState = false;
                 this.lastConnected = new Date().toISOString();
@@ -121,18 +87,6 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             });
         },
 
-        /**
-         * Mark the connection as live from observed poll activity.
-         *
-         * A playback event (updated or stopped) can only arrive from a poll
-         * that actually reached Plex, so it is definitive proof the connection
-         * is live and polling. The status flags are otherwise a one-time
-         * snapshot taken at startup (refreshStatus) plus error/restore deltas —
-         * if that snapshot was captured before the backend poller started (a
-         * startup race) and no error ever occurred, the tile would stay "Idle"
-         * with a Reconnect button while music is clearly playing. The playback
-         * store calls this on every playback event to keep the tile honest.
-         */
         markLivePoll() {
             if (this.connected && this.polling && !this.inErrorState) {
                 return;
@@ -143,9 +97,6 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             this.clearError();
         },
 
-        /**
-         * Cleanup event listeners
-         */
         cleanup() {
             EventsOff('PlexConnectionError');
             EventsOff('PlexConnectionRestored');
@@ -153,9 +104,6 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             this.initialized = false;
         },
 
-        /**
-         * Refresh connection status from backend
-         */
         async refreshStatus() {
             try {
                 const status = await GetPlexConnectionStatus();
@@ -175,17 +123,11 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             }
         },
 
-        /**
-         * Manually retry connection
-         */
         async retry() {
             this.loading = true;
             try {
                 await RetryPlexConnection();
             } catch (error) {
-                // Surface the failure (e.g. no server/user configured yet)
-                // instead of leaving the Reconnect button looking like it
-                // did nothing.
                 this.inErrorState = true;
                 this.error = {
                     code: 'PLEX_RETRY_FAILED',
@@ -200,9 +142,6 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             }
         },
 
-        /**
-         * Set error with detailed info from backend
-         */
         async setError(errorCode) {
             try {
                 this.error = await GetErrorInfo(errorCode);
@@ -217,9 +156,6 @@ export const usePlexConnectionStore = defineStore('plexConnection', {
             }
         },
 
-        /**
-         * Clear error state
-         */
         clearError() {
             this.error = null;
         }

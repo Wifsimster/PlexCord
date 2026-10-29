@@ -1,6 +1,5 @@
 version: 2
 updates:
-  # Go dependencies
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -17,7 +16,6 @@ updates:
     assignees:
       - "batti"
 
-  # NPM dependencies (frontend)
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
@@ -34,13 +32,11 @@ updates:
     assignees:
       - "batti"
     ignore:
-      # Ignore major version updates for stable dependencies
       - dependency-name: "vue"
         update-types: ["version-update:semver-major"]
       - dependency-name: "primevue"
         update-types: ["version-update:semver-major"]
 
-  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

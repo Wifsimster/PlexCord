@@ -51,7 +51,6 @@ func TestRecordingBus_Reset(t *testing.T) {
 }
 
 func TestWailsBus_NilContext(t *testing.T) {
-	// Emitting with nil context should not panic (it's a no-op)
 	bus := NewWailsBus(nil) //nolint:staticcheck // SA1012: intentionally nil to verify defensive behavior
 	defer func() {
 		if r := recover(); r != nil {
@@ -62,7 +61,6 @@ func TestWailsBus_NilContext(t *testing.T) {
 }
 
 func TestWailsBus_NilReceiver(t *testing.T) {
-	// Emitting on nil *WailsBus should not panic
 	var bus *WailsBus
 	defer func() {
 		if r := recover(); r != nil {

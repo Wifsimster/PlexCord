@@ -24,29 +24,21 @@ func TestIsNewerVersion(t *testing.T) {
 		current  string
 		expected bool
 	}{
-		// Newer versions
 		{"v1.1.0", "v1.0.0", true},
 		{"v2.0.0", "v1.9.9", true},
 		{"v1.0.1", "v1.0.0", true},
-		{"1.1.0", "1.0.0", true}, // Without v prefix
+		{"1.1.0", "1.0.0", true},
 
-		// Same versions
 		{"v1.0.0", "v1.0.0", false},
 		{"1.0.0", "1.0.0", false},
 
-		// Older versions
 		{"v1.0.0", "v1.1.0", false},
 		{"v1.0.0", "v2.0.0", false},
 
-		// Dev builds always get updates
 		{"v1.0.0", "v0.0.0-dev", true},
 		{"v0.1.0", "v0.0.0-dev", true},
 
-		// Pre-release suffixes (release version newer than pre-release)
 		{"v1.1.0", "v1.0.0-beta", true},
-		// Same base version: release is newer than pre-release
-		// Note: Our simple implementation treats v1.0.0 and v1.0.0-rc1 as same base
-		// For production use, we'd need more sophisticated semver comparison
 		{"v1.0.1", "v1.0.0-rc1", true},
 	}
 
@@ -67,7 +59,6 @@ func TestParseVersion(t *testing.T) {
 		expected [3]int
 	}{
 		{"1.2.3", [3]int{1, 2, 3}},
-		// Note: parseVersion expects 'v' prefix to be stripped by caller (isNewerVersion)
 		{"1.0.0", [3]int{1, 0, 0}},
 		{"0.0.1", [3]int{0, 0, 1}},
 		{"1.2.3-beta", [3]int{1, 2, 3}},

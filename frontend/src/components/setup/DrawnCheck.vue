@@ -1,12 +1,6 @@
 <script setup>
-// M19 — success check draw (spec §4): SVG check stroke-dashoffset draw
-// 320ms --pc-ease-out + optional circle fill fade 180ms delayed 120ms.
-// Reduced motion: the global policy collapses the animation, so the
-// check simply appears (per the M19 fallback).
 defineProps({
-    /** Rendered size in px (square). */
     size: { type: Number, default: 14 },
-    /** Draw the success-dim circle behind the check. */
     circle: { type: Boolean, default: false }
 });
 </script>

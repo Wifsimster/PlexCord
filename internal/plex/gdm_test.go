@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// TestGDMPacketFormat tests that GDM request packet is correct
 func TestGDMPacketFormat(t *testing.T) {
 	expected := "M-SEARCH * HTTP/1.0\r\n\r\n"
 	if gdmRequest != expected {
@@ -13,7 +12,6 @@ func TestGDMPacketFormat(t *testing.T) {
 	}
 }
 
-// TestGDMMulticastAddress tests that multicast address is correct
 func TestGDMMulticastAddress(t *testing.T) {
 	expected := "239.0.0.250:32414"
 	if gdmMulticastAddr != expected {
@@ -21,7 +19,6 @@ func TestGDMMulticastAddress(t *testing.T) {
 	}
 }
 
-// TestParseGDMResponse tests parsing a valid GDM response
 func TestParseGDMResponse(t *testing.T) {
 	response := `HTTP/1.0 200 OK
 Name: MyPlexServer
@@ -54,7 +51,6 @@ Resource-Identifier: 1234567890abcdef`
 	}
 }
 
-// TestParseGDMResponseMissingName tests that missing Name field returns error
 func TestParseGDMResponseMissingName(t *testing.T) {
 	response := `HTTP/1.0 200 OK
 Port: 32400
@@ -66,7 +62,6 @@ Resource-Identifier: 1234567890abcdef`
 	}
 }
 
-// TestIsLocalIP tests local IP detection
 func TestIsLocalIP(t *testing.T) {
 	tests := []struct {
 		ip       string
@@ -89,7 +84,6 @@ func TestIsLocalIP(t *testing.T) {
 	}
 }
 
-// TestDeduplicateServers tests server deduplication by ID
 func TestDeduplicateServers(t *testing.T) {
 	servers := []Server{
 		{ID: "server-1", Name: "Server 1"},
@@ -101,12 +95,10 @@ func TestDeduplicateServers(t *testing.T) {
 
 	result := deduplicateServers(servers)
 
-	// Should have 4 servers: 2 unique IDs + 2 without IDs
 	if len(result) != 4 {
 		t.Errorf("Expected 4 servers after deduplication, got %d", len(result))
 	}
 
-	// Check that server-1 appears only once
 	count := 0
 	for _, s := range result {
 		if s.ID == "server-1" {
@@ -118,7 +110,6 @@ func TestDeduplicateServers(t *testing.T) {
 	}
 }
 
-// TestDeduplicateServersEmpty tests deduplication with empty slice
 func TestDeduplicateServersEmpty(t *testing.T) {
 	servers := []Server{}
 	result := deduplicateServers(servers)
@@ -128,7 +119,6 @@ func TestDeduplicateServersEmpty(t *testing.T) {
 	}
 }
 
-// TestNewGDMScanner tests scanner creation
 func TestNewGDMScanner(t *testing.T) {
 	timeout := 5 * time.Second
 	scanner := NewGDMScanner(timeout)
@@ -142,7 +132,6 @@ func TestNewGDMScanner(t *testing.T) {
 	}
 }
 
-// TestServerURL tests Server.URL() method
 func TestServerURL(t *testing.T) {
 	server := Server{
 		Address: "192.168.1.100",
@@ -157,10 +146,7 @@ func TestServerURL(t *testing.T) {
 	}
 }
 
-// TestGDMScannerTimeout tests that scan respects timeout
 func TestGDMScannerTimeout(t *testing.T) {
-	// This test verifies timeout mechanism works
-	// We can't test actual network discovery in unit tests
 	scanner := NewGDMScanner(100 * time.Millisecond)
 
 	if scanner.timeout != 100*time.Millisecond {

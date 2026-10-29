@@ -1,13 +1,8 @@
 <script setup>
 import BrandSymbol from '@/components/BrandSymbol.vue';
 
-// Single logo lockup (spec §5.0.5): the PlexCord symbol + the "PlexCord"
-// wordmark, used by the topbar and the wizard rail. See BrandSymbol.vue and
-// docs/brand.md for the symbol itself ("the live badge").
 defineProps({
-    /** Optional uppercase suffix after the wordmark (e.g. 'SETUP'). */
     suffix: { type: String, default: '' },
-    /** Symbol size in px (the small optical size below 32). */
     size: { type: Number, default: 20 }
 });
 </script>

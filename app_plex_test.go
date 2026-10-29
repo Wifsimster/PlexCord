@@ -10,11 +10,6 @@ import (
 	"plexcord/internal/plex"
 )
 
-// The PIN link flow and the reconnection loop used to reach straight for
-// plex.NewAuthenticator and a live retry.Manager. Behind the
-// PlexAuthenticator and RetryManager seams they can be checked without
-// contacting plex.tv or waiting out a backoff schedule.
-
 func TestStartPlexPINAuthReturnsCodeAndURL(t *testing.T) {
 	expires := time.Now().Add(15 * time.Minute)
 	auth := &fakeAuthenticator{
@@ -71,8 +66,6 @@ func TestCheckPlexPINAuthAuthorized(t *testing.T) {
 		t.Errorf("authToken = %v, want the issued token", result["authToken"])
 	}
 
-	// The authenticator is released once the token is in hand, so a stale
-	// poll cannot hand the token out a second time.
 	if _, err := app.CheckPlexPINAuth(1); err == nil {
 		t.Error("CheckPlexPINAuth() succeeded after the PIN was consumed")
 	}
@@ -99,8 +92,6 @@ func TestCheckPlexPINAuthExpired(t *testing.T) {
 	}
 }
 
-// TestStartPlexRetryOnlyForRecoverableErrors verifies PlexCord does not spin a
-// backoff loop against a problem retrying cannot fix.
 func TestStartPlexRetryOnlyForRecoverableErrors(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -138,8 +129,6 @@ func TestStartPlexRetryOnlyForRecoverableErrors(t *testing.T) {
 	}
 }
 
-// TestRetryPlexConnectionRequiresConfiguration verifies the Reconnect button
-// reports why it cannot do anything, instead of appearing unresponsive.
 func TestRetryPlexConnectionRequiresConfiguration(t *testing.T) {
 	app := newTestApp(config.DefaultConfig())
 
@@ -157,8 +146,6 @@ func TestRetryPlexConnectionRequiresConfiguration(t *testing.T) {
 	}
 }
 
-// TestValidatePlexConnectionStopsRetries verifies a successful validation ends
-// the backoff loop and records the connection.
 func TestValidatePlexConnectionStopsRetries(t *testing.T) {
 	app := newTestApp(config.DefaultConfig())
 	app.tokens = &fakeTokenStore{token: "a-token"}
@@ -184,8 +171,6 @@ func TestValidatePlexConnectionRequiresToken(t *testing.T) {
 	}
 }
 
-// TestDiscoverPlexServersUsesInjectedDiscoverer verifies the setup wizard's
-// discovery step runs without multicast traffic.
 func TestDiscoverPlexServersUsesInjectedDiscoverer(t *testing.T) {
 	app := newTestApp(config.DefaultConfig())
 	app.discovery = &fakeDiscoverer{servers: []plex.Server{
@@ -215,9 +200,6 @@ func TestSaveServerURLRejectsNonHTTPSchemes(t *testing.T) {
 	}
 }
 
-// TestPlexRecoveryRestoresPresence covers a short Plex outage mid-playback: the
-// error cleared the presence, and the poll loop emits nothing on recovery when
-// the same item is still playing, so recovery itself must put it back.
 func TestPlexRecoveryRestoresPresence(t *testing.T) {
 	presence := &recordingPresence{connected: true}
 	app := newTestApp(config.DefaultConfig())
@@ -232,8 +214,6 @@ func TestPlexRecoveryRestoresPresence(t *testing.T) {
 	}
 }
 
-// TestPlexRecoveryKeepsManualPause verifies recovery does not un-hide a
-// presence the user paused.
 func TestPlexRecoveryKeepsManualPause(t *testing.T) {
 	presence := &recordingPresence{connected: true}
 	app := newTestApp(config.DefaultConfig())

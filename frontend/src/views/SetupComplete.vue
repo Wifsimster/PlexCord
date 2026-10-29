@@ -6,9 +6,6 @@ import { GetPresenceFormat } from '../../wailsjs/go/main/App';
 import DiscordSpecimen from '@/components/DiscordSpecimen.vue';
 import DrawnCheck from '@/components/setup/DrawnCheck.vue';
 
-// Step 5 — Complete (spec §5.4 / F32). Pure summary view: all side effects
-// (Discord connect if needed → StartSessionPolling → CompleteSetup) run in
-// the wizard footer's Finish action (setupStore.finishSetup) — NOT here.
 const setupStore = useSetupStore();
 const { currentTrack, isPaused } = usePlayback();
 
@@ -32,25 +29,21 @@ onMounted(async () => {
         </div>
 
         <div class="setup-panels">
-            <!-- Finish failure (F32): surfaced here, never swallowed -->
             <section v-if="setupStore.finishError" class="pc-panel complete-error" role="alert">
                 <p class="complete-error-title"><i class="pi pi-times-circle" aria-hidden="true"></i> {{ $t('complete.errTitle') }}</p>
                 <p class="complete-error-text">{{ setupStore.finishError }}</p>
                 <p class="complete-error-suggestion">{{ $t('complete.errSuggestion') }}</p>
             </section>
 
-            <!-- Discord skipped (F29) -->
             <section v-if="setupStore.discordSkipped && !setupStore.discordConnected" class="pc-panel complete-warn">
                 <p class="complete-warn-text"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ $t('complete.discordSkipped') }}</p>
             </section>
 
-            <!-- Live specimen: exactly what Discord will show -->
             <section class="pc-panel">
                 <span class="pc-eyebrow complete-eyebrow">{{ $t('complete.yourPresence') }}</span>
                 <DiscordSpecimen :track="currentTrack" :formats="formats" :paused="isPaused" :idle-title="$t('complete.idleTitle')" />
             </section>
 
-            <!-- What happens next -->
             <section class="pc-panel">
                 <span class="pc-eyebrow complete-eyebrow">{{ $t('complete.whatNext') }}</span>
                 <ul class="next-list">
@@ -91,7 +84,6 @@ onMounted(async () => {
     margin-bottom: 12px;
 }
 
-/* ---- Failure panel ---- */
 .complete-error {
     border-color: color-mix(in srgb, var(--pc-danger) 40%, transparent);
     background: var(--pc-danger-dim);
@@ -117,7 +109,6 @@ onMounted(async () => {
     color: var(--pc-text-muted);
 }
 
-/* ---- Discord-skipped warn panel ---- */
 .complete-warn {
     border-color: color-mix(in srgb, var(--pc-warn) 40%, transparent);
     background: var(--pc-warn-dim);
@@ -131,7 +122,6 @@ onMounted(async () => {
     color: var(--pc-warn);
 }
 
-/* ---- What happens next ---- */
 .next-list {
     list-style: none;
     margin: 0;

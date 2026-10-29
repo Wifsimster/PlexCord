@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
-// Mock Wails runtime
 vi.mock('../../../wailsjs/runtime/runtime', () => ({
   EventsOn: vi.fn(),
   EventsOff: vi.fn()
 }))
 
-// Mock backend calls
 vi.mock('../../../wailsjs/go/main/App', () => ({
   IsDiscordConnected: vi.fn().mockResolvedValue(false),
   GetConnectionHistory: vi.fn().mockResolvedValue({
@@ -274,7 +272,6 @@ describe('discordConnection store', () => {
         expect(store.initialized).toBe(true)
         expect(EventsOn).toHaveBeenCalledTimes(3)
 
-        // Second call should be a no-op
         await store.initialize()
         expect(EventsOn).toHaveBeenCalledTimes(3)
 
@@ -311,7 +308,6 @@ describe('discordConnection store', () => {
       })
 
       it('DiscordDisconnected reads code from the nested error payload that the backend actually emits', async () => {
-        // discord.ConnectionEvent marshals as {connected, error: {code, message}, clientId}.
         await eventHandlers['DiscordDisconnected']({
           connected: false,
           error: { code: 'DISCORD_CONN_FAILED', message: 'pipe broken' }

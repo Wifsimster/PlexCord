@@ -12,8 +12,6 @@ import (
 	"plexcord/internal/version"
 )
 
-// newTestUpdater builds an Updater with fast timings and controllable fakes.
-// Override the injected funcs after construction as needed.
 func newTestUpdater(bus events.Bus) *Updater {
 	u := New(bus, 20*time.Millisecond)
 	u.initialDelay = time.Millisecond
@@ -32,7 +30,6 @@ func updateInfo(v string) *version.UpdateInfo {
 	return &version.UpdateInfo{Available: true, CurrentVersion: "v1.0.0", LatestVersion: v}
 }
 
-// waitFor polls until cond returns true or the timeout elapses.
 func waitFor(t *testing.T, cond func() bool, msg string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -62,7 +59,6 @@ func TestAutoCheckDownloadsOnceAndDedupsAcrossTicks(t *testing.T) {
 	u.StartChecker(context.Background())
 	defer u.StopChecker()
 
-	// Wait for several ticks to pass.
 	waitFor(t, func() bool { return checks.Load() >= 3 }, "at least 3 checks")
 
 	if got := downloads.Load(); got != 1 {
@@ -82,7 +78,7 @@ func TestAutoCheckDownloadsOnceAndDedupsAcrossTicks(t *testing.T) {
 func TestAutoCheckNewVersionSupersedesDedup(t *testing.T) {
 	bus := events.NewRecordingBus()
 	u := newTestUpdater(bus)
-	u.canSelf = func() bool { return false } // notify-only keeps state simple
+	u.canSelf = func() bool { return false }
 
 	var checks atomic.Int32
 	u.check = func() (*version.UpdateInfo, error) {
@@ -166,13 +162,11 @@ func TestStopCheckerStopsAndStartIsIdempotent(t *testing.T) {
 
 	ctx := context.Background()
 	u.StartChecker(ctx)
-	u.StartChecker(ctx) // idempotent: must not spawn a second loop
+	u.StartChecker(ctx)
 
 	waitFor(t, func() bool { return checks.Load() >= 1 }, "first check")
-	// With a 1ms initial delay, a duplicate goroutine would have doubled the
-	// early check count; give both a moment then compare against ticks.
 	u.StopChecker()
-	u.StopChecker() // idempotent
+	u.StopChecker()
 
 	stopped := checks.Load()
 	time.Sleep(80 * time.Millisecond)
@@ -180,7 +174,6 @@ func TestStopCheckerStopsAndStartIsIdempotent(t *testing.T) {
 		t.Errorf("checks continued after StopChecker: %d -> %d", stopped, checks.Load())
 	}
 
-	// Restart works after a stop.
 	u.StartChecker(ctx)
 	waitFor(t, func() bool { return checks.Load() > stopped }, "check after restart")
 	u.StopChecker()
@@ -214,7 +207,6 @@ func TestStartDownloadRejectsConcurrentAndCachesReady(t *testing.T) {
 		t.Fatalf("first download failed: %v", err)
 	}
 
-	// A download after the update is ready must not re-download.
 	info, err := u.StartDownload(context.Background(), false)
 	if err != nil {
 		t.Fatalf("StartDownload after ready: %v", err)
@@ -230,7 +222,6 @@ func TestStartDownloadRejectsConcurrentAndCachesReady(t *testing.T) {
 func TestAutoCheckDoesNotClobberInFlightDownload(t *testing.T) {
 	bus := events.NewRecordingBus()
 	u := newTestUpdater(bus)
-	// No prior auto-announce: a purely manual download, notifiedVersion == "".
 	u.check = func() (*version.UpdateInfo, error) {
 		return updateInfo("v9.9.9"), nil
 	}
@@ -241,7 +232,6 @@ func TestAutoCheckDoesNotClobberInFlightDownload(t *testing.T) {
 		return &version.UpdateInfo{LatestVersion: "v9.9.9"}, nil
 	}
 
-	// Start a manual download and let it reach StateDownloading.
 	done := make(chan error, 1)
 	go func() {
 		_, err := u.StartDownload(context.Background(), false)
@@ -249,8 +239,6 @@ func TestAutoCheckDoesNotClobberInFlightDownload(t *testing.T) {
 	}()
 	waitFor(t, func() bool { return u.GetStatus().State == StateDownloading }, "manual download reaches downloading")
 
-	// An automatic check firing now must not overwrite the downloading status
-	// nor emit a spurious UpdateAvailable.
 	u.runAutoCheck(context.Background())
 
 	if st := u.GetStatus().State; st != StateDownloading {
@@ -282,8 +270,6 @@ func TestAutoDownloadFailureRetriesWithoutReannouncing(t *testing.T) {
 
 	waitFor(t, func() bool { return downloads.Load() >= 3 }, "download retried across ticks")
 
-	// The update is announced exactly once even though the download keeps
-	// failing and retrying every tick.
 	if got := bus.Count(events.UpdateAvailable); got != 1 {
 		t.Errorf("UpdateAvailable emitted %d times, want 1 (no re-announce on retry)", got)
 	}
@@ -353,7 +339,6 @@ func TestDownloadEmitsProgressAndReady(t *testing.T) {
 		t.Errorf("UpdateReady emitted %d times, want 1", got)
 	}
 
-	// Payload shape: percent must be present and computed.
 	for _, e := range bus.Snapshot() {
 		if e.Name != events.UpdateDownloadProgress {
 			continue
@@ -368,9 +353,6 @@ func TestDownloadEmitsProgressAndReady(t *testing.T) {
 	}
 }
 
-// TestOnStatusChangeReportsTransitions verifies the in-process listener (used by
-// the system tray, which cannot see the frontend events) sees each lifecycle
-// transition and not the download progress in between.
 func TestOnStatusChangeReportsTransitions(t *testing.T) {
 	bus := events.NewRecordingBus()
 	u := newTestUpdater(bus)
@@ -383,8 +365,6 @@ func TestOnStatusChangeReportsTransitions(t *testing.T) {
 		mu.Unlock()
 	})
 
-	// Registering delivers the current state immediately, so a listener wired
-	// up after an early transition is not left behind.
 	mu.Lock()
 	initial := append([]State(nil), states...)
 	mu.Unlock()
@@ -394,7 +374,6 @@ func TestOnStatusChangeReportsTransitions(t *testing.T) {
 
 	u.check = func() (*version.UpdateInfo, error) { return updateInfo("v9.9.9"), nil }
 	u.download = func(_ context.Context, progress version.ProgressFunc) (*version.UpdateInfo, error) {
-		// Progress is not a state change and must not notify.
 		progress(50, 100)
 		progress(100, 100)
 		return &version.UpdateInfo{LatestVersion: "v9.9.9"}, nil
@@ -425,8 +404,6 @@ func TestOnStatusChangeReportsTransitions(t *testing.T) {
 	}
 }
 
-// TestOnStatusChangeReportsFailedDownload verifies a failed download reports the
-// state it fell back to, so the tray stops advertising a download in progress.
 func TestOnStatusChangeReportsFailedDownload(t *testing.T) {
 	u := newTestUpdater(events.NewRecordingBus())
 
@@ -460,9 +437,6 @@ func TestOnStatusChangeReportsFailedDownload(t *testing.T) {
 	}
 }
 
-// TestManualCheckRecordsTheUpdate verifies a user-initiated check lands in the
-// shared status — so it survives a page reload, reaches the system tray, and
-// primes the dedup — without starting a download.
 func TestManualCheckRecordsTheUpdate(t *testing.T) {
 	u := newTestUpdater(events.NewRecordingBus())
 
@@ -494,19 +468,16 @@ func TestManualCheckRecordsTheUpdate(t *testing.T) {
 	if got := downloads.Load(); got != 0 {
 		t.Errorf("downloads = %d, want 0 — the user decides when to install", got)
 	}
-	// One notification when the listener registered, one for the transition.
 	if got := notified.Load(); got != 2 {
 		t.Errorf("status notifications = %d, want 2", got)
 	}
 }
 
-// TestManualCheckPrimesAnnouncementDedup verifies the background checker does not
-// re-announce a version the user already saw in Settings.
 func TestManualCheckPrimesAnnouncementDedup(t *testing.T) {
 	bus := events.NewRecordingBus()
 	u := newTestUpdater(bus)
 	u.check = func() (*version.UpdateInfo, error) { return updateInfo("v9.9.9"), nil }
-	u.canSelf = func() bool { return false } // notify-only: no download to confuse the count
+	u.canSelf = func() bool { return false }
 
 	if _, err := u.Check(); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -515,7 +486,6 @@ func TestManualCheckPrimesAnnouncementDedup(t *testing.T) {
 	u.StartChecker(context.Background())
 	defer u.StopChecker()
 
-	// Let the checker run at least two cycles.
 	waitFor(t, func() bool { return u.GetStatus().State == StateAvailable }, "checker to settle")
 	time.Sleep(60 * time.Millisecond)
 
@@ -524,8 +494,6 @@ func TestManualCheckPrimesAnnouncementDedup(t *testing.T) {
 	}
 }
 
-// TestManualCheckLeavesAppliedUpdateAlone verifies a check that finds nothing new
-// does not retract an update already downloaded and waiting for a restart.
 func TestManualCheckLeavesAppliedUpdateAlone(t *testing.T) {
 	u := newTestUpdater(events.NewRecordingBus())
 
@@ -546,8 +514,6 @@ func TestManualCheckLeavesAppliedUpdateAlone(t *testing.T) {
 	}
 }
 
-// TestManualCheckPropagatesFailure verifies a failing check does not touch the
-// status.
 func TestManualCheckPropagatesFailure(t *testing.T) {
 	u := newTestUpdater(events.NewRecordingBus())
 	u.check = func() (*version.UpdateInfo, error) { return nil, errors.New("offline") }

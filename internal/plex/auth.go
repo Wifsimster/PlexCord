@@ -18,11 +18,10 @@ import (
 const (
 	plexPinURL  = "https://plex.tv/api/v2/pins"
 	plexAuthURL = "https://app.plex.tv/auth#"
-	clientID    = "plexcord-" // Will be appended with generated UUID
+	clientID    = "plexcord-"
 	productName = "PlexCord"
 )
 
-// PINResponse represents the response from creating a PIN
 type PINResponse struct {
 	Location struct {
 		Code string `json:"code"`
@@ -30,24 +29,21 @@ type PINResponse struct {
 	} `json:"location"`
 	CreatedAt        time.Time `json:"createdAt"`
 	ExpiresAt        time.Time `json:"expiresAt"`
-	Code             string    `json:"code"` // The 4-digit PIN
+	Code             string    `json:"code"`
 	Product          string    `json:"product"`
 	ClientIdentifier string    `json:"clientIdentifier"`
-	AuthToken        string    `json:"authToken"` // Present after user authorizes
+	AuthToken        string    `json:"authToken"`
 	ID               int       `json:"id"`
-	ExpiresIn        int       `json:"expiresIn"` // Seconds until expiration
+	ExpiresIn        int       `json:"expiresIn"`
 	Trusted          bool      `json:"trusted"`
 }
 
-// Authenticator stores PIN authentication state.
 type Authenticator struct {
 	httpClient *http.Client
 	clientID   string
 }
 
-// NewAuthenticator creates a new PIN-based authenticator
 func NewAuthenticator() *Authenticator {
-	// Generate a unique client ID for this installation
 	clientID := fmt.Sprintf("%s%d", clientID, time.Now().Unix())
 
 	return &Authenticator{
@@ -58,18 +54,15 @@ func NewAuthenticator() *Authenticator {
 	}
 }
 
-// RequestPIN requests a new PIN from plex.tv
 func (a *Authenticator) RequestPIN(ctx context.Context) (*PINResponse, error) {
-	// Build form data
 	data := url.Values{}
-	data.Set("strong", "true") // Request a 4-digit PIN
+	data.Set("strong", "true")
 
 	req, err := http.NewRequestWithContext(ctx, "POST", plexPinURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to create PIN request")
 	}
 
-	// Set required headers
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Plex-Product", productName)
@@ -108,7 +101,6 @@ func (a *Authenticator) RequestPIN(ctx context.Context) (*PINResponse, error) {
 	return &pinResp, nil
 }
 
-// CheckPIN checks if the user has authorized the PIN and returns the auth token if available
 func (a *Authenticator) CheckPIN(ctx context.Context, pinID int) (*PINResponse, error) {
 	checkURL := fmt.Sprintf("%s/%d", plexPinURL, pinID)
 
@@ -117,7 +109,6 @@ func (a *Authenticator) CheckPIN(ctx context.Context, pinID int) (*PINResponse, 
 		return nil, errors.Wrap(err, errors.PLEX_CONN_FAILED, "failed to create PIN check request")
 	}
 
-	// Set required headers
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Plex-Client-Identifier", a.clientID)
 
@@ -153,7 +144,6 @@ func (a *Authenticator) CheckPIN(ctx context.Context, pinID int) (*PINResponse, 
 	return &pinResp, nil
 }
 
-// GetAuthURL returns the URL the user should visit to authorize the PIN
 func (a *Authenticator) GetAuthURL(pinCode string) string {
 	params := url.Values{}
 	params.Set("clientID", a.clientID)
@@ -163,10 +153,8 @@ func (a *Authenticator) GetAuthURL(pinCode string) string {
 	return fmt.Sprintf("%s?%s", plexAuthURL, params.Encode())
 }
 
-// WaitForAuth polls for PIN authorization and returns the auth token when available
-// This blocks until either the user authorizes, the PIN expires, or the context is canceled
 func (a *Authenticator) WaitForAuth(ctx context.Context, pinID int, pinCode string) (string, error) {
-	ticker := time.NewTicker(1 * time.Second) // Poll every second
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -179,12 +167,10 @@ func (a *Authenticator) WaitForAuth(ctx context.Context, pinID int, pinCode stri
 				return "", err
 			}
 
-			// Check if we have an auth token
 			if pinResp.AuthToken != "" {
 				return pinResp.AuthToken, nil
 			}
 
-			// Check if PIN has expired
 			if time.Now().After(pinResp.ExpiresAt) {
 				return "", errors.New(errors.PLEX_CONN_FAILED, "PIN expired before authorization")
 			}
