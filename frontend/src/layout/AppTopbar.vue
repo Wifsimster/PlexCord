@@ -119,8 +119,7 @@ const isMaximised = ref(false);
 const syncMaximised = async () => {
     try {
         isMaximised.value = await WindowIsMaximised();
-    } catch {
-    }
+    } catch {}
 };
 
 const minimiseWindow = () => WindowMinimise();

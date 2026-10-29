@@ -55,6 +55,7 @@ export namespace history {
 	    artist: string;
 	    album: string;
 	    duration: number;
+	    // Go type: time
 	    startedAt: any;
 	    thumbUrl?: string;
 	
@@ -112,7 +113,9 @@ export namespace history {
 export namespace main {
 	
 	export class ConnectionHistory {
+	    // Go type: time
 	    plexLastConnected?: any;
+	    // Go type: time
 	    discordLastConnected?: any;
 	
 	    static createFrom(source: any = {}) {
@@ -328,6 +331,7 @@ export namespace plex {
 export namespace retry {
 	
 	export class RetryState {
+	    // Go type: time
 	    nextRetryAt: any;
 	    lastError?: string;
 	    lastErrorCode?: string;

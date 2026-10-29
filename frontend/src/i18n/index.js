@@ -22,8 +22,7 @@ export function detectLocale() {
     try {
         const saved = matchSupported(localStorage.getItem(LOCALE_STORAGE_KEY));
         if (saved) return saved;
-    } catch {
-    }
+    } catch {}
 
     const candidates = [];
     if (typeof navigator !== 'undefined') {
@@ -51,8 +50,7 @@ export function setLocale(locale) {
     i18n.global.locale.value = matched;
     try {
         localStorage.setItem(LOCALE_STORAGE_KEY, matched);
-    } catch {
-    }
+    } catch {}
     if (typeof document !== 'undefined') {
         document.documentElement.setAttribute('lang', matched);
     }

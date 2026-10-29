@@ -1,7 +1,50 @@
 #!/usr/bin/env bash
+#
+# File: .claude/hooks/piper-installer.sh
+#
+# AgentVibes - Finally, your AI Agents can Talk Back! Text-to-Speech WITH personality for AI Assistants!
+#
+# Usage: piper-installer.sh [--non-interactive]
+# Website: https://agentvibes.org
+# Repository: https://github.com/paulpreibisch/AgentVibes
+#
+# Co-created by Paul Preibisch with Claude AI
+# Copyright (c) 2025 Paul Preibisch
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# DISCLAIMER: This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# express or implied, including but not limited to the warranties of
+# merchantability, fitness for a particular purpose and noninfringement.
+# In no event shall the authors or copyright holders be liable for any claim,
+# damages or other liability, whether in an action of contract, tort or
+# otherwise, arising from, out of or in connection with the software or the
+# use or other dealings in the software.
+#
+# ---
+#
+# @fileoverview Piper TTS Installer - Installs Piper TTS via pipx and downloads initial voice models
+# @context Automated installation script for free offline Piper TTS on WSL/Linux systems
+# @architecture Helper script for AgentVibes installer, invoked manually or from provider switcher
+# @dependencies pipx (Python package installer), apt-get/brew/dnf/pacman (for pipx installation)
+# @entrypoints Called by src/installer.js or manually by users during setup
+# @patterns Platform detection (WSL/Linux only), package manager abstraction, guided voice download
+# @related piper-download-voices.sh, provider-manager.sh, src/installer.js
+#
 
-set -e
+set -e  # Exit on error
 
+# Parse command line arguments
 NON_INTERACTIVE=false
 if [[ "$1" == "--non-interactive" ]]; then
   NON_INTERACTIVE=true
@@ -11,9 +54,11 @@ echo "🎤 Piper TTS Installer"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+# Detect platform
 PLATFORM="$(uname -s)"
 ARCH="$(uname -m)"
 
+# Check if running on macOS, WSL, or Linux
 if [[ "$PLATFORM" == "Darwin" ]]; then
   IS_MACOS=true
   echo "🍎 Detected macOS"
@@ -28,7 +73,9 @@ else
   exit 1
 fi
 
+# Check if Piper is already installed
 if command -v piper &> /dev/null; then
+  # Piper doesn't have a --version flag, just check if it exists
   echo "✅ Piper TTS is already installed!"
   echo "   Location: $(which piper)"
   echo ""
@@ -39,10 +86,12 @@ fi
 echo "📦 Installing Piper TTS..."
 echo ""
 
+# macOS: Use precompiled binaries
 if [[ "$IS_MACOS" == true ]]; then
   echo "🍎 Installing Piper TTS from precompiled binaries for macOS..."
   echo ""
 
+  # Determine architecture
   if [[ "$ARCH" == "arm64" ]]; then
     echo "Detected Apple Silicon (M1/M2/M3)"
     PIPER_URL="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_aarch64.tar.gz"
@@ -54,9 +103,11 @@ if [[ "$IS_MACOS" == true ]]; then
     exit 1
   fi
 
+  # Create installation directory
   INSTALL_DIR="$HOME/.local/bin"
   mkdir -p "$INSTALL_DIR"
 
+  # Download and extract
   echo "📥 Downloading Piper from: $PIPER_URL"
   TEMP_DIR=$(mktemp -d)
   cd "$TEMP_DIR"
@@ -64,6 +115,7 @@ if [[ "$IS_MACOS" == true ]]; then
   if curl -L "$PIPER_URL" | tar -xz; then
     echo "✅ Downloaded and extracted successfully"
 
+    # Copy binaries to ~/.local/bin
     if [[ -d "piper" ]]; then
       cp -r piper/* "$INSTALL_DIR/"
       chmod +x "$INSTALL_DIR/piper"
@@ -71,6 +123,7 @@ if [[ "$IS_MACOS" == true ]]; then
 
       echo "✅ Installed Piper to: $INSTALL_DIR/piper"
 
+      # Add to PATH if not already there
       if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
         echo ""
         echo "⚠️  Add $INSTALL_DIR to your PATH:"
@@ -101,18 +154,24 @@ if [[ "$IS_MACOS" == true ]]; then
 
 # Linux/WSL: Use pipx
 else
+  # Check if pipx is installed
   if ! command -v pipx &> /dev/null; then
     echo "⚠️  pipx not found. Installing pipx first..."
     echo ""
 
+    # Try to install pipx
     if command -v apt-get &> /dev/null; then
+      # Debian/Ubuntu
       sudo apt-get update
       sudo apt-get install -y pipx
     elif command -v brew &> /dev/null; then
+      # Linux with Homebrew
       brew install pipx
     elif command -v dnf &> /dev/null; then
+      # Fedora
       sudo dnf install -y pipx
     elif command -v pacman &> /dev/null; then
+      # Arch Linux
       sudo pacman -S python-pipx
     else
       echo "❌ Unable to install pipx automatically."
@@ -122,10 +181,12 @@ else
       exit 1
     fi
 
+    # Ensure pipx is in PATH
     pipx ensurepath
     echo ""
   fi
 
+  # Install Piper TTS
   echo "📥 Installing Piper TTS via pipx..."
   pipx install piper-tts
 
@@ -143,13 +204,16 @@ echo ""
 echo "✅ Piper TTS installed successfully!"
 echo ""
 
+# Use full path since PATH hasn't been updated in current session
 PIPER_VERSION=$($INSTALL_DIR/piper --version 2>&1 || echo "unknown")
 echo "   Version: $PIPER_VERSION"
 echo ""
 
+# Determine voices directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Check for configured voices directory
 VOICES_DIR=""
 if [[ -f "$CLAUDE_DIR/piper-voices-dir.txt" ]]; then
   VOICES_DIR=$(cat "$CLAUDE_DIR/piper-voices-dir.txt")
@@ -162,6 +226,7 @@ fi
 echo "📁 Voice storage location: $VOICES_DIR"
 echo ""
 
+# Ask if user wants to download voices now (skip in non-interactive mode)
 DOWNLOAD_VOICES=true
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
   read -p "Would you like to download voice models now? [Y/n] " -n 1 -r
@@ -180,9 +245,11 @@ if [[ "$DOWNLOAD_VOICES" == "true" ]]; then
   echo "📥 Downloading recommended voices..."
   echo ""
 
+  # Use the piper-download-voices.sh script if available
   if [[ -f "$SCRIPT_DIR/piper-download-voices.sh" ]]; then
     "$SCRIPT_DIR/piper-download-voices.sh" --yes
   else
+    # Manual download of a basic voice
     mkdir -p "$VOICES_DIR"
 
     echo "Downloading en_US-lessac-medium (recommended)..."

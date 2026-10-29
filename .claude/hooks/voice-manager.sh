@@ -1,26 +1,74 @@
 #!/usr/bin/env bash
+#
+# File: .claude/hooks/voice-manager.sh
+#
+# AgentVibes - Finally, your AI Agents can Talk Back! Text-to-Speech WITH personality for AI Assistants!
+# Website: https://agentvibes.org
+# Repository: https://github.com/paulpreibisch/AgentVibes
+#
+# Co-created by Paul Preibisch with Claude AI
+# Copyright (c) 2025 Paul Preibisch
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# DISCLAIMER: This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# express or implied. Use at your own risk. See the Apache License for details.
+#
+# ---
+#
+# @fileoverview Voice Manager - Unified voice management for Piper and macOS providers
+# @context Central interface for listing, switching, previewing, and replaying TTS voices across providers
+# @architecture Provider-aware operations with dynamic voice listing based on active provider
+# @dependencies piper-voice-manager.sh (Piper voices), provider-manager.sh
+# @entrypoints Called by /agent-vibes:switch, /agent-vibes:list, /agent-vibes:whoami, /agent-vibes:replay commands
+# @patterns Provider abstraction, numbered selection UI, silent mode for programmatic switching
+# @related piper-voice-manager.sh, .claude/tts-voice.txt, .claude/audio/ (replay)
 
+# Get script directory (physical path for sourcing files)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
+# Bash 3.2 compatible lowercase function (macOS ships with bash 3.2)
+# ${var,,} syntax requires bash 4.0+
 to_lower() {
   echo "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+# Determine target .claude directory based on context
+# Priority:
+# 1. CLAUDE_PROJECT_DIR env var (set by MCP for project-specific settings)
+# 2. Script location (for direct slash command usage)
+# 3. Global ~/.claude (fallback)
+
 if [[ -n "$CLAUDE_PROJECT_DIR" ]] && [[ -d "$CLAUDE_PROJECT_DIR/.claude" ]]; then
+  # MCP context: Use the project directory where MCP was invoked
   CLAUDE_DIR="$CLAUDE_PROJECT_DIR/.claude"
 else
+  # Direct usage context: Use script location
   SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   CLAUDE_DIR="$(dirname "$SCRIPT_PATH")"
 
+  # If script is in global ~/.claude, use that
   if [[ "$CLAUDE_DIR" == "$HOME/.claude" ]]; then
     CLAUDE_DIR="$HOME/.claude"
   elif [[ ! -d "$CLAUDE_DIR" ]]; then
+    # Fallback to global if directory doesn't exist
     CLAUDE_DIR="$HOME/.claude"
   fi
 fi
 
 VOICE_FILE="$CLAUDE_DIR/tts-voice.txt"
 
+# Helper function to get default voice based on active provider
 get_default_voice() {
   local provider_file="$CLAUDE_DIR/tts-provider.txt"
   [[ ! -f "$provider_file" ]] && provider_file="$HOME/.claude/tts-provider.txt"
@@ -30,42 +78,47 @@ get_default_voice() {
 
   case "$active_provider" in
     piper)
-      echo "en_US-lessac-medium"
+      echo "en_US-lessac-medium"  # Piper default
       ;;
     macos)
-      echo "Samantha"
+      echo "Samantha"  # macOS default
       ;;
     *)
-      echo "en_US-lessac-medium"
+      echo "en_US-lessac-medium"  # Default to Piper
       ;;
   esac
 }
 
 case "$1" in
   list)
+    # Get active provider
     PROVIDER_FILE="$CLAUDE_DIR/tts-provider.txt"
     if [[ ! -f "$PROVIDER_FILE" ]]; then
       PROVIDER_FILE="$HOME/.claude/tts-provider.txt"
     fi
 
-    ACTIVE_PROVIDER="piper"
+    ACTIVE_PROVIDER="piper"  # default
     if [ -f "$PROVIDER_FILE" ]; then
       ACTIVE_PROVIDER=$(cat "$PROVIDER_FILE")
     fi
 
     CURRENT_VOICE=$(cat "$VOICE_FILE" 2>/dev/null || get_default_voice)
 
+    # Use Node.js formatter for beautiful boxen display
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
     FORMATTER="$PROJECT_ROOT/src/cli/list-voices.js"
 
     if [[ "$ACTIVE_PROVIDER" == "piper" ]]; then
+      # Get voice directory for Piper
       if [[ -f "$SCRIPT_DIR/piper-voice-manager.sh" ]]; then
         source "$SCRIPT_DIR/piper-voice-manager.sh"
         VOICE_DIR=$(get_voice_storage_dir)
 
+        # Use Node.js formatter if available
         if [[ -f "$FORMATTER" ]] && command -v node &> /dev/null; then
           node "$FORMATTER" "piper" "$CURRENT_VOICE" "$VOICE_DIR"
         else
+          # Fallback to plain text display
           echo "🎤 Available Piper TTS Voices:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -90,9 +143,11 @@ case "$1" in
         fi
       fi
     elif [[ "$ACTIVE_PROVIDER" == "macos" ]]; then
+      # Use Node.js formatter if available
       if [[ -f "$FORMATTER" ]] && command -v node &> /dev/null; then
         node "$FORMATTER" "macos" "$CURRENT_VOICE"
       else
+        # Fallback to plain text display
         echo "🎤 Available macOS TTS Voices:"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -136,8 +191,10 @@ case "$1" in
     VOICE_NAME="$2"
     SILENT_MODE=false
 
+    # Check for --silent flag
     if [[ "$2" == "--silent" ]] || [[ "$3" == "--silent" ]]; then
       SILENT_MODE=true
+      # If --silent is first arg, voice name is in $3
       [[ "$2" == "--silent" ]] && VOICE_NAME="$3"
     fi
 
@@ -150,6 +207,7 @@ case "$1" in
       exit 1
     fi
 
+    # Detect active TTS provider
     PROVIDER_FILE=""
     if [[ -f "$CLAUDE_DIR/tts-provider.txt" ]]; then
       PROVIDER_FILE="$CLAUDE_DIR/tts-provider.txt"
@@ -157,18 +215,21 @@ case "$1" in
       PROVIDER_FILE="$HOME/.claude/tts-provider.txt"
     fi
 
-    ACTIVE_PROVIDER="piper"
+    ACTIVE_PROVIDER="piper"  # default
     if [[ -n "$PROVIDER_FILE" ]]; then
       ACTIVE_PROVIDER=$(cat "$PROVIDER_FILE")
     fi
 
+    # Voice lookup strategy depends on active provider
     if [[ "$ACTIVE_PROVIDER" == "macos" ]]; then
+      # macOS voice lookup using say -v ?
       if [[ "$(uname -s)" != "Darwin" ]]; then
         echo "❌ macOS voices only available on macOS"
         echo "Switch to another provider: /agent-vibes:provider switch piper"
         exit 1
       fi
 
+      # Check if voice exists (case-insensitive match against first column)
       FOUND=""
       while IFS= read -r line; do
         voice=$(echo "$line" | awk '{print $1}')
@@ -187,9 +248,11 @@ case "$1" in
         exit 1
       fi
     elif [[ "$ACTIVE_PROVIDER" == "piper" ]]; then
+      # Piper voice lookup: Scan voice directory for .onnx files
       source "$SCRIPT_DIR/piper-voice-manager.sh"
       VOICE_DIR=$(get_voice_storage_dir)
 
+      # Check if voice file exists (case-insensitive)
       FOUND=""
       shopt -s nullglob
       for onnx_file in "$VOICE_DIR"/*.onnx; do
@@ -203,6 +266,7 @@ case "$1" in
       done
       shopt -u nullglob
 
+      # If not found, check multi-speaker registry
       if [[ -z "$FOUND" ]] && [[ -f "$SCRIPT_DIR/piper-multispeaker-registry.sh" ]]; then
         source "$SCRIPT_DIR/piper-multispeaker-registry.sh"
 
@@ -211,9 +275,12 @@ case "$1" in
           MODEL="${MULTISPEAKER_INFO%%:*}"
           SPEAKER_ID="${MULTISPEAKER_INFO#*:}"
 
+          # Verify the model file exists
           if [[ -f "$VOICE_DIR/${MODEL}.onnx" ]]; then
+            # Store speaker name in tts-voice.txt
             echo "$VOICE_NAME" > "$VOICE_FILE"
 
+            # Store model and speaker ID separately for play-tts-piper.sh
             echo "$MODEL" > "$CLAUDE_DIR/tts-piper-model.txt"
             echo "$SPEAKER_ID" > "$CLAUDE_DIR/tts-piper-speaker-id.txt"
 
@@ -224,6 +291,7 @@ case "$1" in
               echo "📝 Description: $DESCRIPTION"
             fi
 
+            # Have the new voice introduce itself (unless silent mode)
             if [[ "$SILENT_MODE" != "true" ]]; then
               PLAY_TTS="$SCRIPT_DIR/play-tts.sh"
               if [ -x "$PLAY_TTS" ]; then
@@ -244,6 +312,7 @@ case "$1" in
         fi
       fi
 
+      # In test mode, allow switching to any voice name without file validation
       if [[ -z "$FOUND" ]] && [[ "${AGENTVIBES_TEST_MODE:-false}" != "true" ]]; then
         echo "❌ Piper voice not found: $VOICE_NAME"
         echo ""
@@ -279,10 +348,12 @@ case "$1" in
       exit 1
     fi
 
+    # In test mode, use the requested voice name even if not found
     VOICE_TO_SAVE="${FOUND:-$VOICE_NAME}"
     echo "$VOICE_TO_SAVE" > "$VOICE_FILE"
     echo "✅ Voice switched to: $VOICE_TO_SAVE"
 
+    # Have the new voice introduce itself (unless silent mode)
     if [[ "$SILENT_MODE" != "true" ]] && [[ "${AGENTVIBES_TEST_MODE:-false}" != "true" ]]; then
       SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
       PLAY_TTS="$SCRIPT_DIR/play-tts.sh"
@@ -308,6 +379,7 @@ case "$1" in
     echo "🎤 Current Voice Configuration"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+    # Get active TTS provider
     PROVIDER_FILE="$CLAUDE_DIR/tts-provider.txt"
     if [[ ! -f "$PROVIDER_FILE" ]]; then
       PROVIDER_FILE="$HOME/.claude/tts-provider.txt"
@@ -323,21 +395,26 @@ case "$1" in
         echo "Provider: $ACTIVE_PROVIDER"
       fi
     else
+      # Default to Piper if no provider file
       echo "Provider: Piper TTS (Free, Offline)"
     fi
 
+    # Get current voice
     CURRENT_VOICE=$(cat "$VOICE_FILE" 2>/dev/null || get_default_voice)
     echo "Voice: $CURRENT_VOICE"
 
+    # Get current sentiment (priority)
     if [ -f "$HOME/.claude/tts-sentiment.txt" ]; then
       SENTIMENT=$(cat "$HOME/.claude/tts-sentiment.txt")
       echo "Sentiment: $SENTIMENT (active)"
 
+      # Also show personality if set
       if [ -f "$HOME/.claude/tts-personality.txt" ]; then
         PERSONALITY=$(cat "$HOME/.claude/tts-personality.txt")
         echo "Personality: $PERSONALITY (overridden by sentiment)"
       fi
     else
+      # No sentiment, check personality
       if [ -f "$HOME/.claude/tts-personality.txt" ]; then
         PERSONALITY=$(cat "$HOME/.claude/tts-personality.txt")
         echo "Personality: $PERSONALITY (active)"
@@ -350,17 +427,20 @@ case "$1" in
     ;;
 
   list-simple)
+    # Simple list for AI to parse and display
+    # Get active provider
     PROVIDER_FILE="$CLAUDE_DIR/tts-provider.txt"
     if [[ ! -f "$PROVIDER_FILE" ]]; then
       PROVIDER_FILE="$HOME/.claude/tts-provider.txt"
     fi
 
-    ACTIVE_PROVIDER="piper"
+    ACTIVE_PROVIDER="piper"  # default
     if [ -f "$PROVIDER_FILE" ]; then
       ACTIVE_PROVIDER=$(cat "$PROVIDER_FILE")
     fi
 
     if [[ "$ACTIVE_PROVIDER" == "piper" ]]; then
+      # List downloaded Piper voices
       if [[ -f "$SCRIPT_DIR/piper-voice-manager.sh" ]]; then
         source "$SCRIPT_DIR/piper-voice-manager.sh"
         VOICE_DIR=$(get_voice_storage_dir)
@@ -371,6 +451,7 @@ case "$1" in
         done | sort
       fi
     elif [[ "$ACTIVE_PROVIDER" == "macos" ]]; then
+      # List macOS voices (voice names only)
       if [[ "$(uname -s)" == "Darwin" ]]; then
         say -v ? 2>/dev/null | awk '{print $1}' | sort
       else
@@ -382,9 +463,12 @@ case "$1" in
     ;;
 
   replay)
+    # Replay recent TTS audio from history
+    # Use project-local directory with same logic as play-tts.sh
     if [[ -n "$CLAUDE_PROJECT_DIR" ]]; then
       AUDIO_DIR="$CLAUDE_PROJECT_DIR/.claude/audio"
     else
+      # Fallback: try to find .claude directory in current path
       CURRENT_DIR="$PWD"
       while [[ "$CURRENT_DIR" != "/" ]]; do
         if [[ -d "$CURRENT_DIR/.claude" ]]; then
@@ -393,13 +477,16 @@ case "$1" in
         fi
         CURRENT_DIR=$(dirname "$CURRENT_DIR")
       done
+      # Final fallback to global if no project .claude found
       if [[ -z "$AUDIO_DIR" ]]; then
         AUDIO_DIR="$HOME/.claude/audio"
       fi
     fi
 
+    # Default to replay last audio (N=1)
     N="${2:-1}"
 
+    # Validate N is a number
     if ! [[ "$N" =~ ^[0-9]+$ ]]; then
       echo "❌ Invalid argument. Please use a number (1-10)"
       echo "Usage: /agent-vibes:replay [N]"
@@ -409,17 +496,20 @@ case "$1" in
       exit 1
     fi
 
+    # Check bounds
     if [[ $N -lt 1 || $N -gt 10 ]]; then
       echo "❌ Number out of range. Please choose 1-10"
       exit 1
     fi
 
+    # Get list of audio files sorted by time (newest first)
     if [[ ! -d "$AUDIO_DIR" ]]; then
       echo "❌ No audio history found"
       echo "Audio files are stored in: $AUDIO_DIR"
       exit 1
     fi
 
+    # Get the Nth most recent file (check all supported formats)
     AUDIO_FILE=$(ls -t "$AUDIO_DIR"/tts-*.{mp3,wav,aiff} 2>/dev/null | sed -n "${N}p")
 
     if [[ -z "$AUDIO_FILE" ]]; then
@@ -433,6 +523,7 @@ case "$1" in
     echo "   File: $(basename "$AUDIO_FILE")"
     echo "   Path: $AUDIO_FILE"
 
+    # Play the audio file in background (afplay for macOS, paplay/aplay/mpg123 for Linux)
     if [[ "$(uname -s)" == "Darwin" ]]; then
       afplay "$AUDIO_FILE" &
     else
