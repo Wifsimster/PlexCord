@@ -1,26 +1,68 @@
 #!/usr/bin/env bash
+#
+# File: .claude/hooks/piper-download-voices.sh
+#
+# AgentVibes - Finally, your AI Agents can Talk Back! Text-to-Speech WITH personality for AI Assistants!
+# Website: https://agentvibes.org
+# Repository: https://github.com/paulpreibisch/AgentVibes
+#
+# Co-created by Paul Preibisch with Claude AI
+# Copyright (c) 2025 Paul Preibisch
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# DISCLAIMER: This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# express or implied, including but not limited to the warranties of
+# merchantability, fitness for a particular purpose and noninfringement.
+# In no event shall the authors or copyright holders be liable for any claim,
+# damages or other liability, whether in an action of contract, tort or
+# otherwise, arising from, out of or in connection with the software or the
+# use or other dealings in the software.
+#
+# ---
+#
+# @fileoverview Piper Voice Model Downloader - Batch downloads popular Piper TTS voices from HuggingFace
+# @context Post-installation utility to download commonly used voices (~25MB each)
+# @architecture Wrapper around piper-voice-manager.sh download functions with progress tracking
+# @dependencies piper-voice-manager.sh (download logic), piper binary (for validation)
+# @entrypoints Called by piper-installer.sh or manually via ./piper-download-voices.sh [--yes|-y]
+# @patterns Batch operations, skip-existing logic, auto-yes flag for non-interactive use
+# @related piper-voice-manager.sh, piper-installer.sh
+#
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/piper-voice-manager.sh"
 
+# Parse command line arguments
 AUTO_YES=false
 if [[ "$1" == "--yes" ]] || [[ "$1" == "-y" ]]; then
   AUTO_YES=true
 fi
 
+# Common voice models to download
 COMMON_VOICES=(
-  "en_US-ryan-high"
-  "en_US-amy-medium"
-  "en_US-hfc_female-medium"
-  "en_US-lessac-medium"
-  "en_US-danny-low"
-  "en_US-bryce-medium"
-  "en_US-kathleen-low"
-  "en_US-kusal-medium"
-  "en_US-kristin-medium"
-  "en_US-libritts_r-high"
-  "en_US-libritts-high"
-  "16Speakers"
+  "en_US-ryan-high"          # Default, expressive male (30MB)
+  "en_US-amy-medium"         # Warm female (13MB)
+  "en_US-hfc_female-medium"  # Professional female (13MB)
+  "en_US-lessac-medium"      # Clear female (13MB)
+  "en_US-danny-low"          # Calm male (13MB)
+  "en_US-bryce-medium"       # Professional male (13MB)
+  "en_US-kathleen-low"       # Clear female (13MB)
+  "en_US-kusal-medium"       # Male voice (13MB)
+  "en_US-kristin-medium"     # Female voice (13MB)
+  "en_US-libritts_r-high"    # Premium male (57MB)
+  "en_US-libritts-high"      # Premium quality (57MB)
+  "16Speakers"               # Multi-speaker: 12 US + 4 UK voices (77MB)
 )
 
 echo "🎙️  Piper Voice Model Downloader"
@@ -30,17 +72,20 @@ echo "This will download the most commonly used Piper voice models."
 echo "Each voice is approximately 25MB."
 echo ""
 
+# Check if piper is installed
 if ! command -v piper &> /dev/null; then
   echo "❌ Error: Piper TTS not installed"
   echo "Install with: pipx install piper-tts"
   exit 1
 fi
 
+# Get storage directory
 VOICE_DIR=$(get_voice_storage_dir)
 
 echo "📂 Storage location: $VOICE_DIR"
 echo ""
 
+# Count already downloaded
 ALREADY_DOWNLOADED=0
 ALREADY_DOWNLOADED_LIST=()
 NEED_DOWNLOAD=()
@@ -59,6 +104,7 @@ echo "   Already downloaded: $ALREADY_DOWNLOADED voice(s)"
 echo "   Need to download: ${#NEED_DOWNLOAD[@]} voice(s)"
 echo ""
 
+# Show already downloaded voices
 if [[ $ALREADY_DOWNLOADED -gt 0 ]]; then
   echo "✅ Already downloaded (skipped):"
   for voice in "${ALREADY_DOWNLOADED_LIST[@]}"; do
@@ -78,6 +124,7 @@ for voice in "${NEED_DOWNLOAD[@]}"; do
 done
 echo ""
 
+# Ask for confirmation (skip if --yes flag provided)
 if [[ "$AUTO_YES" == "false" ]]; then
   read -p "Download ${#NEED_DOWNLOAD[@]} voice model(s)? [Y/n]: " -n 1 -r
   echo
@@ -91,6 +138,7 @@ else
   echo ""
 fi
 
+# Download each voice
 DOWNLOADED=0
 FAILED=0
 
@@ -159,4 +207,6 @@ if [[ $DOWNLOADED -gt 0 ]]; then
   echo "  /agent-vibes:preview"
 fi
 
+# Always exit successfully even if some downloads failed
+# (individual failures are tracked in FAILED counter)
 exit 0

@@ -1,21 +1,60 @@
 #!/usr/bin/env bash
+#
+# File: .claude/hooks/learn-manager.sh
+#
+# AgentVibes - Finally, your AI Agents can Talk Back! Text-to-Speech WITH personality for AI Assistants!
+# Website: https://agentvibes.org
+# Repository: https://github.com/paulpreibisch/AgentVibes
+#
+# Co-created by Paul Preibisch with Claude AI
+# Copyright (c) 2025 Paul Preibisch
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# DISCLAIMER: This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# express or implied. Use at your own risk. See the Apache License for details.
+#
+# ---
+#
+# @fileoverview Language Learning Mode Manager - Enables dual-language TTS for immersive learning
+# @context Speaks responses in both main language (English) and target language (Spanish, French, etc.) for language practice
+# @architecture Manages main/target language pairs with voice mappings, auto-configures recommended voices per language
+# @dependencies play-tts.sh (dual invocation), language-manager.sh (voice recommendations), .claude/tts-*.txt state files
+# @entrypoints Called by /agent-vibes:learn commands to enable/disable learning mode
+# @patterns Dual-voice orchestration, auto-configuration, greeting on activation, provider-aware voice selection
+# @related language-manager.sh, play-tts.sh, .claude/tts-learn-mode.txt, .claude/tts-target-language.txt
 
+# Only set strict mode when executed directly, not when sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     set -e
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Bash 3.2 compatible lowercase function (macOS ships with bash 3.2)
+# ${var,,} syntax requires bash 4.0+
 _to_lower() {
   echo "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+# Use PWD for project dir when called from project context, fall back to script-relative
 if [[ -d "$PWD/.claude" ]]; then
     PROJECT_DIR="$PWD"
 else
     PROJECT_DIR="$SCRIPT_DIR/../.."
 fi
 
+# Configuration files (project-local first, then global fallback)
 MAIN_LANG_FILE="$PROJECT_DIR/.claude/tts-main-language.txt"
 TARGET_LANG_FILE="$PROJECT_DIR/.claude/tts-target-language.txt"
 TARGET_VOICE_FILE="$PROJECT_DIR/.claude/tts-target-voice.txt"
@@ -26,11 +65,13 @@ GLOBAL_TARGET_LANG_FILE="$HOME/.claude/tts-target-language.txt"
 GLOBAL_TARGET_VOICE_FILE="$HOME/.claude/tts-target-voice.txt"
 GLOBAL_LEARN_MODE_FILE="$HOME/.claude/tts-learn-mode.txt"
 
+# Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Get main language
 get_main_language() {
     if [[ -f "$MAIN_LANG_FILE" ]]; then
         cat "$MAIN_LANG_FILE"
@@ -41,6 +82,7 @@ get_main_language() {
     fi
 }
 
+# Set main language
 set_main_language() {
     local language="$1"
     if [[ -z "$language" ]]; then
@@ -53,6 +95,7 @@ set_main_language() {
     echo -e "${GREEN}✓${NC} Main language set to: $language"
 }
 
+# Get target language
 get_target_language() {
     if [[ -f "$TARGET_LANG_FILE" ]]; then
         cat "$TARGET_LANG_FILE"
@@ -63,6 +106,7 @@ get_target_language() {
     fi
 }
 
+# Get greeting message for a language
 get_greeting_for_language() {
     local language="$1"
 
@@ -118,6 +162,7 @@ get_greeting_for_language() {
     esac
 }
 
+# Set target language
 set_target_language() {
     local language="$1"
     if [[ -z "$language" ]]; then
@@ -129,11 +174,13 @@ set_target_language() {
     echo "$language" > "$TARGET_LANG_FILE"
     echo -e "${GREEN}✓${NC} Target language set to: $language"
 
+    # Automatically set the recommended voice for this language
     local recommended_voice=$(get_recommended_voice_for_language "$language")
     if [[ -n "$recommended_voice" ]]; then
         echo "$recommended_voice" > "$TARGET_VOICE_FILE"
         echo -e "${GREEN}✓${NC} Target voice automatically set to: ${YELLOW}$recommended_voice${NC}"
 
+        # Detect provider for display
         local provider=""
         if [[ -f "$PROJECT_DIR/.claude/tts-provider.txt" ]]; then
             provider=$(cat "$PROJECT_DIR/.claude/tts-provider.txt")
@@ -145,42 +192,52 @@ set_target_language() {
         echo -e "   (for ${GREEN}$provider${NC} TTS)"
         echo ""
 
+        # Greet user in the target language with the target voice
         local greeting=$(get_greeting_for_language "$language")
         echo -e "${BLUE}🎓${NC} Your language teacher says:"
 
+        # Check if we're using Piper and if the voice is available
         if [[ "$provider" == "piper" ]]; then
+            # Quick check: does the voice file exist?
             local voice_dir="${HOME}/.claude/piper-voices"
             if [[ -f "${voice_dir}/${recommended_voice}.onnx" ]]; then
+                # Voice exists, play greeting in background
                 nohup "$SCRIPT_DIR/play-tts.sh" "$greeting" "$recommended_voice" >/dev/null 2>&1 &
             else
                 echo -e "${YELLOW}   (Voice not yet downloaded - greeting will play after first download)${NC}"
             fi
         else
+            # macOS or other provider - just play it in background
             nohup "$SCRIPT_DIR/play-tts.sh" "$greeting" "$recommended_voice" >/dev/null 2>&1 &
         fi
     else
+        # Fallback to suggestion if auto-set failed
         suggest_voice_for_language "$language"
     fi
 }
 
+# Get recommended voice for a language (returns voice string, no output)
 get_recommended_voice_for_language() {
     local language="$1"
     local recommended_voice=""
     local provider=""
 
+    # Detect active provider
     if [[ -f "$PROJECT_DIR/.claude/tts-provider.txt" ]]; then
         provider=$(cat "$PROJECT_DIR/.claude/tts-provider.txt")
     elif [[ -f "$HOME/.claude/tts-provider.txt" ]]; then
         provider=$(cat "$HOME/.claude/tts-provider.txt")
     else
-        provider="piper"
+        provider="piper"  # Default
     fi
 
+    # Source language manager and get provider-specific voice
     if [[ -f "$SCRIPT_DIR/language-manager.sh" ]]; then
         source "$SCRIPT_DIR/language-manager.sh" 2>/dev/null
         recommended_voice=$(get_voice_for_language "$language" "$provider" 2>/dev/null)
     fi
 
+    # Fallback to hardcoded suggestions if function failed
     if [[ -z "$recommended_voice" ]]; then
         case "$(_to_lower "$language")" in
             spanish|español)
@@ -210,10 +267,12 @@ get_recommended_voice_for_language() {
     echo "$recommended_voice"
 }
 
+# Suggest voice based on target language (displays suggestion message)
 suggest_voice_for_language() {
     local language="$1"
     local suggested_voice=$(get_recommended_voice_for_language "$language")
 
+    # Detect provider for display
     local provider=""
     if [[ -f "$PROJECT_DIR/.claude/tts-provider.txt" ]]; then
         provider=$(cat "$PROJECT_DIR/.claude/tts-provider.txt")
@@ -228,6 +287,7 @@ suggest_voice_for_language() {
     echo -e "   Set it with: ${YELLOW}/agent-vibes:target-voice $suggested_voice${NC}"
 }
 
+# Get target voice
 get_target_voice() {
     if [[ -f "$TARGET_VOICE_FILE" ]]; then
         cat "$TARGET_VOICE_FILE"
@@ -238,6 +298,7 @@ get_target_voice() {
     fi
 }
 
+# Set target voice
 set_target_voice() {
     local voice="$1"
     if [[ -z "$voice" ]]; then
@@ -250,6 +311,7 @@ set_target_voice() {
     echo -e "${GREEN}✓${NC} Target voice set to: $voice"
 }
 
+# Check if learning mode is enabled
 is_learn_mode_enabled() {
     if [[ -f "$LEARN_MODE_FILE" ]]; then
         local mode=$(cat "$LEARN_MODE_FILE")
@@ -262,12 +324,14 @@ is_learn_mode_enabled() {
     fi
 }
 
+# Enable learning mode
 enable_learn_mode() {
     mkdir -p "$PROJECT_DIR/.claude"
     echo "ON" > "$LEARN_MODE_FILE"
     echo -e "${GREEN}✓${NC} Language learning mode: ${GREEN}ENABLED${NC}"
     echo ""
 
+    # Auto-set target voice if target language is set but voice is not
     local target_lang=$(get_target_language)
     local target_voice=$(get_target_voice)
     local voice_was_set=false
@@ -280,6 +344,7 @@ enable_learn_mode() {
             target_voice="$recommended_voice"
             echo -e "${GREEN}✓${NC} Target voice automatically set to: ${YELLOW}$recommended_voice${NC}"
 
+            # Detect provider for display
             local provider=""
             if [[ -f "$PROJECT_DIR/.claude/tts-provider.txt" ]]; then
                 provider=$(cat "$PROJECT_DIR/.claude/tts-provider.txt")
@@ -296,11 +361,13 @@ enable_learn_mode() {
 
     show_status
 
+    # Greet user with language teacher if everything is configured
     if [[ -n "$target_lang" ]] && [[ -n "$target_voice" ]]; then
         echo ""
         local greeting=$(get_greeting_for_language "$target_lang")
         echo -e "${BLUE}🎓${NC} Your language teacher says:"
 
+        # Detect provider
         local provider=""
         if [[ -f "$PROJECT_DIR/.claude/tts-provider.txt" ]]; then
             provider=$(cat "$PROJECT_DIR/.claude/tts-provider.txt")
@@ -310,25 +377,31 @@ enable_learn_mode() {
             provider="piper"
         fi
 
+        # Check if we're using Piper and if the voice is available
         if [[ "$provider" == "piper" ]]; then
+            # Quick check: does the voice file exist?
             local voice_dir="${HOME}/.claude/piper-voices"
             if [[ -f "${voice_dir}/${target_voice}.onnx" ]]; then
+                # Voice exists, play greeting in background
                 nohup "$SCRIPT_DIR/play-tts.sh" "$greeting" "$target_voice" >/dev/null 2>&1 &
             else
                 echo -e "${YELLOW}   (Voice not yet downloaded - greeting will play after first download)${NC}"
             fi
         else
+            # macOS or other provider - just play it in background
             nohup "$SCRIPT_DIR/play-tts.sh" "$greeting" "$target_voice" >/dev/null 2>&1 &
         fi
     fi
 }
 
+# Disable learning mode
 disable_learn_mode() {
     mkdir -p "$PROJECT_DIR/.claude"
     echo "OFF" > "$LEARN_MODE_FILE"
     echo -e "${GREEN}✓${NC} Language learning mode: ${YELLOW}DISABLED${NC}"
 }
 
+# Show learning mode status
 show_status() {
     local main_lang=$(get_main_language)
     local target_lang=$(get_target_language)
@@ -372,6 +445,7 @@ show_status() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
+# Main command handler - only run if script is executed directly, not sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 case "${1:-}" in
     get-main-language)

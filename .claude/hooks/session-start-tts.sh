@@ -1,25 +1,39 @@
 #!/usr/bin/env bash
 set -euo pipefail
+#
+# File: .claude/hooks/session-start-tts.sh
+#
+# AgentVibes SessionStart Hook - Optimized (Issue #80, Phase 1)
+# Token target: ~250 (down from ~500)
+#
 
+# Fix locale warnings
 export LC_ALL=C
 
+# Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Check if AgentVibes is installed
 if [[ ! -f "$SCRIPT_DIR/play-tts.sh" ]]; then
+  # AgentVibes not installed, don't inject anything
   exit 0
 fi
 
+# Check for sentiment (priority) or personality (fallback)
 SENTIMENT=$(cat .claude/tts-sentiment.txt 2>/dev/null || cat ~/.claude/tts-sentiment.txt 2>/dev/null || echo "")
 PERSONALITY=$(cat .claude/tts-personality.txt 2>/dev/null || cat ~/.claude/tts-personality.txt 2>/dev/null || echo "normal")
 
+# Determine style
 if [[ -n "$SENTIMENT" ]]; then
   STYLE="$SENTIMENT"
 else
   STYLE="$PERSONALITY"
 fi
 
+# Get verbosity level (Issue #32)
 VERBOSITY=$(cat .claude/tts-verbosity.txt 2>/dev/null || cat ~/.claude/tts-verbosity.txt 2>/dev/null || echo "low")
 
+# Output optimized TTS protocol
 cat <<'EOF'
 
 # AgentVibes TTS Protocol
@@ -38,6 +52,7 @@ cat <<'EOF'
 
 EOF
 
+# Add verbosity-specific protocol (Issue #32)
 case "$VERBOSITY" in
   low)
     cat <<'EOF'
@@ -70,6 +85,7 @@ EOF
     ;;
 esac
 
+# Add style info and rules
 cat << EOF
 ## Style: $STYLE
 
